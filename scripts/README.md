@@ -20,9 +20,11 @@ Docker-based test runner that ensures consistent test execution across all envir
 # Verification
 ./scripts/test.sh --coverage         # Generate coverage report
 ./scripts/test.sh --e2e              # Run end-to-end tests
+./scripts/test.sh --quality          # Run test quality analyzer
+./scripts/test.sh --coupling         # Run test-atom coupling analyzer
 
 # CI/CD
-./scripts/test.sh --ci               # Full test suite (unit + e2e + coverage)
+./scripts/test.sh --ci               # Full test suite (unit + e2e + coverage + quality + coupling)
 ```
 
 ### Features
