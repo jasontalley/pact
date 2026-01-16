@@ -107,9 +107,7 @@ export class TestAtomCouplingService {
       }));
 
     // Step 5: Find mismatches (tests reference non-existent atoms)
-    const existingAtomIds = new Set(
-      (await this.atomRepository.find()).map((a) => a.atomId),
-    );
+    const existingAtomIds = new Set((await this.atomRepository.find()).map((a) => a.atomId));
     const mismatches: AtomMismatch[] = [];
 
     for (const analysis of testFileAnalyses) {
@@ -157,10 +155,7 @@ export class TestAtomCouplingService {
   /**
    * Find test files in a directory
    */
-  private findTestFiles(
-    directory: string,
-    options: CouplingCheckOptions,
-  ): string[] {
+  private findTestFiles(directory: string, options: CouplingCheckOptions): string[] {
     const includePatterns = options.includePatterns || this.defaultTestPatterns;
     const excludePatterns = options.excludePatterns || this.defaultExcludePatterns;
     const testFiles: string[] = [];

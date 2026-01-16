@@ -55,6 +55,21 @@ jobs:
       - name: Run Test Quality Analyzer
         run: npm run test:quality
 
+      - name: Run Test-Atom Coupling Check
+        run: npm run test:coupling
+
+      - name: Generate HTML Quality Report
+        run: npm run test:quality:report
+        continue-on-error: true
+
+      - name: Upload Quality Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-quality-report
+          path: test/reports/quality-report.html
+          retention-days: 30
+        if: always()
+
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest

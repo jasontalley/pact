@@ -7,6 +7,7 @@ import { databaseConfig } from './config/database/database.config';
 import { AtomsModule } from './modules/atoms/atoms.module';
 import { AgentsModule } from './modules/agents/agents.module';
 import { LLMModule } from './modules/llm/llm.module';
+import { QualityModule } from './modules/quality/quality.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { LLMModule } from './modules/llm/llm.module';
     LLMModule,
     AtomsModule,
     AgentsModule,
+    QualityModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -12,10 +12,7 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  AtomQualityService,
-  AtomForValidation,
-} from './atom-quality.service';
+import { AtomQualityService, AtomForValidation } from './atom-quality.service';
 import { LLMService } from '../../common/llm/llm.service';
 
 describe('AtomQualityService', () => {
@@ -181,11 +178,21 @@ describe('AtomQualityService', () => {
 
       // Mock high scores totaling 88
       mockLLMService.invoke
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 23, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 22, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 18, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 13, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 12, feedback: '', suggestions: [] }) });
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 23, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 22, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 18, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 13, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 12, feedback: '', suggestions: [] }),
+        });
 
       const result = await service.validateAtom(atom);
 
@@ -205,11 +212,21 @@ describe('AtomQualityService', () => {
 
       // Mock medium scores totaling 60 (boundary for revise)
       mockLLMService.invoke
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 15, feedback: '', suggestions: ['Be more specific'] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 14, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 12, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 10, feedback: '', suggestions: ['Define fast'] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 9, feedback: '', suggestions: [] }) });
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 15, feedback: '', suggestions: ['Be more specific'] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 14, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 12, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 10, feedback: '', suggestions: ['Define fast'] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 9, feedback: '', suggestions: [] }),
+        });
 
       const result = await service.validateAtom(atom);
 
@@ -229,11 +246,21 @@ describe('AtomQualityService', () => {
 
       // Mock low scores totaling 34
       mockLLMService.invoke
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 8, feedback: '', suggestions: ['Too vague'] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 7, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 10, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 5, feedback: '', suggestions: ['Define "good"'] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 4, feedback: '', suggestions: [] }) });
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 8, feedback: '', suggestions: ['Too vague'] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 7, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 10, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 5, feedback: '', suggestions: ['Define "good"'] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 4, feedback: '', suggestions: [] }),
+        });
 
       const result = await service.validateAtom(atom);
 
@@ -253,11 +280,21 @@ describe('AtomQualityService', () => {
 
       // Mock scores totaling exactly 80 (approve threshold)
       mockLLMService.invoke
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 20, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 20, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 16, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 12, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 12, feedback: '', suggestions: [] }) });
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 20, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 20, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 16, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 12, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 12, feedback: '', suggestions: [] }),
+        });
 
       const result = await service.validateAtom(atom);
 
@@ -277,11 +314,21 @@ describe('AtomQualityService', () => {
 
       // Mock scores totaling exactly 60 (revise threshold)
       mockLLMService.invoke
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 15, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 15, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 12, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 9, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 9, feedback: '', suggestions: [] }) });
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 15, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 15, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 12, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 9, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 9, feedback: '', suggestions: [] }),
+        });
 
       const result = await service.validateAtom(atom);
 
@@ -301,11 +348,21 @@ describe('AtomQualityService', () => {
 
       // Mock scores totaling 59 (just below revise threshold)
       mockLLMService.invoke
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 15, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 14, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 12, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 9, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 9, feedback: '', suggestions: [] }) });
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 15, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 14, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 12, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 9, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 9, feedback: '', suggestions: [] }),
+        });
 
       const result = await service.validateAtom(atom);
 
@@ -348,11 +405,25 @@ describe('AtomQualityService', () => {
 
       // Mock scores totaling 65 (in revise range: 60-79)
       mockLLMService.invoke
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 16, feedback: '', suggestions: ['Add time constraint'] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 15, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 14, feedback: '', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 10, feedback: '', suggestions: ['Be more specific'] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 10, feedback: '', suggestions: [] }) });
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            score: 16,
+            feedback: '',
+            suggestions: ['Add time constraint'],
+          }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 15, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 14, feedback: '', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 10, feedback: '', suggestions: ['Be more specific'] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 10, feedback: '', suggestions: [] }),
+        });
 
       const result = await service.validateAtom(atom);
 
@@ -373,11 +444,21 @@ describe('AtomQualityService', () => {
       };
 
       mockLLMService.invoke
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 10, feedback: '', suggestions: ['Suggestion 1'] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 10, feedback: '', suggestions: ['Suggestion 2'] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 8, feedback: '', suggestions: ['Suggestion 3'] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 6, feedback: '', suggestions: ['Suggestion 4'] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 5, feedback: '', suggestions: ['Suggestion 5'] }) });
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 10, feedback: '', suggestions: ['Suggestion 1'] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 10, feedback: '', suggestions: ['Suggestion 2'] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 8, feedback: '', suggestions: ['Suggestion 3'] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 6, feedback: '', suggestions: ['Suggestion 4'] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 5, feedback: '', suggestions: ['Suggestion 5'] }),
+        });
 
       const result = await service.validateAtom(atom);
 
@@ -430,9 +511,7 @@ describe('AtomQualityService', () => {
       const result = await service.validateAtom(atom);
 
       // Duplicate suggestions from different dimensions should be merged
-      const duplicates = result.actionableImprovements.filter(
-        (s) => s === 'Same suggestion',
-      );
+      const duplicates = result.actionableImprovements.filter((s) => s === 'Same suggestion');
       // Only one instance of each unique suggestion should remain
       expect(duplicates.length).toBe(1);
     });
@@ -610,11 +689,25 @@ describe('AtomQualityService', () => {
       };
 
       mockLLMService.invoke
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 24, feedback: 'Highly observable', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 25, feedback: 'Clearly falsifiable', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 19, feedback: 'Implementation-agnostic', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 14, feedback: 'Clear language', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 15, feedback: 'Clear criteria', suggestions: [] }) });
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 24, feedback: 'Highly observable', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 25, feedback: 'Clearly falsifiable', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            score: 19,
+            feedback: 'Implementation-agnostic',
+            suggestions: [],
+          }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 14, feedback: 'Clear language', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 15, feedback: 'Clear criteria', suggestions: [] }),
+        });
 
       const result = await service.validateAtom(atom);
 
@@ -633,11 +726,37 @@ describe('AtomQualityService', () => {
       };
 
       mockLLMService.invoke
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 8, feedback: 'Hard to observe', suggestions: ['Define responsive'] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 5, feedback: 'Not falsifiable', suggestions: ['Add thresholds'] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 14, feedback: 'Mostly agnostic', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 3, feedback: 'Very vague', suggestions: ['Define good'] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 2, feedback: 'No criteria', suggestions: ['Add acceptance criteria'] }) });
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            score: 8,
+            feedback: 'Hard to observe',
+            suggestions: ['Define responsive'],
+          }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            score: 5,
+            feedback: 'Not falsifiable',
+            suggestions: ['Add thresholds'],
+          }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 14, feedback: 'Mostly agnostic', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            score: 3,
+            feedback: 'Very vague',
+            suggestions: ['Define good'],
+          }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            score: 2,
+            feedback: 'No criteria',
+            suggestions: ['Add acceptance criteria'],
+          }),
+        });
 
       const result = await service.validateAtom(atom);
 
@@ -658,11 +777,33 @@ describe('AtomQualityService', () => {
       };
 
       mockLLMService.invoke
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 22, feedback: 'Observable session expiry', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 24, feedback: 'Clear failure condition', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 18, feedback: 'Behavior-focused', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 14, feedback: 'Specific time', suggestions: [] }) })
-        .mockResolvedValueOnce({ content: JSON.stringify({ score: 14, feedback: 'Clear 30-minute threshold', suggestions: [] }) });
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            score: 22,
+            feedback: 'Observable session expiry',
+            suggestions: [],
+          }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            score: 24,
+            feedback: 'Clear failure condition',
+            suggestions: [],
+          }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 18, feedback: 'Behavior-focused', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({ score: 14, feedback: 'Specific time', suggestions: [] }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            score: 14,
+            feedback: 'Clear 30-minute threshold',
+            suggestions: [],
+          }),
+        });
 
       const result = await service.validateAtom(atom);
 

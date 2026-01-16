@@ -28,6 +28,7 @@
 ### The Core Problem
 
 Traditional software development suffers from:
+
 - **Intent Loss**: Requirements drift from original vision
 - **Ambiguity Accumulation**: Unclear specifications lead to implementation errors
 - **Test-Intent Decoupling**: Tests become disconnected from original intent
@@ -36,6 +37,7 @@ Traditional software development suffers from:
 ### The Pact Solution
 
 Pact introduces:
+
 - **Intent Atoms**: Irreducible behavioral primitives that are observable, falsifiable, and implementation-agnostic
 - **Commitment Boundary**: Explicit phase transition where ambiguity collapses and intent becomes immutable
 - **Test-Atom Coupling**: Tests explicitly reference atoms, creating traceable links between intent and code
@@ -44,6 +46,7 @@ Pact introduces:
 ### Current Status
 
 **Phase 0 (Weeks 1-4)**: Foundation infrastructure and core agents
+
 - ✅ **Complete**: Development infrastructure (Docker, NestJS, PostgreSQL)
 - ✅ **Complete**: Atomization Agent (converts ideas to atoms)
 - ✅ **Complete**: Atom Quality Validator (gates commitment quality)
@@ -82,7 +85,7 @@ Everything else (molecules, validators, agents) exists to help humans and agents
 
 ### High-Level Flow
 
-```
+```bash
 Ideas (mutable) 
   → Intent Atoms (draft, mutable)
     → Quality Validation (gating)
@@ -93,27 +96,27 @@ Ideas (mutable)
 
 ### Component Architecture
 
-```
+```bash
 ┌─────────────────────────────────────────────────────────┐
-│                    Pact System                           │
+│                    Pact System                          │
 ├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  ┌──────────────┐    ┌──────────────┐                  │
-│  │   Ideas      │───▶│   Atoms      │                  │
-│  │  (mutable)   │    │  (draft)     │                  │
-│  └──────────────┘    └──────┬───────┘                  │
+│                                                         │
+│  ┌──────────────┐    ┌──────────────┐                   │
+│  │   Ideas      │───▶│   Atoms      │                   │
+│  │  (mutable)   │    │  (draft)     │                   │
+│  └──────────────┘    └──────┬───────┘                   │ 
 │                             │                           │
 │                             ▼                           │
 │                    ┌─────────────────┐                  │
 │                    │ Quality Validator│                 │
 │                    │   (Gate ≥80)    │                  │
-│                    └────────┬────────┘                 │
+│                    └────────┬────────┘                  │
 │                             │                           │
 │                             ▼                           │
-│              ┌──────────────────────────┐               │
-│              │  Commitment Boundary     │               │
+│              ┌─────────────────────────-─┐              │
+│              │  Commitment Boundary      │              │
 │              │  (INV-001 through INV-009)│              │
-│              └──────────────┬───────────┘              │
+│              └──────────────┬──────────-─┘              │
 │                             │                           │
 │                             ▼                           │
 │                    ┌─────────────────┐                  │
@@ -126,7 +129,7 @@ Ideas (mutable)
 │                    │    Evidence     │                  │
 │                    │  (Immutable)    │                  │
 │                    └─────────────────┘                  │
-│                                                          │
+│                                                         │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -146,13 +149,15 @@ Ideas (mutable)
 ### Intent Atoms
 
 **Definition**: The smallest unit of intent that is:
+
 - **Behaviorally precise**: Describes what must be true
 - **Observable**: Can be seen in a running system
 - **Falsifiable**: Can be proven wrong
 - **Implementation-agnostic**: Describes WHAT, not HOW
 
 **Example**:
-```
+
+```bash
 IA-001: "User authentication must complete within 2 seconds"
 - Observable: Yes (response time is measurable)
 - Falsifiable: Yes (can prove it takes >2 seconds)
@@ -162,6 +167,7 @@ IA-001: "User authentication must complete within 2 seconds"
 **Storage**: `/atoms/IA-{ID}-{slug}.md` and `.json` files
 
 **Lifecycle**:
+
 1. Created from ideas (draft status)
 2. Quality validated (must score ≥80 to proceed)
 3. Committed (immutable, can only be superseded)
@@ -175,12 +181,14 @@ IA-001: "User authentication must complete within 2 seconds"
 **Key Insight**: Molecules are **lenses**, not truth. The system is the composition of atoms; molecules help humans understand how atoms relate.
 
 **Characteristics**:
+
 - Mutable (can be recomposed endlessly)
 - Non-authoritative (atoms are truth)
 - Human-facing (for organization and understanding)
 
 **Example**:
-```
+
+```bash
 M-001: Secure Checkout
   - IA-003: Payment processes securely
   - IA-004: Payment completes within 5 seconds
@@ -195,6 +203,7 @@ M-002: Authenticated Checkout (reuses atoms)
 ### Commitment Boundary
 
 **Definition**: The explicit phase transition where:
+
 - Ambiguity collapses
 - Interpretation freezes
 - Determinism begins
@@ -218,11 +227,13 @@ it('processes payment securely using TLS 1.3', () => {
 ```
 
 **Purpose**: Creates traceable links between:
+
 - Intent (atoms)
 - Validation (tests)
 - Evidence (test results)
 
-**Enforcement**: 
+**Enforcement**:
+
 - Orphan tests (no `@atom`) are flagged
 - Unrealized atoms (no tests) are detected
 - Test-atom mismatches (INV-009 violations) are blocked
@@ -232,6 +243,7 @@ it('processes payment securely using TLS 1.3', () => {
 **Definition**: Tests and validation rules that prove atoms are satisfied.
 
 **Types**:
+
 - **Gherkin**: Given/When/Then scenarios
 - **Executable**: Unit/integration tests
 - **Declarative**: Natural language with LLM translation
@@ -247,12 +259,14 @@ it('processes payment securely using TLS 1.3', () => {
 #### ✅ Week 1-2: Complete
 
 **Infrastructure**:
+
 - Dockerized development environment (PostgreSQL, NestJS, Redis)
 - Database schema (10 tables)
 - Testing framework (Jest + Cucumber/Gherkin)
 - CI/CD pipelines (bootstrap isolation checks, test quality gates)
 
 **Atomization Agent**:
+
 - LLM-powered intent analysis
 - Atomicity detection (confidence threshold: 0.7)
 - Decomposition suggestions for non-atomic intents
@@ -260,6 +274,7 @@ it('processes payment securely using TLS 1.3', () => {
 - Integration with database
 
 **Atom Quality Validator**:
+
 - 5 quality dimensions (total: 100 points):
   - Observable (0-25): User-visible, measurable behavior
   - Falsifiable (0-25): Clear pass/fail criteria
@@ -278,6 +293,7 @@ it('processes payment securely using TLS 1.3', () => {
 #### 🔨 Week 3: In Progress
 
 **Test-Atom Coupling Agent**:
+
 - Detection of orphan tests (tests without `@atom` annotations)
 - Detection of unrealized atoms (committed atoms without tests)
 - Detection of test-atom mismatches (INV-009 violations)
@@ -287,6 +303,7 @@ it('processes payment securely using TLS 1.3', () => {
 #### ⏳ Week 4: Pending
 
 **Test Quality Analyzer Integration**:
+
 - 7 quality dimensions enforcement:
   1. Intent Fidelity (20%)
   2. No Vacuous Tests (15%)
@@ -302,6 +319,7 @@ it('processes payment securely using TLS 1.3', () => {
 ### Database Schema
 
 **Core Tables** (8):
+
 1. `atoms` - Intent atoms
 2. `molecules` - Descriptive groupings
 3. `molecule_atoms` - Many-to-many relationships
@@ -324,6 +342,7 @@ it('processes payment securely using TLS 1.3', () => {
 **Goal**: Core infrastructure and first 4 agents operational
 
 **Deliverables**:
+
 - ✅ Dockerized development environment
 - ✅ Atomization Agent
 - ✅ Atom Quality Validator
@@ -331,6 +350,7 @@ it('processes payment securely using TLS 1.3', () => {
 - ⏳ Test Quality Analyzer Integration
 
 **Success Criteria**:
+
 - Can create atoms from ideas
 - Can validate atom quality (≥80 score required)
 - Can detect orphan tests and unrealized atoms
@@ -341,6 +361,7 @@ it('processes payment securely using TLS 1.3', () => {
 **Goal**: Complete intent creation and commitment workflow
 
 **Deliverables**:
+
 - Intent Atom CRUD API
 - Canvas UI for visual organization
 - Natural language input with AI validation
@@ -352,6 +373,7 @@ it('processes payment securely using TLS 1.3', () => {
 **Goal**: Validators give atoms "teeth"
 
 **Deliverables**:
+
 - Validator definition (natural language, Gherkin, templates)
 - Format translation (natural language → Gherkin → code)
 - Validator-to-atom association
@@ -362,6 +384,7 @@ it('processes payment securely using TLS 1.3', () => {
 **Goal**: The defining feature—phase transition where ambiguity collapses
 
 **Deliverables**:
+
 - Explicit commitment ceremony (multi-step flow)
 - Global invariant checking engine
 - Commitment Artifact generation (immutable JSON)
@@ -372,6 +395,7 @@ it('processes payment securely using TLS 1.3', () => {
 **Goal**: Automate execution from committed intent
 
 **Deliverables**:
+
 - Agent reads Commitment Artifacts
 - Test generation from validators (Red phase)
 - Code generation from Intent Atoms (Green phase)
@@ -382,6 +406,7 @@ it('processes payment securely using TLS 1.3', () => {
 **Goal**: Close the loop from intent → code → proof
 
 **Deliverables**:
+
 - Evidence Artifact generation (test results, coverage, security, quality)
 - Real-time evidence stream
 - Timeline/history view
@@ -390,6 +415,7 @@ it('processes payment securely using TLS 1.3', () => {
 ### Phase 6-8: System Evolution (Weeks 25+)
 
 **Future Enhancements**:
+
 - Cross-commit dependencies
 - Commitment supersession
 - External integrations (Git, CI/CD)
@@ -403,10 +429,12 @@ it('processes payment securely using TLS 1.3', () => {
 ### API Endpoints
 
 **Atomization**:
+
 - `POST /agents/atomize` - Convert intent to atom
 - `GET /agents/atomize/:id` - Get atomization result
 
 **Atoms**:
+
 - `GET /atoms` - List all atoms
 - `GET /atoms/:id` - Get atom by ID
 - `POST /atoms` - Create atom (manual)
@@ -414,16 +442,19 @@ it('processes payment securely using TLS 1.3', () => {
 - `DELETE /atoms/:id` - Delete atom (draft only)
 
 **Quality Validation**:
+
 - `POST /validators/atom-quality` - Validate atom quality
 - `GET /validators/atom-quality/:atomId` - Get quality report
 
 **Test-Atom Coupling**:
+
 - `GET /agents/test-coupling/analyze` - Analyze coupling
 - `POST /agents/test-coupling/fix` - Fix coupling issues
 
 ### Data Models
 
 **Atom Entity**:
+
 ```typescript
 {
   id: UUID
@@ -441,6 +472,7 @@ it('processes payment securely using TLS 1.3', () => {
 ```
 
 **Quality Result**:
+
 ```typescript
 {
   totalScore: number (0-100)
@@ -486,31 +518,41 @@ LOG_LEVEL=debug
 Pact enforces 9 global invariants at the Commitment Boundary:
 
 ### INV-001: Explicit Commitment Required
+
 No intent may become enforceable without an explicit human commitment action.
 
 ### INV-002: Intent Atoms Must Be Behaviorally Testable
+
 Every committed Intent Atom must describe behavior that is observable and falsifiable.
 
 ### INV-003: No Ambiguity in Commitment Artifacts
+
 Commitment Artifacts must not contain unresolved ambiguity or implementation directives.
 
 ### INV-004: Commitment Is Immutable
+
 Committed intent may not be edited. It may only be superseded by a new commitment.
 
 ### INV-005: Traceability Is Mandatory
+
 All Realization and Evidence Artifacts must reference the Commitment Artifact they satisfy.
 
 ### INV-006: Agents May Not Commit Intent
+
 Only humans may authorize commitment across the Commitment Boundary.
 
 ### INV-007: Evidence Is First-Class and Immutable
+
 Evidence Artifacts may not be altered, suppressed, or discarded.
 
 ### INV-008: Rejection Is Limited to Invariants
+
 The system may reject intent only due to violations of declared global invariants.
 
 ### INV-009: Post-Commitment Ambiguity Must Be Resolved Explicitly
+
 Ambiguity discovered after commitment may never be resolved in place. It must result in either:
+
 - A superseding commitment (new Commitment Artifact), or
 - An explicit, logged Clarification Artifact
 
@@ -525,9 +567,11 @@ Pact uses specialized AI agents to automate key transformations while maintainin
 ### P0 Agents (Critical - Phase 0)
 
 #### Atomization Agent
+
 **Purpose**: Convert ideas/requirements into properly-formed atoms
 
 **Capabilities**:
+
 - Atomicity analysis (is intent irreducible?)
 - Testability analysis (is intent observable/falsifiable?)
 - Implementation-agnostic check (does it describe WHAT, not HOW?)
@@ -538,9 +582,11 @@ Pact uses specialized AI agents to automate key transformations while maintainin
 **Status**: ✅ Complete
 
 #### Atom Quality Validator
+
 **Purpose**: Review proposed atoms for quality before commitment
 
 **Capabilities**:
+
 - 5-dimension quality scoring (0-100)
 - Gating logic (≥80 approve, 60-79 revise, <60 reject)
 - Actionable feedback generation
@@ -548,9 +594,11 @@ Pact uses specialized AI agents to automate key transformations while maintainin
 **Status**: ✅ Complete
 
 #### Test-Atom Coupling Agent
+
 **Purpose**: Ensure tests properly reference atoms and detect mismatches
 
 **Capabilities**:
+
 - Orphan test detection (tests without `@atom`)
 - Unrealized atom detection (atoms without tests)
 - Test-atom mismatch detection (INV-009 violations)
@@ -559,9 +607,11 @@ Pact uses specialized AI agents to automate key transformations while maintainin
 **Status**: 🔨 In Progress
 
 #### Test Quality Analyzer
+
 **Purpose**: Review tests against 7 quality dimensions
 
 **Capabilities**:
+
 - Intent fidelity checking
 - Vacuous/brittle test detection
 - Determinism validation
@@ -617,26 +667,32 @@ Pact uses specialized AI agents to automate key transformations while maintainin
 ## Key Documents
 
 ### Core Philosophy
+
 - [ingest/manifesto.md](../ingest/manifesto.md) - The Intent-Centric Software Manifesto
 - [ingest/taxonomy.md](../ingest/taxonomy.md) - ProdOS Canonical Taxonomy
 - [ingest/invariants.md](../ingest/invariants.md) - Global Invariants
 
 ### Implementation
+
 - [ideas/implementation-kickoff.md](../ideas/implementation-kickoff.md) - Phase 0 implementation plan
 - [docs/implementation-guide-2026-01-12.md](implementation-guide-2026-01-12.md) - Full implementation roadmap
 - [docs/implementation-checklist.md](implementation-checklist.md) - Current status tracking
 
 ### Requirements
+
 - [docs/requirements/requirements-synthesis-2026-01-12.md](requirements/requirements-synthesis-2026-01-12.md) - Requirements synthesis
 - [docs/acceptance-criteria/pact-acceptance-criteria-2026-01-12.md](acceptance-criteria/pact-acceptance-criteria-2026-01-12.md) - Acceptance criteria (90 scenarios)
 
 ### Architecture
+
 - [docs/architectural-review-response-2026-01-12.md](architectural-review-response-2026-01-12.md) - Architectural decisions
 
 ### Agents
+
 - [ideas/pact-agents.md](../ideas/pact-agents.md) - Agent specifications
 
 ### Testing
+
 - [ingest/test-quality.md](../ingest/test-quality.md) - Test quality metrics taxonomy
 
 ---
@@ -646,24 +702,29 @@ Pact uses specialized AI agents to automate key transformations while maintainin
 ### For MVP Launch
 
 **Intent Quality**:
+
 - 90%+ of Intent Atoms pass atomicity checks without major revision
 - Average refinement iterations < 3 per Intent Atom
 
 **Commitment Success**:
+
 - 95%+ of commitments pass invariant checks on first attempt
 - 0 accidental invariant overrides
 
 **Realization Accuracy**:
+
 - 80%+ of agent-generated tests accurately reflect intent
 - 70%+ of agent-generated code passes tests on first attempt
 - <10% of failures classified as "intent mismatch"
 
 **Evidence Completeness**:
+
 - 100% of test executions produce Evidence Artifacts
 - 95%+ of realizations have security scan Evidence
 - 90%+ of realizations have test quality Evidence
 
 **Developer Experience**:
+
 - Time from "idea" to "working code" reduced by 50% vs. traditional workflow
 - Developers rate Pact UX as 7+/10 for clarity and ease of use
 - 90%+ of developers can complete intent → commitment → realization cycle within first week

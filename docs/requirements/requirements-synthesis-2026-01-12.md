@@ -1,7 +1,7 @@
 # Pact - Requirements Synthesis
 
 **Generated**: 2026-01-12
-**Sources**: ingest/manifesto.md, ingest/taxonomy.md, ingest/chat-trasncript-2026-01-11-2130.md, ingest/invariants.md
+**Sources**: ingest/manifesto.md, ingest/taxonomy.md, ingest/chat-transcript-2026-01-11-2130.md, ingest/invariants.md
 **Status**: Draft - Evolving Understanding
 
 **Important Context**: This synthesis captures evolving understanding through dialog and conversation. These are not fixed requirements or global invariants, but rather context for understanding the system vision as it has developed through exploration.
@@ -657,7 +657,7 @@ Philosophical foundation declaring the phase shift from code-centric to intent-c
 
 ProdOS Canonical Taxonomy v0.1 - formal meta-system ontology. Five first-class categories (Intent, Boundary, Commitment, Realization, Evidence) with precise definitions. Explicitly excludes domain entities, UI, workflow states, and technology choices to remain portable across client projects. This is the load-bearing semantic structure.
 
-### chat-trasncript-2026-01-11-2130.md
+### chat-transcript-2026-01-11-2130.md
 
 Extensive Socratic dialog exploring the ontology. Key insights: Intent Units are cognitive scaffolding, not semantic primitives; collections of atoms don't introduce new boundaries; validators give atoms force; the phase shift requires new industry language; specs/stories/tickets are convenience artifacts, not truth. This represents the thought process that led to the taxonomy.
 

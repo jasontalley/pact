@@ -11,10 +11,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as fs from 'fs';
-import {
-  TestAtomCouplingService,
-  CouplingAnalysisResult,
-} from './test-atom-coupling.service';
+import { TestAtomCouplingService, CouplingAnalysisResult } from './test-atom-coupling.service';
 import { Atom } from '../atoms/atom.entity';
 
 // Mock fs module
@@ -280,7 +277,9 @@ describe('Test', () => {
       // IA-999 does not exist in database
       mockAtomRepository.find
         .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([{ atomId: 'IA-001', description: 'Existing atom', status: 'draft' }]);
+        .mockResolvedValueOnce([
+          { atomId: 'IA-001', description: 'Existing atom', status: 'draft' },
+        ]);
 
       const result = await service.analyzeCoupling({ testDirectory: '/test' });
 
@@ -311,8 +310,12 @@ describe('Test', () => {
 
       // IA-001 exists in database
       mockAtomRepository.find
-        .mockResolvedValueOnce([{ atomId: 'IA-001', description: 'Existing atom', status: 'committed' }])
-        .mockResolvedValueOnce([{ atomId: 'IA-001', description: 'Existing atom', status: 'committed' }]);
+        .mockResolvedValueOnce([
+          { atomId: 'IA-001', description: 'Existing atom', status: 'committed' },
+        ])
+        .mockResolvedValueOnce([
+          { atomId: 'IA-001', description: 'Existing atom', status: 'committed' },
+        ]);
 
       const result = await service.analyzeCoupling({ testDirectory: '/test' });
 
@@ -406,10 +409,7 @@ describe('Test', () => {
         { name: 'test.spec.ts', isDirectory: () => false, isFile: () => true },
       ] as any);
       mockFs.readFileSync.mockReturnValue(testContent);
-      mockAtomRepository.find.mockResolvedValue([
-        { atomId: 'IA-001' },
-        { atomId: 'IA-002' },
-      ]);
+      mockAtomRepository.find.mockResolvedValue([{ atomId: 'IA-001' }, { atomId: 'IA-002' }]);
 
       const result = await service.analyzeCoupling({
         testDirectory: '/test',
@@ -517,7 +517,12 @@ describe('Test', () => {
           { atomId: 'IA-050', description: 'Unrealized atom description', status: 'committed' },
         ],
         mismatches: [
-          { atomId: 'IA-999', testFile: '/test/mismatch.spec.ts', testName: 'bad test', issue: 'Atom does not exist' },
+          {
+            atomId: 'IA-999',
+            testFile: '/test/mismatch.spec.ts',
+            testName: 'bad test',
+            issue: 'Atom does not exist',
+          },
         ],
         testFileAnalyses: [],
         passesGate: false,

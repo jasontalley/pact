@@ -62,14 +62,19 @@ export class AtomQualityService {
     this.logger.log(`Validating atom quality: ${atom.atomId}`);
 
     // Evaluate each dimension
-    const [observable, falsifiable, implementationAgnostic, unambiguousLanguage, clearSuccessCriteria] =
-      await Promise.all([
-        this.evaluateObservable(atom),
-        this.evaluateFalsifiable(atom),
-        this.evaluateImplementationAgnostic(atom),
-        this.evaluateUnambiguousLanguage(atom),
-        this.evaluateClearSuccessCriteria(atom),
-      ]);
+    const [
+      observable,
+      falsifiable,
+      implementationAgnostic,
+      unambiguousLanguage,
+      clearSuccessCriteria,
+    ] = await Promise.all([
+      this.evaluateObservable(atom),
+      this.evaluateFalsifiable(atom),
+      this.evaluateImplementationAgnostic(atom),
+      this.evaluateUnambiguousLanguage(atom),
+      this.evaluateClearSuccessCriteria(atom),
+    ]);
 
     const dimensions = {
       observable,
@@ -144,7 +149,11 @@ Respond in JSON format:
     try {
       const response = await this.llmService.invoke({
         messages: [
-          { role: 'system', content: 'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality.' },
+          {
+            role: 'system',
+            content:
+              'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality.',
+          },
           { role: 'user', content: prompt },
         ],
         agentName: 'AtomQualityValidator',
@@ -198,7 +207,11 @@ Respond in JSON format:
     try {
       const response = await this.llmService.invoke({
         messages: [
-          { role: 'system', content: 'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality.' },
+          {
+            role: 'system',
+            content:
+              'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality.',
+          },
           { role: 'user', content: prompt },
         ],
         agentName: 'AtomQualityValidator',
@@ -252,7 +265,11 @@ Respond in JSON format:
     try {
       const response = await this.llmService.invoke({
         messages: [
-          { role: 'system', content: 'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality.' },
+          {
+            role: 'system',
+            content:
+              'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality.',
+          },
           { role: 'user', content: prompt },
         ],
         agentName: 'AtomQualityValidator',
@@ -268,7 +285,9 @@ Respond in JSON format:
         suggestions: parsed.suggestions || [],
       };
     } catch (error) {
-      this.logger.warn(`LLM evaluation failed for implementation-agnostic, using heuristic: ${error}`);
+      this.logger.warn(
+        `LLM evaluation failed for implementation-agnostic, using heuristic: ${error}`,
+      );
       return this.heuristicImplementationAgnostic(atom);
     }
   }
@@ -306,7 +325,11 @@ Respond in JSON format:
     try {
       const response = await this.llmService.invoke({
         messages: [
-          { role: 'system', content: 'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality.' },
+          {
+            role: 'system',
+            content:
+              'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality.',
+          },
           { role: 'user', content: prompt },
         ],
         agentName: 'AtomQualityValidator',
@@ -360,7 +383,11 @@ Respond in JSON format:
     try {
       const response = await this.llmService.invoke({
         messages: [
-          { role: 'system', content: 'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality.' },
+          {
+            role: 'system',
+            content:
+              'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality.',
+          },
           { role: 'user', content: prompt },
         ],
         agentName: 'AtomQualityValidator',
@@ -376,7 +403,9 @@ Respond in JSON format:
         suggestions: parsed.suggestions || [],
       };
     } catch (error) {
-      this.logger.warn(`LLM evaluation failed for clear success criteria, using heuristic: ${error}`);
+      this.logger.warn(
+        `LLM evaluation failed for clear success criteria, using heuristic: ${error}`,
+      );
       return this.heuristicClearSuccessCriteria(atom);
     }
   }
@@ -440,7 +469,11 @@ Respond in JSON format:
   /**
    * Parse JSON response from LLM, handling markdown code blocks
    */
-  private parseJsonResponse(content: string): { score: number; feedback: string; suggestions: string[] } {
+  private parseJsonResponse(content: string): {
+    score: number;
+    feedback: string;
+    suggestions: string[];
+  } {
     try {
       // Remove markdown code blocks if present
       let cleaned = content.trim();
@@ -469,7 +502,8 @@ Respond in JSON format:
     const suggestions: string[] = [];
 
     // Check for observable verbs
-    const observableVerbs = /\b(displays?|shows?|returns?|sends?|receives?|responds?|outputs?|produces?|emits?|notifies?)\b/i;
+    const observableVerbs =
+      /\b(displays?|shows?|returns?|sends?|receives?|responds?|outputs?|produces?|emits?|notifies?)\b/i;
     if (observableVerbs.test(atom.description)) {
       score += 5;
     } else {
@@ -484,7 +518,8 @@ Respond in JSON format:
     }
 
     // Check for measurable outcomes
-    const measurablePatterns = /\b(within|less than|more than|at least|exactly|between|\d+\s*(seconds?|ms|minutes?))\b/i;
+    const measurablePatterns =
+      /\b(within|less than|more than|at least|exactly|between|\d+\s*(seconds?|ms|minutes?))\b/i;
     if (measurablePatterns.test(atom.description)) {
       score += 5;
     } else {
@@ -541,10 +576,13 @@ Respond in JSON format:
     const suggestions: string[] = [];
 
     // Check for technology-specific words (negative)
-    const techWords = /\b(sql|database|api|http|rest|graphql|redis|postgres|mongo|kafka|rabbitmq|jwt|oauth|docker|kubernetes)\b/i;
+    const techWords =
+      /\b(sql|database|api|http|rest|graphql|redis|postgres|mongo|kafka|rabbitmq|jwt|oauth|docker|kubernetes)\b/i;
     if (techWords.test(atom.description)) {
       score -= 6;
-      suggestions.push('Remove technology-specific terms; describe the behavior, not the implementation');
+      suggestions.push(
+        'Remove technology-specific terms; describe the behavior, not the implementation',
+      );
     }
 
     // Check for implementation verbs (negative)
@@ -574,7 +612,8 @@ Respond in JSON format:
     const suggestions: string[] = [];
 
     // Check for vague adjectives (negative)
-    const vagueAdjectives = /\b(fast|slow|good|bad|better|worse|nice|efficient|effective|user-friendly|intuitive|simple|easy|quick)\b/i;
+    const vagueAdjectives =
+      /\b(fast|slow|good|bad|better|worse|nice|efficient|effective|user-friendly|intuitive|simple|easy|quick)\b/i;
     if (vagueAdjectives.test(atom.description)) {
       score -= 4;
       suggestions.push('Replace vague adjectives with specific, measurable criteria');
@@ -593,7 +632,9 @@ Respond in JSON format:
       suggestions.push('Add more detail to clarify the expected behavior');
     } else if (wordCount > 30) {
       score -= 2;
-      suggestions.push('Consider splitting this into multiple atoms if it describes multiple behaviors');
+      suggestions.push(
+        'Consider splitting this into multiple atoms if it describes multiple behaviors',
+      );
     }
 
     return {
@@ -610,7 +651,8 @@ Respond in JSON format:
     const suggestions: string[] = [];
 
     // Check for success indicators
-    const successIndicators = /\b(successfully|completes?|confirms?|verified?|validates?|pass(?:es)?|receives?)\b/i;
+    const successIndicators =
+      /\b(successfully|completes?|confirms?|verified?|validates?|pass(?:es)?|receives?)\b/i;
     if (successIndicators.test(atom.description)) {
       score += 3;
     } else {

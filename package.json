@@ -22,6 +22,7 @@
     "test:bdd": "cucumber-js",
     "test:bdd:watch": "nodemon --exec cucumber-js",
     "test:quality": "node bootstrap/tooling/test-quality-analyzer.js",
+    "test:quality:report": "node bootstrap/tooling/test-quality-analyzer.js --report",
     "test:coupling": "node bootstrap/tooling/test-atom-coupling.js src",
     "typeorm": "typeorm-ts-node-commonjs -d src/config/database/data-source.ts",
     "migration:generate": "typeorm-ts-node-commonjs migration:generate -d src/config/database/data-source.ts",
