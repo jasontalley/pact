@@ -8,8 +8,8 @@
  * Owner: @jasontalley
  */
 
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 
 // Quality dimensions (from /ingest/test-quality.md)
 const QUALITY_DIMENSIONS = {
@@ -25,7 +25,8 @@ const QUALITY_DIMENSIONS = {
 function analyzeTestFile(filePath) {
   const content = fs.readFileSync(filePath, 'utf-8');
 
-  const scores = {
+  // Run all checks and collect both scores and diagnostics
+  const checkResults = {
     intentFidelity: checkIntentFidelity(content),
     noVacuousTests: checkForVacuousTests(content),
     noBrittleTests: checkForBrittleTests(content),
@@ -35,15 +36,24 @@ function analyzeTestFile(filePath) {
     boundaryAndNegativeCoverage: checkBoundaryAndNegativeCoverage(content),
   };
 
+  // Extract scores for backward compatibility with calculateOverallScore/checkThresholds
+  const scores = {};
+  const diagnostics = {};
+  Object.entries(checkResults).forEach(([key, result]) => {
+    scores[key] = result.score;
+    diagnostics[key] = result.diagnostics;
+  });
+
   const overallScore = calculateOverallScore(scores);
   const passed = checkThresholds(scores);
 
   return {
     filePath,
     scores,
+    diagnostics,
     overallScore,
     passed,
-    issues: collectIssues(scores),
+    issues: collectIssues(scores, diagnostics),
   };
 }
 
@@ -52,67 +62,114 @@ function checkIntentFidelity(content) {
   const atomAnnotations = (content.match(/@atom IA-\d{3}/g) || []).length;
   const testCases = (content.match(/it\(/g) || []).length;
 
-  if (testCases === 0) return 1.0; // No tests yet
+  if (testCases === 0) {
+    return { score: 1, diagnostics: { atomAnnotations: 0, testCases: 0 } };
+  }
 
   const coverage = atomAnnotations / testCases;
-  return Math.min(coverage, 1.0);
+  return {
+    score: Math.min(coverage, 1),
+    diagnostics: {
+      atomAnnotations,
+      testCases,
+      missing: testCases - atomAnnotations,
+    },
+  };
 }
 
 function checkForVacuousTests(content) {
   const vacuousPatterns = [
-    /expect\([^)]+\)\.toBeDefined\(\)/g,
-    /expect\([^)]+\)\.toBeTruthy\(\)/g,
-    /expect\(true\)\.toBe\(true\)/g,
+    { pattern: /expect\([^)]+\)\.toBeDefined\(\)/g, name: 'toBeDefined()' },
+    { pattern: /expect\([^)]+\)\.toBeTruthy\(\)/g, name: 'toBeTruthy()' },
+    { pattern: /expect\(true\)\.toBe\(true\)/g, name: 'toBe(true) literal' },
   ];
 
+  const vacuousDetails = {};
   let vacuousCount = 0;
-  vacuousPatterns.forEach((pattern) => {
-    vacuousCount += (content.match(pattern) || []).length;
+  vacuousPatterns.forEach(({ pattern, name }) => {
+    const count = (content.match(pattern) || []).length;
+    if (count > 0) {
+      vacuousDetails[name] = count;
+      vacuousCount += count;
+    }
   });
 
   const totalAssertions = (content.match(/expect\(/g) || []).length;
-  if (totalAssertions === 0) return 1.0;
+  if (totalAssertions === 0) {
+    return { score: 1, diagnostics: { vacuousCount: 0, totalAssertions: 0 } };
+  }
 
-  return 1.0 - vacuousCount / totalAssertions;
+  return {
+    score: 1 - vacuousCount / totalAssertions,
+    diagnostics: {
+      vacuousCount,
+      totalAssertions,
+      strongAssertions: totalAssertions - vacuousCount,
+      vacuousDetails,
+    },
+  };
 }
 
 function checkForBrittleTests(content) {
   const brittlePatterns = [
-    /\.toHaveBeenCalledTimes\(/g, // Coupling to call count
-    /toMatchSnapshot\(\)/g, // Snapshot tests can be brittle
+    { pattern: /\.toHaveBeenCalledTimes\(/g, name: 'toHaveBeenCalledTimes()' },
+    { pattern: /toMatchSnapshot\(\)/g, name: 'toMatchSnapshot()' },
   ];
 
+  const brittleDetails = {};
   let brittleCount = 0;
-  brittlePatterns.forEach((pattern) => {
-    brittleCount += (content.match(pattern) || []).length;
+  brittlePatterns.forEach(({ pattern, name }) => {
+    const count = (content.match(pattern) || []).length;
+    if (count > 0) {
+      brittleDetails[name] = count;
+      brittleCount += count;
+    }
   });
 
   const totalTests = (content.match(/it\(/g) || []).length;
-  if (totalTests === 0) return 1.0;
+  if (totalTests === 0) {
+    return { score: 1, diagnostics: { brittleCount: 0, totalTests: 0 } };
+  }
 
-  return Math.max(0, 1.0 - (brittleCount / totalTests) * 0.5);
+  return {
+    score: Math.max(0, 1 - (brittleCount / totalTests) * 0.5),
+    diagnostics: {
+      brittleCount,
+      totalTests,
+      brittleDetails,
+    },
+  };
 }
 
 function checkDeterminism(content) {
   const nonDeterministicPatterns = [
-    /Math\.random\(\)/g,
-    /Date\.now\(\)/g,
-    /new Date\(\)/g,
-    /fetch\(/g,
-    /axios\./g,
+    { pattern: /Math\.random\(\)/g, name: 'Math.random()' },
+    { pattern: /Date\.now\(\)/g, name: 'Date.now()' },
+    { pattern: /new Date\(\)/g, name: 'new Date()' },
+    { pattern: /fetch\(/g, name: 'fetch()' },
+    { pattern: /axios\./g, name: 'axios' },
   ];
 
+  const isMocked = content.includes('jest.mock') || content.includes('jest.spyOn');
+  const unmockedDetails = {};
   let issues = 0;
-  nonDeterministicPatterns.forEach((pattern) => {
+
+  nonDeterministicPatterns.forEach(({ pattern, name }) => {
     const matches = content.match(pattern) || [];
-    // Check if they're mocked
-    const isMocked = content.includes('jest.mock') || content.includes('jest.spyOn');
     if (matches.length > 0 && !isMocked) {
+      unmockedDetails[name] = matches.length;
       issues += matches.length;
     }
   });
 
-  return issues === 0 ? 1.0 : Math.max(0, 1.0 - issues * 0.1);
+  return {
+    score: issues === 0 ? 1 : Math.max(0, 1 - issues * 0.1),
+    diagnostics: {
+      unmockedCount: issues,
+      isMocked,
+      unmockedDetails,
+    },
+  };
 }
 
 function checkFailureSignalQuality(content) {
@@ -135,56 +192,102 @@ function checkFailureSignalQuality(content) {
 
   const totalAssertions = (contentWithoutTemplateLiterals.match(/expect\(/g) || []).length;
 
-  if (totalAssertions === 0) return 1.0;
+  if (totalAssertions === 0) {
+    return { score: 1, diagnostics: { documented: 0, totalAssertions: 0 } };
+  }
 
   const documented = assertionsWithInlineMessages + assertionsWithComments;
-  return Math.min(documented / totalAssertions, 1.0);
+  return {
+    score: Math.min(documented / totalAssertions, 1),
+    diagnostics: {
+      withComments: assertionsWithComments,
+      withInlineMessages: assertionsWithInlineMessages,
+      documented,
+      totalAssertions,
+      undocumented: totalAssertions - documented,
+    },
+  };
 }
 
 function checkIntegrationAuthenticity(content, filePath) {
   const isIntegrationTest =
     filePath.includes('integration') || filePath.includes('e2e');
 
-  if (!isIntegrationTest) return 1.0; // Not applicable to unit tests
+  if (!isIntegrationTest) {
+    return { score: 1, diagnostics: { isIntegrationTest: false, notApplicable: true } };
+  }
 
   // Check for inappropriate mocks in integration tests
   const mockPatterns = [
-    /jest\.mock\(/g,
-    /\.mockImplementation\(/g,
-    /\.mockReturnValue\(/g,
+    { pattern: /jest\.mock\(/g, name: 'jest.mock()' },
+    { pattern: /\.mockImplementation\(/g, name: 'mockImplementation()' },
+    { pattern: /\.mockReturnValue\(/g, name: 'mockReturnValue()' },
   ];
 
+  const mockDetails = {};
   let mockCount = 0;
-  mockPatterns.forEach((pattern) => {
-    mockCount += (content.match(pattern) || []).length;
+  mockPatterns.forEach(({ pattern, name }) => {
+    const count = (content.match(pattern) || []).length;
+    if (count > 0) {
+      mockDetails[name] = count;
+      mockCount += count;
+    }
   });
 
   // Integration tests should have minimal mocking
-  return mockCount === 0 ? 1.0 : Math.max(0, 1.0 - mockCount * 0.2);
+  return {
+    score: mockCount === 0 ? 1 : Math.max(0, 1 - mockCount * 0.2),
+    diagnostics: {
+      isIntegrationTest: true,
+      mockCount,
+      mockDetails,
+    },
+  };
 }
 
 function checkBoundaryAndNegativeCoverage(content) {
   const boundaryPatterns = [
-    /toBe\(0\)/g,
-    /toBe\(null\)/g,
-    /toBe\(undefined\)/g,
-    /toBeGreaterThan\(/g,
-    /toBeLessThan\(/g,
-    /toThrow/g,
-    /expect.*\.rejects/g,
+    { pattern: /toBe\(0\)/g, name: 'toBe(0)' },
+    { pattern: /toBe\(null\)/g, name: 'toBe(null)' },
+    { pattern: /toBe\(undefined\)/g, name: 'toBe(undefined)' },
+    { pattern: /toBeNull\(\)/g, name: 'toBeNull()' },
+    { pattern: /toBeUndefined\(\)/g, name: 'toBeUndefined()' },
+    { pattern: /toBeGreaterThan\(/g, name: 'toBeGreaterThan()' },
+    { pattern: /toBeLessThan\(/g, name: 'toBeLessThan()' },
+    { pattern: /toThrow/g, name: 'toThrow()' },
+    { pattern: /expect.*\.rejects/g, name: '.rejects' },
   ];
 
+  const boundaryDetails = {};
   let boundaryTestCount = 0;
-  boundaryPatterns.forEach((pattern) => {
-    boundaryTestCount += (content.match(pattern) || []).length;
+  boundaryPatterns.forEach(({ pattern, name }) => {
+    const count = (content.match(pattern) || []).length;
+    if (count > 0) {
+      boundaryDetails[name] = count;
+      boundaryTestCount += count;
+    }
   });
 
   const totalTests = (content.match(/it\(/g) || []).length;
-  if (totalTests === 0) return 1.0;
+  if (totalTests === 0) {
+    return { score: 1, diagnostics: { boundaryTestCount: 0, totalTests: 0 } };
+  }
 
   // At least 30% of tests should cover boundaries/negatives
   const ratio = boundaryTestCount / totalTests;
-  return Math.min(ratio / 0.3, 1.0);
+  const targetCount = Math.ceil(totalTests * 0.3);
+
+  return {
+    score: Math.min(ratio / 0.3, 1),
+    diagnostics: {
+      boundaryTestCount,
+      totalTests,
+      ratio: (ratio * 100).toFixed(1) + '%',
+      targetCount,
+      needed: Math.max(0, targetCount - boundaryTestCount),
+      boundaryDetails,
+    },
+  };
 }
 
 function calculateOverallScore(scores) {
@@ -217,20 +320,95 @@ function checkThresholds(scores) {
   return failures.length === 0;
 }
 
-function collectIssues(scores) {
+function collectIssues(scores, diagnostics = {}) {
   const issues = [];
+
+  // Remediation hints for each dimension
+  const remediationHints = {
+    intentFidelity: 'Add "// @atom IA-XXX" comments before test cases to link them to Intent Atoms',
+    noVacuousTests: 'Replace weak assertions like .toBeDefined() or .toBeTruthy() with specific value checks',
+    noBrittleTests: 'Reduce use of .toHaveBeenCalledTimes() and toMatchSnapshot() - test behavior, not implementation',
+    determinism: 'Mock Date, Math.random, and network calls with jest.spyOn() or jest.mock()',
+    failureSignalQuality: 'Add a comment on the line directly BEFORE each expect() statement explaining what it tests',
+    integrationTestAuthenticity: 'Remove mocks from integration tests - use real dependencies or Docker containers',
+    boundaryAndNegativeCoverage: 'Add tests using .toBe(0), .toBe(null), .toBeNull(), .toThrow(), or .rejects',
+  };
+
+  // What each dimension measures
+  const dimensionDescriptions = {
+    intentFidelity: 'Tests linked to Intent Atoms via @atom comments',
+    noVacuousTests: 'Assertions that test specific values (not just .toBeDefined())',
+    noBrittleTests: 'Tests that don\'t couple to implementation details',
+    determinism: 'Tests without unmocked sources of randomness (Date, Math.random, etc.)',
+    failureSignalQuality: 'expect() statements with explanatory comment on preceding line',
+    integrationTestAuthenticity: 'Integration tests without inappropriate mocking',
+    boundaryAndNegativeCoverage: 'Tests covering edge cases (null, 0, errors, boundaries)',
+  };
+
+  // Generate human-readable diagnostic summary
+  function formatDiagnostic(dimension, diag) {
+    if (!diag) return null;
+
+    // Helper to format detail objects as "Nx pattern, Mx pattern2"
+    const formatDetails = (details) =>
+      Object.entries(details || {})
+        .map(([k, v]) => `${v}x ${k}`)
+        .join(', ');
+
+    switch (dimension) {
+      case 'intentFidelity':
+        if (diag.testCases === 0) return 'No test cases found';
+        return `${diag.atomAnnotations} of ${diag.testCases} tests have @atom annotations (${diag.missing} missing)`;
+
+      case 'noVacuousTests':
+        if (diag.totalAssertions === 0) return 'No assertions found';
+        if (diag.vacuousCount === 0) return null;
+        return `${diag.vacuousCount} weak assertions found: ${formatDetails(diag.vacuousDetails)}`;
+
+      case 'noBrittleTests':
+        if (diag.brittleCount === 0) return null;
+        return `${diag.brittleCount} brittle patterns found: ${formatDetails(diag.brittleDetails)}`;
+
+      case 'determinism':
+        if (diag.unmockedCount === 0) return null;
+        return `${diag.unmockedCount} unmocked non-deterministic calls: ${formatDetails(diag.unmockedDetails)}`;
+
+      case 'failureSignalQuality':
+        if (diag.totalAssertions === 0) return 'No assertions found';
+        return `${diag.documented} of ${diag.totalAssertions} expect() have comments (${diag.undocumented} need comments)`;
+
+      case 'integrationTestAuthenticity':
+        if (diag.notApplicable) return 'N/A (not an integration test)';
+        if (diag.mockCount === 0) return null;
+        return `${diag.mockCount} mocks in integration test: ${formatDetails(diag.mockDetails)}`;
+
+      case 'boundaryAndNegativeCoverage':
+        if (diag.totalTests === 0) return 'No tests found';
+        return `${diag.boundaryTestCount} boundary tests (${diag.ratio} of tests). Target: ${diag.targetCount}. Found: ${formatDetails(diag.boundaryDetails) || 'none'}`;
+
+      default:
+        return null;
+    }
+  }
 
   Object.keys(QUALITY_DIMENSIONS).forEach((dimension) => {
     const threshold = QUALITY_DIMENSIONS[dimension].threshold;
     const score = scores[dimension];
 
     if (score < threshold) {
-      issues.push({
+      const diag = diagnostics[dimension];
+      const issue = {
         dimension,
         score: (score * 100).toFixed(1) + '%',
         threshold: (threshold * 100).toFixed(1) + '%',
         severity: score < threshold * 0.5 ? 'critical' : 'warning',
-      });
+        description: dimensionDescriptions[dimension],
+        fix: remediationHints[dimension],
+        diagnostic: formatDiagnostic(dimension, diag),
+        rawDiagnostics: diag,
+      };
+
+      issues.push(issue);
     }
   });
 
@@ -274,13 +452,20 @@ function generateHtmlReport(results) {
       const relativePath = path.relative(process.cwd(), result.filePath);
       const issueHtml =
         result.issues.length > 0
-          ? `<ul class="issues">${result.issues
+          ? `<div class="issues">${result.issues
               .map(
-                (i) =>
-                  `<li>${i.severity === 'critical' ? '🔴' : '🟡'} ${i.dimension}: ${i.score}</li>`,
+                (i) => `
+                  <div class="issue ${i.severity}">
+                    <div class="issue-header">
+                      ${i.severity === 'critical' ? '🔴' : '🟡'}
+                      <strong>${i.dimension}</strong>: ${i.score} (need ${i.threshold})
+                    </div>
+                    ${i.diagnostic ? `<div class="issue-diagnostic">📊 ${i.diagnostic}</div>` : ''}
+                    <div class="issue-fix">💡 ${i.fix}</div>
+                  </div>`,
               )
-              .join('')}</ul>`
-          : '<span class="no-issues">No issues</span>';
+              .join('')}</div>`
+          : '<span class="no-issues">✅ No issues</span>';
 
       return `
         <tr class="${result.passed ? 'passed' : 'failed'}">
@@ -344,8 +529,12 @@ function generateHtmlReport(results) {
     tr.failed td:first-child { border-left: 3px solid #ef4444; }
     .issues-row { background: #16213e; }
     .issues-row td { padding: 8px 12px; font-size: 0.9em; }
-    .issues { margin: 0; padding-left: 20px; }
-    .issues li { margin: 4px 0; }
+    .issues { margin: 0; }
+    .issue { margin: 8px 0; padding: 10px; background: #1e293b; border-radius: 6px; border-left: 3px solid #eab308; }
+    .issue.critical { border-left-color: #ef4444; }
+    .issue-header { font-size: 0.95em; margin-bottom: 6px; }
+    .issue-diagnostic { color: #94a3b8; font-size: 0.85em; margin: 4px 0 4px 20px; }
+    .issue-fix { color: #22d3ee; font-size: 0.85em; margin: 4px 0 0 20px; }
     .no-issues { color: #22c55e; }
     footer {
       margin-top: 40px; padding-top: 20px; border-top: 1px solid #334155;
@@ -444,6 +633,8 @@ if (require.main === module) {
     });
 
     // Summary output
+    const verbose = args.includes('--verbose') || args.includes('-v');
+
     results.forEach((result) => {
       const status = result.passed ? '✅' : '❌';
       const relativePath = path.relative(process.cwd(), result.filePath);
@@ -452,7 +643,13 @@ if (require.main === module) {
       if (result.issues.length > 0) {
         result.issues.forEach((issue) => {
           const icon = issue.severity === 'critical' ? '   🔴' : '   🟡';
-          console.log(`${icon} ${issue.dimension}: ${issue.score}`);
+          console.log(`${icon} ${issue.dimension}: ${issue.score} (need ${issue.threshold})`);
+          if (issue.diagnostic) {
+            console.log(`      📊 ${issue.diagnostic}`);
+          }
+          if (verbose && issue.fix) {
+            console.log(`      💡 Fix: ${issue.fix}`);
+          }
         });
       }
     });
@@ -460,6 +657,11 @@ if (require.main === module) {
     console.log(`\nTotal: ${results.length} files analyzed`);
     console.log(`Passed: ${results.filter((r) => r.passed).length}`);
     console.log(`Failed: ${results.filter((r) => !r.passed).length}`);
+
+    // Show help hint if there are failures and not in verbose mode
+    if (!allPassed && !verbose) {
+      console.log('\nTip: Run with --verbose or -v for remediation hints');
+    }
 
     // Generate HTML report if requested
     if (generateReport) {
@@ -480,6 +682,7 @@ if (require.main === module) {
 
   try {
     const result = analyzeTestFile(testFilePath);
+    const verbose = args.includes('--verbose') || args.includes('-v');
 
     console.log('\n=== Test Quality Analysis ===\n');
     console.log(`File: ${result.filePath}`);
@@ -490,9 +693,23 @@ if (require.main === module) {
       console.log('Issues Found:\n');
       result.issues.forEach((issue) => {
         const icon = issue.severity === 'critical' ? '🔴' : '🟡';
-        console.log(
-          `${icon} ${issue.dimension}: ${issue.score} (threshold: ${issue.threshold})`,
-        );
+        console.log(`${icon} ${issue.dimension}: ${issue.score} (need ${issue.threshold})`);
+        console.log(`   📖 What it measures: ${issue.description}`);
+        if (issue.diagnostic) {
+          console.log(`   📊 Current state: ${issue.diagnostic}`);
+        }
+        console.log(`   💡 How to fix: ${issue.fix}`);
+        console.log('');
+      });
+    }
+
+    // Show dimension legend if verbose
+    if (verbose) {
+      console.log('--- All Dimension Scores ---');
+      Object.entries(result.scores).forEach(([dim, score]) => {
+        const threshold = QUALITY_DIMENSIONS[dim].threshold;
+        const status = score >= threshold ? '✅' : '❌';
+        console.log(`${status} ${dim}: ${(score * 100).toFixed(1)}% (threshold: ${(threshold * 100).toFixed(0)}%)`);
       });
       console.log('');
     }

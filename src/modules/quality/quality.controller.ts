@@ -56,7 +56,7 @@ export class QualityController {
   })
   @ApiResponse({ status: 200, description: 'Quality trend data' })
   async getTrends(@Query('days') days?: string) {
-    const numDays = days ? parseInt(days, 10) : 7;
+    const numDays = days ? Number.parseInt(days, 10) : 7;
     return this.testQualityService.getRecentTrends(numDays);
   }
 

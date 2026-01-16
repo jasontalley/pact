@@ -20,6 +20,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { LLMService } from '../../common/llm/llm.service';
 
+/**
+ * Type alias for quality gate decisions
+ */
+export type QualityDecision = 'approve' | 'revise' | 'reject';
+
 export interface QualityDimension {
   name: string;
   maxScore: number;
@@ -30,7 +35,7 @@ export interface QualityDimension {
 
 export interface AtomQualityResult {
   totalScore: number;
-  decision: 'approve' | 'revise' | 'reject';
+  decision: QualityDecision;
   dimensions: {
     observable: QualityDimension;
     falsifiable: QualityDimension;
@@ -49,11 +54,76 @@ export interface AtomForValidation {
   metadata?: Record<string, unknown>;
 }
 
+// Word lists for heuristic evaluation (extracted for maintainability)
+const OBSERVABLE_VERBS = [
+  'display',
+  'show',
+  'return',
+  'send',
+  'receive',
+  'respond',
+  'output',
+  'produce',
+  'emit',
+  'notify',
+];
+const INTERNAL_STATE_WORDS = ['store', 'cache', 'internally', 'memory', 'state', 'flag'];
+const CONDITION_WORDS = ['must', 'shall', 'will', 'when', 'if', 'only', 'always', 'never'];
+const VAGUE_QUALIFIERS = ['usually', 'sometimes', 'might', 'could', 'may', 'possibly', 'probably'];
+const TECH_WORDS = [
+  'sql',
+  'database',
+  'api',
+  'http',
+  'rest',
+  'graphql',
+  'redis',
+  'postgres',
+  'mongo',
+  'kafka',
+  'rabbitmq',
+  'jwt',
+  'oauth',
+  'docker',
+  'kubernetes',
+];
+const IMPL_VERBS = ['implement', 'use', 'using', 'call', 'invoke', 'query', 'fetch from', 'store in', 'cache in'];
+const BEHAVIOR_WORDS = ['user', 'customer', 'system', 'allow', 'enable', 'provide', 'ensure'];
+const VAGUE_ADJECTIVES = [
+  'fast',
+  'slow',
+  'good',
+  'bad',
+  'better',
+  'worse',
+  'nice',
+  'efficient',
+  'effective',
+  'user-friendly',
+  'intuitive',
+  'simple',
+  'easy',
+  'quick',
+];
+const SUCCESS_INDICATORS = ['successfully', 'complete', 'confirm', 'verify', 'validate', 'pass', 'receive'];
+const CONDITIONAL_WORDS = ['when', 'given', 'then', 'after', 'before', 'upon'];
+
 @Injectable()
 export class AtomQualityService {
   private readonly logger = new Logger(AtomQualityService.name);
 
   constructor(private readonly llmService: LLMService) {}
+
+  /**
+   * Check if text contains any word from the list (case-insensitive, word boundary)
+   */
+  private containsWord(text: string, words: string[]): boolean {
+    const lowerText = text.toLowerCase();
+    return words.some((word) => {
+      const pattern = new RegExp(String.raw`\b${word}s?\b`, 'i');
+      return pattern.test(lowerText);
+    });
+  }
 
   /**
    * Validates an atom against all 5 quality dimensions
@@ -413,7 +483,7 @@ Respond in JSON format:
   /**
    * Determine the gating decision based on total score
    */
-  private determineDecision(totalScore: number): 'approve' | 'revise' | 'reject' {
+  private determineDecision(totalScore: number): QualityDecision {
     if (totalScore >= 80) {
       return 'approve';
     } else if (totalScore >= 60) {
@@ -428,7 +498,7 @@ Respond in JSON format:
    */
   private generateOverallFeedback(
     totalScore: number,
-    decision: 'approve' | 'revise' | 'reject',
+    decision: QualityDecision,
     dimensions: AtomQualityResult['dimensions'],
   ): string {
     const weakestDimensions = Object.entries(dimensions)
@@ -502,24 +572,20 @@ Respond in JSON format:
     const suggestions: string[] = [];
 
     // Check for observable verbs
-    const observableVerbs =
-      /\b(displays?|shows?|returns?|sends?|receives?|responds?|outputs?|produces?|emits?|notifies?)\b/i;
-    if (observableVerbs.test(atom.description)) {
+    if (this.containsWord(atom.description, OBSERVABLE_VERBS)) {
       score += 5;
     } else {
       suggestions.push('Use observable verbs like "displays", "returns", or "sends"');
     }
 
     // Check for internal state words (negative)
-    const internalWords = /\b(stores?|caches?|internally|memory|state|flag)\b/i;
-    if (internalWords.test(atom.description)) {
+    if (this.containsWord(atom.description, INTERNAL_STATE_WORDS)) {
       score -= 5;
       suggestions.push('Avoid describing internal state; focus on external behavior');
     }
 
-    // Check for measurable outcomes
-    const measurablePatterns =
-      /\b(within|less than|more than|at least|exactly|between|\d+\s*(seconds?|ms|minutes?))\b/i;
+    // Check for measurable outcomes (keep regex for numeric patterns)
+    const measurablePatterns = /\b(within|less than|more than|at least|exactly|between|\d+\s*(seconds?|ms|minutes?))\b/i;
     if (measurablePatterns.test(atom.description)) {
       score += 5;
     } else {
@@ -540,21 +606,19 @@ Respond in JSON format:
     const suggestions: string[] = [];
 
     // Check for explicit conditions
-    const conditionWords = /\b(must|shall|will|when|if|only|always|never)\b/i;
-    if (conditionWords.test(atom.description)) {
+    if (this.containsWord(atom.description, CONDITION_WORDS)) {
       score += 5;
     } else {
       suggestions.push('Add explicit conditions using "must", "when", or "if"');
     }
 
     // Check for vague qualifiers (negative)
-    const vagueWords = /\b(usually|sometimes|might|could|may|possibly|probably)\b/i;
-    if (vagueWords.test(atom.description)) {
+    if (this.containsWord(atom.description, VAGUE_QUALIFIERS)) {
       score -= 5;
       suggestions.push('Remove vague qualifiers; make the behavior deterministic');
     }
 
-    // Check for specific thresholds
+    // Check for specific thresholds (keep regex for numeric patterns)
     const thresholds = /\b(\d+%?|\d+\.\d+|zero|one|two|three)\b/i;
     if (thresholds.test(atom.description)) {
       score += 5;
@@ -576,9 +640,7 @@ Respond in JSON format:
     const suggestions: string[] = [];
 
     // Check for technology-specific words (negative)
-    const techWords =
-      /\b(sql|database|api|http|rest|graphql|redis|postgres|mongo|kafka|rabbitmq|jwt|oauth|docker|kubernetes)\b/i;
-    if (techWords.test(atom.description)) {
+    if (this.containsWord(atom.description, TECH_WORDS)) {
       score -= 6;
       suggestions.push(
         'Remove technology-specific terms; describe the behavior, not the implementation',
@@ -586,15 +648,13 @@ Respond in JSON format:
     }
 
     // Check for implementation verbs (negative)
-    const implVerbs = /\b(implement|use|using|call|invoke|query|fetch from|store in|cache in)\b/i;
-    if (implVerbs.test(atom.description)) {
+    if (this.containsWord(atom.description, IMPL_VERBS)) {
       score -= 4;
       suggestions.push('Avoid implementation verbs; focus on what the system does for the user');
     }
 
     // Check for behavior-focused language (positive)
-    const behaviorWords = /\b(user|customer|system|allows?|enables?|provides?|ensures?)\b/i;
-    if (behaviorWords.test(atom.description)) {
+    if (this.containsWord(atom.description, BEHAVIOR_WORDS)) {
       score += 4;
     }
 
@@ -612,14 +672,12 @@ Respond in JSON format:
     const suggestions: string[] = [];
 
     // Check for vague adjectives (negative)
-    const vagueAdjectives =
-      /\b(fast|slow|good|bad|better|worse|nice|efficient|effective|user-friendly|intuitive|simple|easy|quick)\b/i;
-    if (vagueAdjectives.test(atom.description)) {
+    if (this.containsWord(atom.description, VAGUE_ADJECTIVES)) {
       score -= 4;
       suggestions.push('Replace vague adjectives with specific, measurable criteria');
     }
 
-    // Check for specific terms (positive)
+    // Check for specific terms (positive, keep regex for numeric patterns)
     const specificTerms = /\b(exactly|precisely|within \d+|at least \d+|no more than \d+)\b/i;
     if (specificTerms.test(atom.description)) {
       score += 3;
@@ -651,15 +709,13 @@ Respond in JSON format:
     const suggestions: string[] = [];
 
     // Check for success indicators
-    const successIndicators =
-      /\b(successfully|completes?|confirms?|verified?|validates?|pass(?:es)?|receives?)\b/i;
-    if (successIndicators.test(atom.description)) {
+    if (this.containsWord(atom.description, SUCCESS_INDICATORS)) {
       score += 3;
     } else {
       suggestions.push('Add explicit success indicators like "successfully" or "completes"');
     }
 
-    // Check for measurable outcomes
+    // Check for measurable outcomes (keep regex for numeric patterns)
     const measurableOutcomes = /\b(\d+|zero|one|all|none|every|each)\b/i;
     if (measurableOutcomes.test(atom.description)) {
       score += 3;
@@ -668,8 +724,7 @@ Respond in JSON format:
     }
 
     // Check for conditional language indicating clear acceptance
-    const conditionalSuccess = /\b(when|given|then|after|before|upon)\b/i;
-    if (conditionalSuccess.test(atom.description)) {
+    if (this.containsWord(atom.description, CONDITIONAL_WORDS)) {
       score += 2;
     }
 

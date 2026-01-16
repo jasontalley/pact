@@ -69,6 +69,8 @@ Bootstrap Scaffolding (CODE - demolished):
 |----|------|---------|----------------|-------|----------------|--------------|
 | BS-001 | tooling | Test quality analyzer for Red phase gate | Pact runtime provides built-in test quality analysis | @jasontalley | TBD | Phase 1 |
 | BS-002 | tooling | Scaffold registry CLI for managing bootstrap code | No new scaffolds being created (Phase 2) | @jasontalley | TBD | Phase 2 |
+| BS-003 | seed | Seed database with atom definitions from test annotations | Pact can manage atoms via UI/API without seed step | @jasontalley | TBD | Phase 1 |
+| BS-004 | seed | Project atoms from database to filesystem | Pact provides built-in projection via API/CLI | @jasontalley | TBD | Phase 1 |
 
 ---
 

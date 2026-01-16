@@ -23,7 +23,7 @@ import pRetry, { AbortError } from 'p-retry';
 import { RateLimiterRedis, RateLimiterMemory } from 'rate-limiter-flexible';
 import Redis from 'ioredis';
 import { v4 as uuidv4 } from 'uuid';
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 
 import { LLMConfiguration } from '../../modules/llm/llm-configuration.entity';
 import { LLMUsageTracking } from '../../modules/llm/llm-usage-tracking.entity';
@@ -79,10 +79,10 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     @InjectRepository(LLMConfiguration)
-    private configRepository: Repository<LLMConfiguration>,
+    private readonly configRepository: Repository<LLMConfiguration>,
     @InjectRepository(LLMUsageTracking)
-    private usageRepository: Repository<LLMUsageTracking>,
-    private configService: ConfigService,
+    private readonly usageRepository: Repository<LLMUsageTracking>,
+    private readonly configService: ConfigService,
   ) {}
 
   async onModuleInit() {
@@ -614,7 +614,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
       .andWhere('usage.success = :success', { success: true })
       .getRawOne();
 
-    const dailyCost = parseFloat(dailyCostResult?.total || '0');
+    const dailyCost = Number.parseFloat(dailyCostResult?.total || '0');
 
     // Get monthly cost
     const monthlyCostResult = await this.usageRepository
@@ -624,7 +624,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
       .andWhere('usage.success = :success', { success: true })
       .getRawOne();
 
-    const monthlyCost = parseFloat(monthlyCostResult?.total || '0');
+    const monthlyCost = Number.parseFloat(monthlyCostResult?.total || '0');
 
     // Check budget limits
     if (this.config.budget.hardStop && dailyCost >= this.config.budget.dailyLimit) {

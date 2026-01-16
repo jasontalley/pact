@@ -158,8 +158,8 @@ export const defaultLLMConfig: LLMServiceConfig = {
 
   budget: {
     enabled: true,
-    dailyLimit: 10.0, // $10 per day
-    monthlyLimit: 200.0, // $200 per month
+    dailyLimit: 10, // $10 per day
+    monthlyLimit: 200, // $200 per month
     alertThreshold: 80, // Alert at 80% of budget
     hardStop: true, // Stop requests when budget exceeded
   },
@@ -189,11 +189,11 @@ export function loadLLMConfig(): LLMServiceConfig {
   }
 
   if (process.env.LLM_DAILY_BUDGET) {
-    config.budget.dailyLimit = parseFloat(process.env.LLM_DAILY_BUDGET);
+    config.budget.dailyLimit = Number.parseFloat(process.env.LLM_DAILY_BUDGET);
   }
 
   if (process.env.LLM_MONTHLY_BUDGET) {
-    config.budget.monthlyLimit = parseFloat(process.env.LLM_MONTHLY_BUDGET);
+    config.budget.monthlyLimit = Number.parseFloat(process.env.LLM_MONTHLY_BUDGET);
   }
 
   // Allow disabling features via environment (useful for tests)

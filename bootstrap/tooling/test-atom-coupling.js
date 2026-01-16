@@ -138,7 +138,8 @@ function analyzeTestFile(filePath) {
   let totalTests = 0;
   let annotatedTests = 0;
 
-  const atomAnnotationRegex = /\/\/\s*@atom\s+(IA-\d+)/g;
+  // Match both // @atom and * @atom (JSDoc style) annotations
+  const atomAnnotationRegex = /(?:\/\/|\*)\s*@atom\s+(IA-\d+)/g;
   const testRegex = /^\s*(it|test)\s*\(\s*['"`](.+?)['"`]/;
   const describeRegex = /^\s*describe\s*\(\s*['"`](.+?)['"`]/;
 
@@ -166,7 +167,8 @@ function analyzeTestFile(filePath) {
     if (testMatch) {
       totalTests++;
       const testName = testMatch[2];
-      const hasRecentAnnotation = lastAnnotationLine >= lineNumber - 3;
+      // JSDoc comments can be further away, use 5-line lookback
+      const hasRecentAnnotation = lastAnnotationLine >= lineNumber - 5;
 
       if (hasRecentAnnotation && lastAnnotationAtomId) {
         annotatedTests++;
