@@ -1,0 +1,91 @@
+name: Bootstrap Isolation Check
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  isolation-check:
+    name: Verify Bootstrap Isolation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for bootstrap imports in core code
+        run: |
+          echo "=== Bootstrap Isolation Check ==="
+          echo ""
+          echo "Checking that core code (/src) does not depend on bootstrap..."
+          echo ""
+
+          # Check for any imports from bootstrap in src/
+          if grep -r "from.*bootstrap" src/ 2>/dev/null; then
+            echo ""
+            echo "ERROR: Core code depends on bootstrap scaffolding!"
+            echo ""
+            echo "The following files import from bootstrap:"
+            grep -rl "from.*bootstrap" src/
+            echo ""
+            echo "This violates the one-way dependency rule:"
+            echo "  - bootstrap/ may depend on src/"
+            echo "  - src/ must NEVER depend on bootstrap/"
+            echo ""
+            echo "Please refactor to remove this dependency."
+            exit 1
+          fi
+
+          # Check for require statements from bootstrap
+          if grep -r "require.*bootstrap" src/ 2>/dev/null; then
+            echo ""
+            echo "ERROR: Core code requires bootstrap scaffolding!"
+            echo ""
+            grep -rl "require.*bootstrap" src/
+            exit 1
+          fi
+
+          echo "No bootstrap imports found in core code."
+          echo "Bootstrap isolation: PASSED"
+
+      - name: Verify bootstrap files have version stamps
+        run: |
+          echo ""
+          echo "=== Bootstrap Version Stamp Check ==="
+          echo ""
+
+          # Find all .js and .ts files in bootstrap/
+          bootstrap_files=$(find bootstrap/ -type f \( -name "*.js" -o -name "*.ts" \) 2>/dev/null || true)
+
+          if [ -z "$bootstrap_files" ]; then
+            echo "No bootstrap code files found. Skipping version stamp check."
+            exit 0
+          fi
+
+          missing_stamps=""
+
+          for file in $bootstrap_files; do
+            if ! grep -q "BOOTSTRAP SCAFFOLDING" "$file"; then
+              missing_stamps="$missing_stamps\n  - $file"
+            fi
+          done
+
+          if [ -n "$missing_stamps" ]; then
+            echo "WARNING: The following bootstrap files are missing version stamps:"
+            echo -e "$missing_stamps"
+            echo ""
+            echo "Each bootstrap file should include the header:"
+            echo '  /**'
+            echo '   * BOOTSTRAP SCAFFOLDING - DO NOT DEPEND ON THIS'
+            echo '   * Scaffold ID: BS-XXX'
+            echo '   * ...'
+            echo '   */'
+            echo ""
+            echo "This is a warning only - not failing the build."
+          else
+            echo "All bootstrap files have version stamps."
+          fi
+
+          echo "Version stamp check: COMPLETE"

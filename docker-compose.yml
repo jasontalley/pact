@@ -1,0 +1,76 @@
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:18
+    container_name: pact-postgres
+    environment:
+      POSTGRES_USER: pact
+      POSTGRES_PASSWORD: pact_dev_password
+      POSTGRES_DB: pact_development
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pact"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NestJS application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: pact-app
+    command: npm run start:dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: pact
+      DATABASE_PASSWORD: pact_dev_password
+      DATABASE_NAME: pact_development
+      NODE_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Test runner (separate container for isolation)
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: pact-test
+    command: npm run test:watch
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: pact
+      DATABASE_PASSWORD: pact_dev_password
+      DATABASE_NAME: pact_test
+      NODE_ENV: test
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Redis for caching (Phase 1+)
+  redis:
+    image: redis:7-alpine
+    container_name: pact-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
