@@ -67,6 +67,12 @@ The Pact database schema consists of **10 tables** organized into two categories
 | `committed_at` | TIMESTAMP | NULLABLE | Commitment timestamp (when status = 'committed') |
 | `created_by` | VARCHAR(255) | NULLABLE | Creator identifier (user/agent) |
 | `metadata` | JSONB | DEFAULT '{}' | Extensible metadata (analysis results, tags, etc.) |
+| `observable_outcomes` | JSONB | DEFAULT '[]' | Phase 1: Observable outcomes with measurement criteria |
+| `falsifiability_criteria` | JSONB | DEFAULT '[]' | Phase 1: Conditions that would disprove the atom's intent |
+| `tags` | JSONB | DEFAULT '[]' | Phase 1: User-defined tags for filtering/organization |
+| `canvas_position` | JSONB | NULLABLE | Phase 1: Position {x, y} on Canvas UI |
+| `parent_intent` | TEXT | NULLABLE | Phase 1: Original user input that spawned this atom |
+| `refinement_history` | JSONB | DEFAULT '[]' | Phase 1: History of refinement iterations |
 
 **Indexes**:
 - `idx_atoms_status` on `status`
@@ -81,6 +87,53 @@ The Pact database schema consists of **10 tables** organized into two categories
 - `quality_score` must be between 0 and 100 (database constraint)
 - Once `status = 'committed'`, atom becomes immutable (INV-004)
 - Superseded atoms cannot be modified; new atom must be created
+
+**Phase 1 JSONB Schemas**:
+
+**`observable_outcomes`** - Array of observable outcomes:
+
+```json
+[
+  {
+    "description": "User receives confirmation email",
+    "measurementCriteria": "Email delivered within 30 seconds"
+  }
+]
+```
+
+**`falsifiability_criteria`** - Array of falsification conditions:
+
+```json
+[
+  {
+    "condition": "Response time exceeds 2 seconds",
+    "expectedBehavior": "Performance violation logged"
+  }
+]
+```
+
+**`canvas_position`** - Position on Canvas UI:
+
+```json
+{
+  "x": 150,
+  "y": 200
+}
+```
+
+**`refinement_history`** - Array of refinement records:
+
+```json
+[
+  {
+    "timestamp": "2026-01-21T10:30:00Z",
+    "feedback": "Add time constraint",
+    "previousDescription": "User can login",
+    "newDescription": "User can login within 3 seconds",
+    "source": "ai"
+  }
+]
+```
 
 **Example**:
 ```sql

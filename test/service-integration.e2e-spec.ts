@@ -107,11 +107,12 @@ describe('Service Integration Tests (e2e)', () => {
     beforeAll(async () => {
       // Create a draft atom for testing with unique timestamp to avoid conflicts
       const uniqueId = Date.now();
-      const createResponse = await request(app.getHttpServer()).post('/atoms').send({
-        description:
-          `Integration test ${uniqueId}: File upload must complete within 30 seconds for files under 10MB with progress indication`,
-        category: 'performance',
-      });
+      const createResponse = await request(app.getHttpServer())
+        .post('/atoms')
+        .send({
+          description: `Integration test ${uniqueId}: File upload must complete within 30 seconds for files under 10MB with progress indication`,
+          category: 'performance',
+        });
       if (createResponse.status !== 201) {
         console.warn('Failed to create test atom:', createResponse.body);
       }
@@ -161,10 +162,12 @@ describe('Service Integration Tests (e2e)', () => {
     it('should enforce quality gate on boundary (score = 79)', async () => {
       // Create another atom for boundary testing with unique timestamp
       const uniqueId = Date.now();
-      const createResponse = await request(app.getHttpServer()).post('/atoms').send({
-        description: `Integration test ${uniqueId}: API response time must be under 200ms for 95th percentile`,
-        category: 'performance',
-      });
+      const createResponse = await request(app.getHttpServer())
+        .post('/atoms')
+        .send({
+          description: `Integration test ${uniqueId}: API response time must be under 200ms for 95th percentile`,
+          category: 'performance',
+        });
 
       // Set quality score at boundary (79 - just below threshold)
       await request(app.getHttpServer())
@@ -185,10 +188,12 @@ describe('Service Integration Tests (e2e)', () => {
     it('should allow commit at exact threshold (score = 80)', async () => {
       // Create atom for exact boundary test with unique timestamp
       const uniqueId = Date.now();
-      const createResponse = await request(app.getHttpServer()).post('/atoms').send({
-        description: `Integration test ${uniqueId}: Database queries must complete within 100ms for indexed lookups`,
-        category: 'performance',
-      });
+      const createResponse = await request(app.getHttpServer())
+        .post('/atoms')
+        .send({
+          description: `Integration test ${uniqueId}: Database queries must complete within 100ms for indexed lookups`,
+          category: 'performance',
+        });
 
       // Set quality score at exact threshold
       await request(app.getHttpServer())
@@ -216,10 +221,12 @@ describe('Service Integration Tests (e2e)', () => {
     beforeAll(async () => {
       // Create a draft atom for refinement testing with unique timestamp
       const uniqueId = Date.now();
-      const createResponse = await request(app.getHttpServer()).post('/atoms').send({
-        description: `Integration test ${uniqueId}: System should be fast and work well under normal conditions`,
-        category: 'performance',
-      });
+      const createResponse = await request(app.getHttpServer())
+        .post('/atoms')
+        .send({
+          description: `Integration test ${uniqueId}: System should be fast and work well under normal conditions`,
+          category: 'performance',
+        });
       atomForRefinement = createResponse.body.id;
     });
 
@@ -367,10 +374,12 @@ describe('Service Integration Tests (e2e)', () => {
     it('should handle supersession workflow correctly', async () => {
       // Create and commit v1 with unique timestamp
       const uniqueId = Date.now();
-      const v1Response = await request(app.getHttpServer()).post('/atoms').send({
-        description: `Integration test ${uniqueId}: Cache TTL must be 5 minutes for user profile data`,
-        category: 'performance',
-      });
+      const v1Response = await request(app.getHttpServer())
+        .post('/atoms')
+        .send({
+          description: `Integration test ${uniqueId}: Cache TTL must be 5 minutes for user profile data`,
+          category: 'performance',
+        });
       const v1Id = v1Response.body.id;
 
       await request(app.getHttpServer()).patch(`/atoms/${v1Id}`).send({ qualityScore: 85 });
@@ -379,10 +388,12 @@ describe('Service Integration Tests (e2e)', () => {
 
       // Create and commit v2 (supersedes v1) with different unique timestamp
       const uniqueId2 = Date.now() + 1;
-      const v2Response = await request(app.getHttpServer()).post('/atoms').send({
-        description: `Integration test ${uniqueId2}: Cache TTL must be 10 minutes for user profile data with automatic refresh`,
-        category: 'performance',
-      });
+      const v2Response = await request(app.getHttpServer())
+        .post('/atoms')
+        .send({
+          description: `Integration test ${uniqueId2}: Cache TTL must be 10 minutes for user profile data with automatic refresh`,
+          category: 'performance',
+        });
       const v2Id = v2Response.body.id;
 
       await request(app.getHttpServer()).patch(`/atoms/${v2Id}`).send({ qualityScore: 88 });

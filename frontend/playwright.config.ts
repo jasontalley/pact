@@ -9,7 +9,14 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // Use 4 workers in CI for faster execution, auto-detect locally
+  workers: process.env.CI ? 4 : undefined,
+  // Reduce default timeout from 30s to 5s for faster failure detection
+  timeout: 5000,
+  expect: {
+    // Reduce expect timeout to 5s as well
+    timeout: 5000,
+  },
   reporter: [
     ['html', { outputFolder: 'test-results/html-report' }],
     ['json', { outputFile: 'test-results/results.json' }],
@@ -20,6 +27,10 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
+    // Action timeout for clicks, fills, etc.
+    actionTimeout: 5000,
+    // Navigation timeout
+    navigationTimeout: 10000,
   },
 
   projects: [

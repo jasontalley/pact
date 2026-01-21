@@ -1,9 +1,10 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Network, List, Plus } from 'lucide-react';
+import { LayoutDashboard, Network, List, Plus, Menu, X } from 'lucide-react';
 
 interface NavItem {
   href: string;
@@ -23,6 +24,24 @@ interface HeaderProps {
 
 export function Header({ onCreateAtom }: HeaderProps) {
   const pathname = usePathname();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileMenuOpen]);
 
   return (
     <header className="border-b bg-background sticky top-0 z-50">
@@ -32,6 +51,7 @@ export function Header({ onCreateAtom }: HeaderProps) {
             <span className="text-2xl font-bold text-primary">Pact</span>
           </Link>
 
+          {/* Desktop navigation */}
           <nav className="hidden md:flex items-center gap-1">
             {navItems.map((item) => (
               <Link
@@ -52,16 +72,88 @@ export function Header({ onCreateAtom }: HeaderProps) {
         </div>
 
         <div className="flex items-center gap-4">
+          {/* Desktop: New Atom button */}
           {onCreateAtom && (
             <button
               onClick={onCreateAtom}
-              className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors"
+              className="hidden md:flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors"
             >
               <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">New Atom</span>
+              <span>New Atom</span>
             </button>
           )}
+
+          {/* Mobile: Hamburger menu button */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden flex items-center justify-center p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+            aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={mobileMenuOpen}
+          >
+            {mobileMenuOpen ? (
+              <X className="h-6 w-6" />
+            ) : (
+              <Menu className="h-6 w-6" />
+            )}
+          </button>
         </div>
+      </div>
+
+      {/* Mobile navigation drawer */}
+      <div
+        className={cn(
+          'md:hidden fixed inset-0 top-[57px] z-40 transition-opacity duration-200',
+          mobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        )}
+      >
+        {/* Overlay */}
+        <button
+          type="button"
+          aria-label="Close menu"
+          className="absolute inset-0 bg-black/50 cursor-default"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+
+        {/* Navigation panel */}
+        <nav
+          className={cn(
+            'absolute top-0 right-0 h-full w-64 bg-background shadow-lg transition-transform duration-200',
+            mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
+          )}
+        >
+          <div className="p-4 space-y-2">
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  'flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium transition-colors',
+                  pathname === item.href
+                    ? 'bg-accent text-foreground'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                )}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {item.icon}
+                {item.label}
+              </Link>
+            ))}
+
+            {/* Mobile: New Atom button in menu */}
+            {onCreateAtom && (
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onCreateAtom();
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors mt-4"
+              >
+                <Plus className="h-4 w-4" />
+                New Atom
+              </button>
+            )}
+          </div>
+        </nav>
       </div>
     </header>
   );
