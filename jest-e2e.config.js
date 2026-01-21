@@ -10,4 +10,8 @@ module.exports = {
   ],
   testEnvironment: 'node',
   forceExit: true,
+  // Run E2E tests sequentially to avoid database conflicts
+  maxWorkers: 1,
+  // Run tests in a specific order
+  testSequencer: './test/sequencer.js',
 };

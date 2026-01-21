@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
 
 let app: INestApplication | undefined;
@@ -31,6 +32,21 @@ export async function setupE2EApp(): Promise<INestApplication> {
   );
 
   await app.init();
+
+  // Clean up test database before running tests
+  // This ensures tests start with a clean slate
+  try {
+    const dataSource = moduleFixture.get(DataSource);
+    if (dataSource && dataSource.isInitialized) {
+      // Clean atoms table (main table for E2E tests)
+      // Use TRUNCATE with RESTART IDENTITY to reset auto-incrementing IDs
+      await dataSource.query('TRUNCATE TABLE atoms RESTART IDENTITY CASCADE');
+    }
+  } catch (error) {
+    // Log but don't fail - some environments may not support TRUNCATE
+    console.warn('[E2E Setup] Could not clean test database:', error);
+  }
+
   return app;
 }
 
