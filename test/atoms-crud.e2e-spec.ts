@@ -299,12 +299,10 @@ describe('Atoms CRUD (e2e)', () => {
 
     beforeAll(async () => {
       // Create an atom specifically for deletion testing
-      const response = await request(app.getHttpServer())
-        .post('/atoms')
-        .send({
-          description: 'Temporary atom for deletion testing purposes',
-          category: 'functional',
-        });
+      const response = await request(app.getHttpServer()).post('/atoms').send({
+        description: 'Temporary atom for deletion testing purposes',
+        category: 'functional',
+      });
       atomToDelete = response.body.id;
     });
 
@@ -377,12 +375,10 @@ describe('Atoms CRUD (e2e)', () => {
 
     it('should reject commit for low quality atom', async () => {
       // Create a low quality atom
-      const lowQualityResponse = await request(app.getHttpServer())
-        .post('/atoms')
-        .send({
-          description: 'System should work properly and be good',
-          category: 'functional',
-        });
+      const lowQualityResponse = await request(app.getHttpServer()).post('/atoms').send({
+        description: 'System should work properly and be good',
+        category: 'functional',
+      });
 
       // Asserts quality gate blocks commit
       const response = await request(app.getHttpServer())
@@ -400,13 +396,11 @@ describe('Atoms CRUD (e2e)', () => {
 
     beforeAll(async () => {
       // Create and commit an atom for immutability testing
-      const createResponse = await request(app.getHttpServer())
-        .post('/atoms')
-        .send({
-          description:
-            'Immutability test: User session must timeout after 30 minutes of inactivity with secure logout',
-          category: 'security',
-        });
+      const createResponse = await request(app.getHttpServer()).post('/atoms').send({
+        description:
+          'Immutability test: User session must timeout after 30 minutes of inactivity with secure logout',
+        category: 'security',
+      });
       localCommittedAtomUUID = createResponse.body.id;
 
       // Add quality fields with explicit quality score
@@ -552,12 +546,10 @@ describe('Atoms CRUD (e2e)', () => {
 
     beforeAll(async () => {
       // Create atom for tag testing
-      const response = await request(app.getHttpServer())
-        .post('/atoms')
-        .send({
-          description: 'Atom for testing tag operations in E2E tests',
-          category: 'functional',
-        });
+      const response = await request(app.getHttpServer()).post('/atoms').send({
+        description: 'Atom for testing tag operations in E2E tests',
+        category: 'functional',
+      });
       tagTestAtomUUID = response.body.id;
     });
 
@@ -617,13 +609,11 @@ describe('Atoms CRUD (e2e)', () => {
 
     beforeAll(async () => {
       // Create and commit the first version of an atom
-      const v1Response = await request(app.getHttpServer())
-        .post('/atoms')
-        .send({
-          description:
-            'Chain test v1: System must log all user actions for audit purposes with timestamps',
-          category: 'security',
-        });
+      const v1Response = await request(app.getHttpServer()).post('/atoms').send({
+        description:
+          'Chain test v1: System must log all user actions for audit purposes with timestamps',
+        category: 'security',
+      });
       chainAtomV1UUID = v1Response.body.id;
 
       await request(app.getHttpServer())
@@ -631,7 +621,10 @@ describe('Atoms CRUD (e2e)', () => {
         .send({
           qualityScore: 85, // Explicitly set quality score
           observableOutcomes: [
-            { description: 'All actions logged with timestamp', measurementCriteria: 'Audit log check' },
+            {
+              description: 'All actions logged with timestamp',
+              measurementCriteria: 'Audit log check',
+            },
           ],
           falsifiabilityCriteria: [
             { condition: 'Action without log entry', expectedBehavior: 'Violation detected' },
@@ -641,13 +634,11 @@ describe('Atoms CRUD (e2e)', () => {
       await request(app.getHttpServer()).patch(`/atoms/${chainAtomV1UUID}/commit`);
 
       // Create and commit v2 that supersedes v1
-      const v2Response = await request(app.getHttpServer())
-        .post('/atoms')
-        .send({
-          description:
-            'Chain test v2: System must log all user actions for audit with timestamps and user IP',
-          category: 'security',
-        });
+      const v2Response = await request(app.getHttpServer()).post('/atoms').send({
+        description:
+          'Chain test v2: System must log all user actions for audit with timestamps and user IP',
+        category: 'security',
+      });
       chainAtomV2UUID = v2Response.body.id;
 
       await request(app.getHttpServer())

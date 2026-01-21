@@ -46,16 +46,13 @@ Given(
   },
 );
 
-Given(
-  'the system has atoms with descriptions:',
-  function (this: PactWorld, dataTable: DataTable) {
-    const rows = dataTable.hashes();
-    for (const row of rows) {
-      const atom = this.createMockAtom(row.description, row.category, 'draft');
-      this.atoms.push(atom);
-    }
-  },
-);
+Given('the system has atoms with descriptions:', function (this: PactWorld, dataTable: DataTable) {
+  const rows = dataTable.hashes();
+  for (const row of rows) {
+    const atom = this.createMockAtom(row.description, row.category, 'draft');
+    this.atoms.push(atom);
+  }
+});
 
 // When steps for atom management
 
@@ -197,10 +194,13 @@ Then('the atom status remains {string}', function (this: PactWorld, expectedStat
   expect(this.currentAtom!.status).toBe(expectedStatus);
 });
 
-Then('the update is rejected with status {int}', function (this: PactWorld, expectedStatus: number) {
-  expect(this.lastResponse).not.toBeNull();
-  expect(this.lastResponse!.status).toBe(expectedStatus);
-});
+Then(
+  'the update is rejected with status {int}',
+  function (this: PactWorld, expectedStatus: number) {
+    expect(this.lastResponse).not.toBeNull();
+    expect(this.lastResponse!.status).toBe(expectedStatus);
+  },
+);
 
 Then('I receive a message about immutability', function (this: PactWorld) {
   expect(this.lastResponse).not.toBeNull();
@@ -212,9 +212,12 @@ Then('the atom description remains unchanged', function (this: PactWorld) {
   expect(this.currentAtom).not.toBeNull();
 });
 
-Then('the first atom status changes to {string}', function (this: PactWorld, expectedStatus: string) {
-  expect(this.atoms[0].status).toBe(expectedStatus);
-});
+Then(
+  'the first atom status changes to {string}',
+  function (this: PactWorld, expectedStatus: string) {
+    expect(this.atoms[0].status).toBe(expectedStatus);
+  },
+);
 
 Then('the first atom references the superseding atom', function (this: PactWorld) {
   expect(this.atoms[0].supersededBy).toBe(this.atoms[1].id);
@@ -258,11 +261,14 @@ Then('the atom has tag {string}', function (this: PactWorld, tag: string) {
   expect(this.currentAtom!.tags).toContain(tag);
 });
 
-Then('the atom has tags {string} and {string}', function (this: PactWorld, tag1: string, tag2: string) {
-  expect(this.currentAtom).not.toBeNull();
-  expect(this.currentAtom!.tags).toContain(tag1);
-  expect(this.currentAtom!.tags).toContain(tag2);
-});
+Then(
+  'the atom has tags {string} and {string}',
+  function (this: PactWorld, tag1: string, tag2: string) {
+    expect(this.currentAtom).not.toBeNull();
+    expect(this.currentAtom!.tags).toContain(tag1);
+    expect(this.currentAtom!.tags).toContain(tag2);
+  },
+);
 
 Then('the atom has only tag {string}', function (this: PactWorld, tag: string) {
   expect(this.currentAtom).not.toBeNull();
