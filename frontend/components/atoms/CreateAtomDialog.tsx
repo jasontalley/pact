@@ -58,7 +58,8 @@ export function CreateAtomDialog() {
 
   const handleAnalyze = () => {
     if (rawIntent.trim().length < 10) return;
-    analyzeIntent.mutate({ rawIntent });
+    // Backend expects 'intent' field, not 'rawIntent'
+    analyzeIntent.mutate({ intent: rawIntent });
   };
 
   const handleAddTag = () => {
@@ -103,11 +104,19 @@ export function CreateAtomDialog() {
     : null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-card rounded-lg border shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      role="presentation"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-atom-dialog-title"
+        className="bg-card rounded-lg border shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+      >
         {/* Header */}
         <div className="p-6 border-b">
-          <h2 className="text-xl font-semibold">Create Intent Atom</h2>
+          <h2 id="create-atom-dialog-title" className="text-xl font-semibold">Create Intent Atom</h2>
           <p className="text-sm text-muted-foreground mt-1">
             Step {step + 1} of 3
           </p>
@@ -165,7 +174,7 @@ export function CreateAtomDialog() {
               </div>
 
               {/* Violations */}
-              {analysisResult.atomicity.violations.length > 0 && (
+              {analysisResult.atomicity.violations && analysisResult.atomicity.violations.length > 0 && (
                 <div>
                   <h4 className="font-medium mb-2">Issues Found</h4>
                   <ul className="space-y-1">

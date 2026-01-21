@@ -97,9 +97,10 @@ export interface UpdateAtomDto {
 
 /**
  * DTO for analyzing raw intent
+ * Note: Backend expects 'intent', not 'rawIntent'
  */
 export interface AnalyzeIntentDto {
-  rawIntent: string;
+  intent: string;
 }
 
 /**

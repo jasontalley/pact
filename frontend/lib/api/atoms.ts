@@ -91,7 +91,7 @@ export const atomsApi = {
    * Get all unique tags with counts
    */
   getTags: async (): Promise<{ tag: string; count: number }[]> => {
-    const response = await apiClient.get<{ tag: string; count: number }[]>('/tags');
+    const response = await apiClient.get<{ tag: string; count: number }[]>('/atoms/tags');
     return response.data;
   },
 

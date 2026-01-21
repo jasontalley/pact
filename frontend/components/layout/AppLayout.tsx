@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { useLayoutStore } from '@/stores/layout';
+import { useRefinementWizardStore } from '@/stores/refinement-wizard';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
-import { CreateAtomDialog } from '@/components/atoms/CreateAtomDialog';
 import { Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -16,11 +16,11 @@ interface AppLayoutProps {
 
 export function AppLayout({ children, showSidebar = true, fullHeight = false }: AppLayoutProps) {
   const { sidebarOpen, toggleSidebar, setSidebarOpen } = useLayoutStore();
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const openWizard = useRefinementWizardStore((state) => state.openWizard);
 
   const handleCreateAtom = useCallback(() => {
-    setCreateDialogOpen(true);
-  }, []);
+    openWizard();
+  }, [openWizard]);
 
   return (
     <div className={cn('min-h-screen bg-background flex flex-col', fullHeight && 'h-screen')}>
@@ -66,11 +66,6 @@ export function AppLayout({ children, showSidebar = true, fullHeight = false }: 
           {children}
         </main>
       </div>
-
-      <CreateAtomDialog
-        open={createDialogOpen}
-        onOpenChange={setCreateDialogOpen}
-      />
     </div>
   );
 }

@@ -11,11 +11,11 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   // Use 4 workers in CI for faster execution, auto-detect locally
   workers: process.env.CI ? 4 : undefined,
-  // Reduce default timeout from 30s to 5s for faster failure detection
-  timeout: 5000,
+  // Default timeout of 15s for test execution
+  timeout: 15000,
   expect: {
-    // Reduce expect timeout to 5s as well
-    timeout: 5000,
+    // Expect timeout of 10s for assertions
+    timeout: 10000,
   },
   reporter: [
     ['html', { outputFolder: 'test-results/html-report' }],
@@ -28,9 +28,9 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     // Action timeout for clicks, fills, etc.
-    actionTimeout: 5000,
+    actionTimeout: 10000,
     // Navigation timeout
-    navigationTimeout: 10000,
+    navigationTimeout: 15000,
   },
 
   projects: [

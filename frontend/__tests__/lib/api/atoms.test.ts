@@ -231,8 +231,8 @@ describe('atomsApi', () => {
 
       const result = await atomsApi.getTags();
 
-      // Should call apiClient.get with the tags endpoint
-      expect(apiClient.get).toHaveBeenCalledWith('/tags');
+      // Should call apiClient.get with the tags endpoint under /atoms
+      expect(apiClient.get).toHaveBeenCalledWith('/atoms/tags');
       // Should return array of tags with their usage counts
       expect(result).toEqual(mockTags);
     });

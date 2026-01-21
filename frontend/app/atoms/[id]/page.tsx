@@ -1,14 +1,24 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout';
-import { useAtom, useCommitAtom, useDeleteAtom } from '@/hooks/atoms/use-atoms';
+import { useAtom, useCommitAtom, useDeleteAtom, useUpdateAtom } from '@/hooks/atoms/use-atoms';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { QualityBadge } from '@/components/quality/QualityBadge';
 import { formatDateTime } from '@/lib/utils/format';
 import { ArrowLeft } from 'lucide-react';
+import type { AtomCategory } from '@/types/atom';
+
+const categories: { value: AtomCategory; label: string }[] = [
+  { value: 'functional', label: 'Functional' },
+  { value: 'performance', label: 'Performance' },
+  { value: 'security', label: 'Security' },
+  { value: 'reliability', label: 'Reliability' },
+  { value: 'usability', label: 'Usability' },
+  { value: 'maintainability', label: 'Maintainability' },
+];
 
 interface AtomDetailPageProps {
   params: Promise<{ id: string }>;
@@ -19,10 +29,42 @@ export default function AtomDetailPage({ params }: AtomDetailPageProps) {
   const { data: atom, isLoading, error } = useAtom(resolvedParams.id);
   const commitAtom = useCommitAtom();
   const deleteAtom = useDeleteAtom();
+  const updateAtom = useUpdateAtom();
   const router = useRouter();
   const [showCommitConfirm, setShowCommitConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
+
+  // Edit form state
+  const [editDescription, setEditDescription] = useState('');
+  const [editCategory, setEditCategory] = useState<AtomCategory>('functional');
+
+  // Sync edit form with atom data when dialog opens
+  useEffect(() => {
+    if (atom && showEditDialog) {
+      setEditDescription(atom.description);
+      setEditCategory(atom.category);
+    }
+  }, [atom, showEditDialog]);
+
+  const handleEdit = () => {
+    if (!atom) return;
+    updateAtom.mutate(
+      {
+        id: atom.id,
+        data: {
+          description: editDescription,
+          category: editCategory,
+        },
+      },
+      {
+        onSuccess: () => {
+          setShowEditDialog(false);
+        },
+      }
+    );
+  };
 
   const handleCommit = () => {
     if (!atom) return;
@@ -198,7 +240,10 @@ export default function AtomDetailPage({ params }: AtomDetailPageProps) {
         {/* Actions */}
         <div className="flex gap-3">
           {canEdit && (
-            <button className="px-4 py-2 border rounded-lg hover:bg-accent">
+            <button
+              onClick={() => setShowEditDialog(true)}
+              className="px-4 py-2 border rounded-lg hover:bg-accent"
+            >
               Edit
             </button>
           )}
@@ -287,6 +332,63 @@ export default function AtomDetailPage({ params }: AtomDetailPageProps) {
                   className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 disabled:opacity-50"
                 >
                   {deleteAtom.isPending ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Dialog */}
+        {showEditDialog && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-card rounded-lg border shadow-lg max-w-lg w-full p-6">
+              <h3 className="text-xl font-semibold mb-4">Edit Atom</h3>
+
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="edit-description" className="text-sm font-medium block mb-2">
+                    Description
+                  </label>
+                  <textarea
+                    id="edit-description"
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    className="w-full h-32 px-3 py-2 border rounded-md resize-none"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="edit-category" className="text-sm font-medium block mb-2">
+                    Category
+                  </label>
+                  <select
+                    id="edit-category"
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value as AtomCategory)}
+                    className="w-full px-3 py-2 border rounded-md"
+                  >
+                    {categories.map((cat) => (
+                      <option key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-6">
+                <button
+                  onClick={() => setShowEditDialog(false)}
+                  className="px-4 py-2 border rounded-lg hover:bg-accent"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleEdit}
+                  disabled={updateAtom.isPending || !editDescription.trim()}
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {updateAtom.isPending ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </div>

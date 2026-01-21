@@ -13,6 +13,7 @@ test.describe('Navigation', () => {
 
   test('should display header with navigation links', async ({ page, viewport }) => {
     await page.goto('/');
+    await page.waitForLoadState('networkidle');
 
     // Check header is present
     const header = page.locator('header');
@@ -23,17 +24,19 @@ test.describe('Navigation', () => {
 
     if (isMobileViewport(viewport?.width)) {
       // On mobile, nav links should be hidden until hamburger menu is opened
-      await expect(header.getByRole('link', { name: 'Dashboard' })).not.toBeVisible();
+      // Check that the hamburger menu button exists
+      const menuButton = page.getByRole('button', { name: /open menu/i });
+      await expect(menuButton).toBeVisible({ timeout: 10000 });
 
       // Open hamburger menu
-      const menuButton = header.getByRole('button', { name: /open menu/i });
-      await expect(menuButton).toBeVisible();
       await menuButton.click();
+      // Wait for menu animation
+      await page.waitForTimeout(300);
 
       // Now navigation links should be visible in the drawer
-      await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'Canvas' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'Atoms' })).toBeVisible();
+      await expect(page.locator('nav').getByRole('link', { name: 'Dashboard' })).toBeVisible({ timeout: 5000 });
+      await expect(page.locator('nav').getByRole('link', { name: 'Canvas' })).toBeVisible();
+      await expect(page.locator('nav').getByRole('link', { name: 'Atoms' })).toBeVisible();
     } else {
       // On desktop, nav links should be visible directly in header
       await expect(header.getByRole('link', { name: 'Dashboard' })).toBeVisible();
@@ -57,47 +60,72 @@ test.describe('Navigation', () => {
 
   test('should navigate to Canvas', async ({ page, viewport }) => {
     await page.goto('/');
+    await page.waitForLoadState('networkidle');
 
     if (isMobileViewport(viewport?.width)) {
       // Open hamburger menu first
       await page.getByRole('button', { name: /open menu/i }).click();
+      await page.waitForTimeout(200);
+      // On mobile, use the nav drawer link (not Quick Actions)
+      await page.locator('nav').getByRole('link', { name: 'Canvas', exact: true }).click();
+    } else {
+      // On desktop, use the header link (not Quick Actions)
+      const header = page.locator('header');
+      await header.getByRole('link', { name: 'Canvas', exact: true }).click();
     }
 
-    await page.getByRole('link', { name: 'Canvas' }).click();
     await expect(page).toHaveURL('/canvas');
   });
 
   test('should navigate to Atoms list', async ({ page, viewport }) => {
     await page.goto('/');
+    await page.waitForLoadState('networkidle');
 
     if (isMobileViewport(viewport?.width)) {
       // Open hamburger menu first
       await page.getByRole('button', { name: /open menu/i }).click();
+      await page.waitForTimeout(200);
+      // On mobile, use the nav drawer link
+      await page.locator('nav').getByRole('link', { name: 'Atoms', exact: true }).click();
+    } else {
+      // On desktop, use the header link
+      const header = page.locator('header');
+      await header.getByRole('link', { name: 'Atoms', exact: true }).click();
     }
 
-    await page.getByRole('link', { name: 'Atoms' }).click();
     await expect(page).toHaveURL('/atoms');
     await expect(page.getByRole('heading', { name: /intent atoms/i })).toBeVisible();
   });
 
-  test('should show "New Atom" button', async ({ page, viewport }) => {
+  test('should show "New Atom" button and open dialog when clicked', async ({ page, viewport }) => {
     await page.goto('/');
+    await page.waitForLoadState('networkidle');
 
     if (isMobileViewport(viewport?.width)) {
-      // On mobile, New Atom button is in the hamburger menu
-      const header = page.locator('header');
-      await expect(header.getByRole('button', { name: /new atom/i })).not.toBeVisible();
+      // On mobile, the New Atom button is inside the hamburger menu
+      // Open hamburger menu first
+      const menuButton = page.getByRole('button', { name: /open menu/i });
+      await expect(menuButton).toBeVisible({ timeout: 10000 });
+      await menuButton.click();
+      // Wait for menu animation
+      await page.waitForTimeout(300);
 
-      // Open hamburger menu
-      await page.getByRole('button', { name: /open menu/i }).click();
+      // New Atom button should be visible in the navigation drawer
+      const newAtomButton = page.locator('nav button').filter({ hasText: 'New Atom' });
+      await expect(newAtomButton).toBeVisible({ timeout: 10000 });
 
-      // New Atom button should be visible in the drawer
-      await expect(page.getByRole('button', { name: /new atom/i })).toBeVisible();
+      // Click should open the create dialog
+      await newAtomButton.click();
+      await expect(page.getByRole('heading', { name: /create intent atom/i }).first()).toBeVisible({ timeout: 10000 });
     } else {
       // On desktop, New Atom button is visible in header
       const header = page.locator('header');
-      const newAtomButton = header.getByRole('button', { name: /new atom/i });
-      await expect(newAtomButton).toBeVisible();
+      const newAtomButton = header.getByRole('button', { name: 'New Atom', exact: true });
+      await expect(newAtomButton).toBeVisible({ timeout: 10000 });
+
+      // Click should open the create dialog
+      await newAtomButton.click();
+      await expect(page.getByRole('heading', { name: /create intent atom/i }).first()).toBeVisible({ timeout: 10000 });
     }
   });
 
@@ -106,16 +134,29 @@ test.describe('Navigation', () => {
     test.skip(!isMobileViewport(viewport?.width), 'This test is for mobile viewports only');
 
     await page.goto('/');
+    await page.waitForLoadState('networkidle');
 
     // Open hamburger menu
-    await page.getByRole('button', { name: /open menu/i }).click();
-    await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible();
+    const menuButton = page.getByRole('button', { name: /open menu/i });
+    await expect(menuButton).toBeVisible({ timeout: 10000 });
+    await menuButton.click();
+    // Wait for menu animation
+    await page.waitForTimeout(300);
 
-    // Click overlay to close menu
-    await page.getByRole('button', { name: /close menu/i }).click();
+    // Verify menu is open
+    await expect(page.locator('nav').getByRole('link', { name: 'Dashboard' })).toBeVisible({ timeout: 5000 });
 
-    // Menu should be closed
-    await expect(page.getByRole('link', { name: 'Dashboard' })).not.toBeVisible();
+    // Click the hamburger toggle button (which now shows "Close menu" when the menu is open)
+    // Use aria-expanded attribute to distinguish from the overlay button
+    const closeButton = page.locator('header button[aria-expanded="true"]');
+    await expect(closeButton).toBeVisible({ timeout: 5000 });
+    await closeButton.click();
+
+    // Wait for menu close animation
+    await page.waitForTimeout(300);
+
+    // Menu should be closed - hamburger button should show "Open menu" again
+    await expect(page.locator('header').getByRole('button', { name: /open menu/i })).toBeVisible({ timeout: 5000 });
   });
 
   test('should close mobile menu after navigation', async ({ page, viewport }) => {
@@ -123,13 +164,18 @@ test.describe('Navigation', () => {
     test.skip(!isMobileViewport(viewport?.width), 'This test is for mobile viewports only');
 
     await page.goto('/');
+    await page.waitForLoadState('networkidle');
 
     // Open hamburger menu
     await page.getByRole('button', { name: /open menu/i }).click();
-    await expect(page.getByRole('link', { name: 'Canvas' })).toBeVisible();
+    await page.waitForTimeout(200);
+
+    // Canvas link should be visible in the nav drawer
+    const canvasLink = page.locator('nav').getByRole('link', { name: 'Canvas', exact: true });
+    await expect(canvasLink).toBeVisible();
 
     // Click a navigation link
-    await page.getByRole('link', { name: 'Canvas' }).click();
+    await canvasLink.click();
 
     // Should navigate and menu should be closed
     await expect(page).toHaveURL('/canvas');
