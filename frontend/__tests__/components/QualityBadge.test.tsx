@@ -4,25 +4,25 @@ import { QualityBadge } from '@/components/quality/QualityBadge';
 
 /**
  * QualityBadge Component Tests
- * @atom IA-UI-001 Quality scores display correctly with visual indicators
+ * @atom IA-UI-008 Quality scores display correctly with visual indicators
  */
 describe('QualityBadge', () => {
   describe('score display', () => {
-    // @atom IA-UI-001
+    // @atom IA-UI-008
     it('displays score as percentage', () => {
       render(<QualityBadge score={85} />);
       // Score should render as percentage text
       expect(screen.getByText('85%')).toBeInTheDocument();
     });
 
-    // @atom IA-UI-001
+    // @atom IA-UI-008
     it('displays "Not Scored" for null score', () => {
       render(<QualityBadge score={null} />);
       // Null scores should show placeholder text
       expect(screen.getByText('Not Scored')).toBeInTheDocument();
     });
 
-    // @atom IA-UI-001
+    // @atom IA-UI-008
     it('displays label when showLabel is true', () => {
       render(<QualityBadge score={85} showLabel />);
       // Label should append quality level text
@@ -31,49 +31,70 @@ describe('QualityBadge', () => {
   });
 
   describe('quality level thresholds', () => {
-    // @atom IA-UI-001
+    // @atom IA-UI-008
     it('shows "Needs Work" for scores below 60', () => {
       render(<QualityBadge score={55} showLabel />);
       // Scores < 60 are "reject" level
       expect(screen.getByText('55% - Needs Work')).toBeInTheDocument();
     });
 
-    // @atom IA-UI-001
+    // @atom IA-UI-008
     it('shows "Review" for scores between 60 and 79', () => {
       render(<QualityBadge score={70} showLabel />);
       // Scores 60-79 are "revise" level
       expect(screen.getByText('70% - Review')).toBeInTheDocument();
     });
 
-    // @atom IA-UI-001
+    // @atom IA-UI-008
     it('shows "Ready" for scores 80 and above', () => {
       render(<QualityBadge score={80} showLabel />);
       // Scores >= 80 are "approve" level
       expect(screen.getByText('80% - Ready')).toBeInTheDocument();
     });
 
-    // @atom IA-UI-001
+    // @atom IA-UI-008
     it('handles edge case at 60 (boundary test)', () => {
       render(<QualityBadge score={60} showLabel />);
       // Boundary: exactly 60 should be "Review" not "Needs Work"
       expect(screen.getByText('60% - Review')).toBeInTheDocument();
     });
 
-    // @atom IA-UI-001
+    // @atom IA-UI-008
     it('handles edge case at 80 (boundary test)', () => {
       render(<QualityBadge score={80} showLabel />);
       // Boundary: exactly 80 should be "Ready" not "Review"
       expect(screen.getByText('80% - Ready')).toBeInTheDocument();
     });
 
-    // @atom IA-UI-001
+    // @atom IA-UI-008
     it('handles edge case at 0 (minimum boundary)', () => {
       render(<QualityBadge score={0} showLabel />);
-      // Boundary: score of 0 should still render
+      // Boundary: score of 0 should still render as minimum valid score
       expect(screen.getByText('0% - Needs Work')).toBeInTheDocument();
     });
 
-    // @atom IA-UI-001
+    // @atom IA-UI-008
+    it('handles edge case at 100 (maximum boundary)', () => {
+      render(<QualityBadge score={100} showLabel />);
+      // Boundary: score of 100 should render as maximum valid score with "Ready" status
+      expect(screen.getByText('100% - Ready')).toBeInTheDocument();
+    });
+
+    // @atom IA-UI-008
+    it('handles edge case at 59 (just below Review threshold)', () => {
+      render(<QualityBadge score={59} showLabel />);
+      // Boundary: 59 is one below 60, should be "Needs Work" not "Review"
+      expect(screen.getByText('59% - Needs Work')).toBeInTheDocument();
+    });
+
+    // @atom IA-UI-008
+    it('handles edge case at 79 (just below Ready threshold)', () => {
+      render(<QualityBadge score={79} showLabel />);
+      // Boundary: 79 is one below 80, should be "Review" not "Ready"
+      expect(screen.getByText('79% - Review')).toBeInTheDocument();
+    });
+
+    // @atom IA-UI-008
     it('validates score boundaries are numeric', () => {
       // Boundary test: 0 is the minimum valid score
       const minScore = 0;
@@ -84,7 +105,7 @@ describe('QualityBadge', () => {
       expect(maxScore).toBeLessThan(101);
     });
 
-    // @atom IA-UI-001
+    // @atom IA-UI-008
     it('handles null score boundary', () => {
       render(<QualityBadge score={null} showLabel />);
       // Null should render without crashing
@@ -94,7 +115,7 @@ describe('QualityBadge', () => {
   });
 
   describe('styling', () => {
-    // @atom IA-UI-001
+    // @atom IA-UI-008
     it('applies reject styling for low scores', () => {
       render(<QualityBadge score={50} />);
       const badge = screen.getByText('50%');
@@ -104,7 +125,7 @@ describe('QualityBadge', () => {
       expect(badge).toHaveClass('text-red-800');
     });
 
-    // @atom IA-UI-001
+    // @atom IA-UI-008
     it('applies revise styling for medium scores', () => {
       render(<QualityBadge score={70} />);
       const badge = screen.getByText('70%');
@@ -114,7 +135,7 @@ describe('QualityBadge', () => {
       expect(badge).toHaveClass('text-yellow-800');
     });
 
-    // @atom IA-UI-001
+    // @atom IA-UI-008
     it('applies approve styling for high scores', () => {
       render(<QualityBadge score={90} />);
       const badge = screen.getByText('90%');
@@ -124,7 +145,7 @@ describe('QualityBadge', () => {
       expect(badge).toHaveClass('text-green-800');
     });
 
-    // @atom IA-UI-001
+    // @atom IA-UI-008
     it('applies unknown styling for null scores', () => {
       render(<QualityBadge score={null} />);
       const badge = screen.getByText('Not Scored');
@@ -134,7 +155,7 @@ describe('QualityBadge', () => {
       expect(badge).toHaveClass('text-gray-600');
     });
 
-    // @atom IA-UI-001
+    // @atom IA-UI-008
     it('accepts custom className', () => {
       render(<QualityBadge score={85} className="custom-class" />);
       const badge = screen.getByText('85%');
