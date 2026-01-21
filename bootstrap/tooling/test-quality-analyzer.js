@@ -58,8 +58,8 @@ function analyzeTestFile(filePath) {
 }
 
 function checkIntentFidelity(content) {
-  // Check for @atom annotations
-  const atomAnnotations = (content.match(/@atom IA-\d{3}/g) || []).length;
+  // Check for @atom annotations - flexible pattern to match IA-001, IA-UI-001, etc.
+  const atomAnnotations = (content.match(/@atom IA-[A-Z0-9-]+/g) || []).length;
   const testCases = (content.match(/it\(/g) || []).length;
 
   if (testCases === 0) {
@@ -150,7 +150,12 @@ function checkDeterminism(content) {
     { pattern: /axios\./g, name: 'axios' },
   ];
 
-  const isMocked = content.includes('jest.mock') || content.includes('jest.spyOn');
+  // Recognize both Jest (jest.mock/spyOn) and Vitest (vi.mock/spyOn) mocking
+  const isMocked =
+    content.includes('jest.mock') ||
+    content.includes('jest.spyOn') ||
+    content.includes('vi.mock') ||
+    content.includes('vi.spyOn');
   const unmockedDetails = {};
   let issues = 0;
 
@@ -217,9 +222,10 @@ function checkIntegrationAuthenticity(content, filePath) {
     return { score: 1, diagnostics: { isIntegrationTest: false, notApplicable: true } };
   }
 
-  // Check for inappropriate mocks in integration tests
+  // Check for inappropriate mocks in integration tests (Jest and Vitest patterns)
   const mockPatterns = [
     { pattern: /jest\.mock\(/g, name: 'jest.mock()' },
+    { pattern: /vi\.mock\(/g, name: 'vi.mock()' },
     { pattern: /\.mockImplementation\(/g, name: 'mockImplementation()' },
     { pattern: /\.mockReturnValue\(/g, name: 'mockReturnValue()' },
   ];
@@ -416,16 +422,29 @@ function collectIssues(scores, diagnostics = {}) {
 }
 
 // Find all test files recursively
-function findTestFiles(dir) {
+function findTestFiles(dir, options = {}) {
   const results = [];
+  const excludeDirs = options.excludeDirs || ['node_modules', 'dist', '.next', 'e2e'];
+
+  if (!fs.existsSync(dir)) {
+    return results;
+  }
+
   const items = fs.readdirSync(dir, { withFileTypes: true });
 
   for (const item of items) {
     const fullPath = path.join(dir, item.name);
-    if (item.isDirectory() && item.name !== 'node_modules') {
-      results.push(...findTestFiles(fullPath));
-    } else if (item.isFile() && item.name.endsWith('.spec.ts')) {
-      results.push(fullPath);
+    if (item.isDirectory() && !excludeDirs.includes(item.name)) {
+      results.push(...findTestFiles(fullPath, options));
+    } else if (item.isFile()) {
+      // Match .spec.ts (Jest/backend) and .test.ts/.test.tsx (Vitest/frontend)
+      const isTestFile =
+        item.name.endsWith('.spec.ts') ||
+        item.name.endsWith('.test.ts') ||
+        item.name.endsWith('.test.tsx');
+      if (isTestFile) {
+        results.push(fullPath);
+      }
     }
   }
 
@@ -607,17 +626,28 @@ if (require.main === module) {
   if (!testFilePath) {
     console.log('\n=== Test Quality Analysis (All Files) ===\n');
 
-    const srcDir = path.join(process.cwd(), 'src');
-    if (!fs.existsSync(srcDir)) {
-      console.error('Error: src directory not found');
-      process.exit(1);
-    }
+    // Search both backend (src) and frontend directories
+    const searchDirs = [
+      { path: path.join(process.cwd(), 'src'), name: 'Backend (src)' },
+      { path: path.join(process.cwd(), 'frontend'), name: 'Frontend' },
+    ];
 
-    const testFiles = findTestFiles(srcDir);
+    let testFiles = [];
+    searchDirs.forEach(({ path: dirPath, name }) => {
+      if (fs.existsSync(dirPath)) {
+        const files = findTestFiles(dirPath);
+        if (files.length > 0) {
+          console.log(`Found ${files.length} test files in ${name}`);
+          testFiles.push(...files);
+        }
+      }
+    });
+
     if (testFiles.length === 0) {
-      console.log('No test files found in src/');
+      console.log('No test files found');
       process.exit(0);
     }
+    console.log('');
 
     let allPassed = true;
     const results = [];

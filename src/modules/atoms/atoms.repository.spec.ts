@@ -120,10 +120,9 @@ describe('AtomsRepository', () => {
       expect(result).toHaveLength(2);
       expect(result.every((atom) => atom.tags.includes('security'))).toBe(true);
       // IA-030: Must use PostgreSQL JSONB ?| operator for ANY tag matching
-      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
-        'atom.tags ?| :tags',
-        { tags: ['security'] },
-      );
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith('atom.tags ?| :tags', {
+        tags: ['security'],
+      });
     });
 
     // @atom IA-030 - Boundary: empty input
@@ -142,10 +141,9 @@ describe('AtomsRepository', () => {
       await repository.findByTags(['single-tag']);
 
       // IA-030: Single tag must be wrapped in array for JSONB operator
-      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
-        'atom.tags ?| :tags',
-        { tags: ['single-tag'] },
-      );
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith('atom.tags ?| :tags', {
+        tags: ['single-tag'],
+      });
     });
 
     // @atom IA-030 - Boundary: multiple tags
@@ -155,10 +153,9 @@ describe('AtomsRepository', () => {
       await repository.findByTags(['tag1', 'tag2', 'tag3']);
 
       // IA-030: Multiple tags must all be passed to JSONB operator
-      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
-        'atom.tags ?| :tags',
-        { tags: ['tag1', 'tag2', 'tag3'] },
-      );
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith('atom.tags ?| :tags', {
+        tags: ['tag1', 'tag2', 'tag3'],
+      });
     });
   });
 
@@ -166,9 +163,7 @@ describe('AtomsRepository', () => {
   describe('findByCategory', () => {
     // @atom IA-031
     it('should return atoms filtered by category', async () => {
-      const mockAtoms = [
-        { id: '1', atomId: 'IA-001', category: 'security' },
-      ];
+      const mockAtoms = [{ id: '1', atomId: 'IA-001', category: 'security' }];
       mockTypeOrmRepository.find.mockResolvedValue(mockAtoms as Atom[]);
 
       const result = await repository.findByCategory('security');
@@ -291,10 +286,9 @@ describe('AtomsRepository', () => {
       const result = await repository.search({ search: 'login' });
 
       // IA-033: Text search must use ILIKE for case-insensitive partial matching
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'atom.description ILIKE :search',
-        { search: '%login%' },
-      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('atom.description ILIKE :search', {
+        search: '%login%',
+      });
       // IA-033: Search must return matching items
       expect(result.items).toHaveLength(1);
       expect(result.items[0].description).toContain('login');
@@ -308,10 +302,9 @@ describe('AtomsRepository', () => {
       await repository.search({ status: 'committed' });
 
       // IA-033: Status filter must use exact equality, not partial match
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'atom.status = :status',
-        { status: 'committed' },
-      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('atom.status = :status', {
+        status: 'committed',
+      });
     });
 
     // @atom IA-033 - Boundary: quality score range
@@ -482,9 +475,7 @@ describe('AtomsRepository', () => {
     // @atom IA-035
     it('should return null averageQualityScore when no scores exist', async () => {
       mockTypeOrmRepository.count.mockResolvedValue(0);
-      mockQueryBuilder.getRawMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([]);
+      mockQueryBuilder.getRawMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
       mockQueryBuilder.getRawOne.mockResolvedValue({ avg: null });
 
       const result = await repository.getStatistics();
@@ -603,9 +594,7 @@ describe('AtomsRepository', () => {
   describe('findByTagsAll', () => {
     // @atom IA-037
     it('should return atoms matching ALL of the provided tags', async () => {
-      const mockAtoms = [
-        { id: '1', atomId: 'IA-001', tags: ['security', 'auth', 'login'] },
-      ];
+      const mockAtoms = [{ id: '1', atomId: 'IA-001', tags: ['security', 'auth', 'login'] }];
       mockQueryBuilder.getMany.mockResolvedValue(mockAtoms as Atom[]);
 
       const result = await repository.findByTagsAll(['security', 'auth']);
@@ -613,10 +602,9 @@ describe('AtomsRepository', () => {
       // IA-037: Result must contain atoms matching ALL tags
       expect(result).toHaveLength(1);
       // IA-037: Must use PostgreSQL ?& operator for ALL tag matching
-      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
-        'atom.tags ?& :tags',
-        { tags: ['security', 'auth'] },
-      );
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith('atom.tags ?& :tags', {
+        tags: ['security', 'auth'],
+      });
     });
 
     // @atom IA-037
@@ -698,10 +686,9 @@ describe('AtomsRepository', () => {
       await repository.search({ category: 'security' });
 
       // IA-040: Category filter must use exact equality
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'atom.category = :category',
-        { category: 'security' },
-      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('atom.category = :category', {
+        category: 'security',
+      });
     });
 
     // @atom IA-040
@@ -712,10 +699,9 @@ describe('AtomsRepository', () => {
       await repository.search({ tags: ['security', 'auth'] });
 
       // IA-040: Tags filter must use ?| operator for ANY match
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'atom.tags ?| :tags',
-        { tags: ['security', 'auth'] },
-      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('atom.tags ?| :tags', {
+        tags: ['security', 'auth'],
+      });
     });
 
     // @atom IA-040
@@ -726,10 +712,9 @@ describe('AtomsRepository', () => {
       await repository.search({ tagsAll: ['security', 'auth'] });
 
       // IA-040: TagsAll filter must use ?& operator for ALL match
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'atom.tags ?& :tagsAll',
-        { tagsAll: ['security', 'auth'] },
-      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('atom.tags ?& :tagsAll', {
+        tagsAll: ['security', 'auth'],
+      });
     });
 
     // @atom IA-040
@@ -740,10 +725,9 @@ describe('AtomsRepository', () => {
       await repository.search({ createdAfter: '2024-01-01' });
 
       // IA-040: CreatedAfter filter must use >= comparison
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'atom.createdAt >= :createdAfter',
-        { createdAfter: new Date('2024-01-01') },
-      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('atom.createdAt >= :createdAfter', {
+        createdAfter: new Date('2024-01-01'),
+      });
     });
 
     // @atom IA-040
@@ -754,10 +738,9 @@ describe('AtomsRepository', () => {
       await repository.search({ createdBefore: '2024-12-31' });
 
       // IA-040: CreatedBefore filter must use <= comparison
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'atom.createdAt <= :createdBefore',
-        { createdBefore: new Date('2024-12-31') },
-      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('atom.createdAt <= :createdBefore', {
+        createdBefore: new Date('2024-12-31'),
+      });
     });
 
     // @atom IA-040
@@ -796,10 +779,9 @@ describe('AtomsRepository', () => {
       await repository.search({ createdBy: 'user-123' });
 
       // IA-040: CreatedBy filter must use exact equality
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'atom.createdBy = :createdBy',
-        { createdBy: 'user-123' },
-      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('atom.createdBy = :createdBy', {
+        createdBy: 'user-123',
+      });
     });
 
     // @atom IA-040
@@ -810,10 +792,9 @@ describe('AtomsRepository', () => {
       await repository.search({ cursor: 'last-id' });
 
       // IA-040: Cursor filter must use > comparison for pagination
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'atom.id > :cursor',
-        { cursor: 'last-id' },
-      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('atom.id > :cursor', {
+        cursor: 'last-id',
+      });
     });
 
     // @atom IA-040

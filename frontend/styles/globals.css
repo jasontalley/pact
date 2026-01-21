@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+/* Pact custom theme using TailwindCSS v4 @theme directive */
+@theme {
+  /* Base colors using oklch */
+  --color-background: oklch(100% 0 0);
+  --color-foreground: oklch(14.9% 0.028 265.75);
+
+  --color-card: oklch(100% 0 0);
+  --color-card-foreground: oklch(14.9% 0.028 265.75);
+
+  --color-popover: oklch(100% 0 0);
+  --color-popover-foreground: oklch(14.9% 0.028 265.75);
+
+  --color-primary: oklch(22.9% 0.023 264.36);
+  --color-primary-foreground: oklch(98.5% 0.003 247.86);
+
+  --color-secondary: oklch(96.9% 0.003 264.54);
+  --color-secondary-foreground: oklch(22.9% 0.023 264.36);
+
+  --color-muted: oklch(96.9% 0.003 264.54);
+  --color-muted-foreground: oklch(55.6% 0.016 286.01);
+
+  --color-accent: oklch(96.9% 0.003 264.54);
+  --color-accent-foreground: oklch(22.9% 0.023 264.36);
+
+  --color-destructive: oklch(59.2% 0.227 27.33);
+  --color-destructive-foreground: oklch(98.5% 0.003 247.86);
+
+  --color-border: oklch(91.4% 0.008 264.54);
+  --color-input: oklch(91.4% 0.008 264.54);
+  --color-ring: oklch(14.9% 0.028 265.75);
+
+  /* Pact-specific semantic colors */
+  --color-status-draft: oklch(62.3% 0.214 259.81);
+  --color-status-committed: oklch(59.6% 0.145 163.23);
+  --color-status-superseded: oklch(55.1% 0.027 264.36);
+
+  --color-quality-reject: oklch(59.2% 0.227 27.33);
+  --color-quality-revise: oklch(79.5% 0.184 86.05);
+  --color-quality-approve: oklch(59.6% 0.145 163.23);
+
+  --color-category-functional: oklch(63.9% 0.182 293.54);
+  --color-category-performance: oklch(70.5% 0.213 47.6);
+  --color-category-security: oklch(59.2% 0.227 27.33);
+  --color-category-reliability: oklch(62.3% 0.214 259.81);
+  --color-category-usability: oklch(72.3% 0.15 197.78);
+  --color-category-maintainability: oklch(59.6% 0.145 163.23);
+
+  /* Radius */
+  --radius-lg: 0.5rem;
+  --radius-md: calc(0.5rem - 2px);
+  --radius-sm: calc(0.5rem - 4px);
+}
+
+/* Dark mode theme */
+@theme dark {
+  --color-background: oklch(14.9% 0.028 265.75);
+  --color-foreground: oklch(98.5% 0.003 247.86);
+
+  --color-card: oklch(14.9% 0.028 265.75);
+  --color-card-foreground: oklch(98.5% 0.003 247.86);
+
+  --color-popover: oklch(14.9% 0.028 265.75);
+  --color-popover-foreground: oklch(98.5% 0.003 247.86);
+
+  --color-primary: oklch(98.5% 0.003 247.86);
+  --color-primary-foreground: oklch(22.9% 0.023 264.36);
+
+  --color-secondary: oklch(27.4% 0.023 264.36);
+  --color-secondary-foreground: oklch(98.5% 0.003 247.86);
+
+  --color-muted: oklch(27.4% 0.023 264.36);
+  --color-muted-foreground: oklch(71.2% 0.016 264.36);
+
+  --color-accent: oklch(27.4% 0.023 264.36);
+  --color-accent-foreground: oklch(98.5% 0.003 247.86);
+
+  --color-destructive: oklch(42.2% 0.127 27.33);
+  --color-destructive-foreground: oklch(98.5% 0.003 247.86);
+
+  --color-border: oklch(27.4% 0.023 264.36);
+  --color-input: oklch(27.4% 0.023 264.36);
+  --color-ring: oklch(85.2% 0.016 264.36);
+}
+
+/* Base layer */
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ReactFlow customizations */
+.react-flow__node-atomNode {
+  @apply bg-card border border-border rounded-lg shadow-sm;
+}
+
+.react-flow__node-atomNode.selected {
+  @apply ring-2 ring-ring;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-muted;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/30 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/50;
+}

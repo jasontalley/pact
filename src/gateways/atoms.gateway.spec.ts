@@ -82,9 +82,7 @@ describe('AtomsGateway', () => {
       const mockClient = { id: 'test-client-123' } as any;
       gateway.handleDisconnect(mockClient);
       // Verifies client disconnection is logged with client ID
-      expect(logSpy).toHaveBeenCalledWith(
-        'Client disconnected: test-client-123',
-      );
+      expect(logSpy).toHaveBeenCalledWith('Client disconnected: test-client-123');
     });
   });
 
@@ -173,9 +171,7 @@ describe('AtomsGateway', () => {
     it('should not throw if server is undefined', () => {
       gateway.server = undefined as unknown as Server;
       // Verifies graceful handling when server is not yet initialized
-      expect(() =>
-        gateway.emitAtomSuperseded('old-id', 'new-id'),
-      ).not.toThrow();
+      expect(() => gateway.emitAtomSuperseded('old-id', 'new-id')).not.toThrow();
     });
   });
 

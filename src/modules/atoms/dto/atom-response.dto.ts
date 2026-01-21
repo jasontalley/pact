@@ -31,7 +31,8 @@ export class AtomResponseDto {
   @Expose()
   @ApiProperty({
     description: 'Behavioral description of the Intent Atom',
-    example: 'When a user submits the login form with valid credentials, the system authenticates and redirects to the dashboard',
+    example:
+      'When a user submits the login form with valid credentials, the system authenticates and redirects to the dashboard',
   })
   description: string;
 

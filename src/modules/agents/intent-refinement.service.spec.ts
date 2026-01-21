@@ -128,7 +128,12 @@ describe('IntentRefinementService', () => {
         ...mockAtomicityResult,
         heuristicScores: {
           ...mockAtomicityResult.heuristicScores,
-          observableOutcome: { passed: false, score: 0, maxScore: 20, feedback: 'No observable outcome' },
+          observableOutcome: {
+            passed: false,
+            score: 0,
+            maxScore: 20,
+            feedback: 'No observable outcome',
+          },
         },
       });
 
@@ -298,7 +303,12 @@ describe('IntentRefinementService', () => {
         ...mockAtomicityResult,
         heuristicScores: {
           ...mockAtomicityResult.heuristicScores,
-          measurableCriteria: { passed: false, score: 0, maxScore: 20, feedback: 'No measurements' },
+          measurableCriteria: {
+            passed: false,
+            score: 0,
+            maxScore: 20,
+            feedback: 'No measurements',
+          },
         },
       });
 
@@ -322,7 +332,15 @@ describe('IntentRefinementService', () => {
       mockAtomRepository.save.mockResolvedValueOnce({
         ...mockAtom,
         description: 'Refined description',
-        refinementHistory: [{ timestamp: fixedDate, feedback: 'test', previousDescription: '', newDescription: '', source: 'user' }],
+        refinementHistory: [
+          {
+            timestamp: fixedDate,
+            feedback: 'test',
+            previousDescription: '',
+            newDescription: '',
+            source: 'user',
+          },
+        ],
       } as Atom);
 
       await service.refineAtom('IA-001', 'Make it more specific');
@@ -398,10 +416,21 @@ describe('IntentRefinementService', () => {
         ...mockAtom,
         refinementHistory: [],
       } as Atom);
-      mockAtomRepository.save.mockImplementation(async (atom) => ({
-        ...atom,
-        refinementHistory: [{ timestamp: fixedDate, feedback: '', previousDescription: '', newDescription: '', source: 'ai' as const }],
-      }) as Atom);
+      mockAtomRepository.save.mockImplementation(
+        async (atom) =>
+          ({
+            ...atom,
+            refinementHistory: [
+              {
+                timestamp: fixedDate,
+                feedback: '',
+                previousDescription: '',
+                newDescription: '',
+                source: 'ai' as const,
+              },
+            ],
+          }) as Atom,
+      );
 
       const result = await service.refineAtom('IA-001', 'Clearer description here');
 
@@ -439,7 +468,8 @@ describe('IntentRefinementService', () => {
      * Must treat long feedback as direct replacement
      */
     it('should treat long feedback as direct replacement', async () => {
-      const longFeedback = 'User can view their complete profile information including name, email, and preferences within 2 seconds';
+      const longFeedback =
+        'User can view their complete profile information including name, email, and preferences within 2 seconds';
       mockAtomRepository.findOne.mockResolvedValueOnce({
         ...mockAtom,
         refinementHistory: [],
@@ -464,8 +494,20 @@ describe('IntentRefinementService', () => {
       const fixedDate1 = new Date('2024-01-01T10:00:00Z');
       const fixedDate2 = new Date('2024-01-01T11:00:00Z');
       const history: RefinementRecord[] = [
-        { timestamp: fixedDate1, feedback: 'First', previousDescription: 'v1', newDescription: 'v2', source: 'user' },
-        { timestamp: fixedDate2, feedback: 'Second', previousDescription: 'v2', newDescription: 'v3', source: 'ai' },
+        {
+          timestamp: fixedDate1,
+          feedback: 'First',
+          previousDescription: 'v1',
+          newDescription: 'v2',
+          source: 'user',
+        },
+        {
+          timestamp: fixedDate2,
+          feedback: 'Second',
+          previousDescription: 'v2',
+          newDescription: 'v3',
+          source: 'ai',
+        },
       ];
       mockAtomRepository.findOne.mockResolvedValueOnce({
         ...mockAtom,
@@ -490,9 +532,7 @@ describe('IntentRefinementService', () => {
       mockAtomRepository.findOne.mockResolvedValueOnce(null);
 
       // Verifies NotFoundException is thrown
-      await expect(service.getRefinementHistory('non-existent')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.getRefinementHistory('non-existent')).rejects.toThrow(NotFoundException);
     });
 
     /**
@@ -587,9 +627,7 @@ describe('IntentRefinementService', () => {
      * Must handle special characters in intent
      */
     it('should handle special characters in intent', async () => {
-      const result = await service.analyzeIntent(
-        'User can view profile (including email & phone)',
-      );
+      const result = await service.analyzeIntent('User can view profile (including email & phone)');
 
       // Verifies result has atomicity classification despite special chars
       expect(result).toHaveProperty('atomicity');
@@ -609,9 +647,7 @@ describe('IntentRefinementService', () => {
         refinementHistory: [],
       } as Atom);
       mockAtomRepository.save.mockImplementation(async (atom) => atom as Atom);
-      mockAtomQualityService.validateAtom.mockRejectedValueOnce(
-        new Error('Quality service error'),
-      );
+      mockAtomQualityService.validateAtom.mockRejectedValueOnce(new Error('Quality service error'));
 
       const result = await service.refineAtom('IA-001', 'Updated description');
 

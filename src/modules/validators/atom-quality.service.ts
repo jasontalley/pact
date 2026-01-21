@@ -87,7 +87,17 @@ const TECH_WORDS = [
   'docker',
   'kubernetes',
 ];
-const IMPL_VERBS = ['implement', 'use', 'using', 'call', 'invoke', 'query', 'fetch from', 'store in', 'cache in'];
+const IMPL_VERBS = [
+  'implement',
+  'use',
+  'using',
+  'call',
+  'invoke',
+  'query',
+  'fetch from',
+  'store in',
+  'cache in',
+];
 const BEHAVIOR_WORDS = ['user', 'customer', 'system', 'allow', 'enable', 'provide', 'ensure'];
 const VAGUE_ADJECTIVES = [
   'fast',
@@ -105,7 +115,15 @@ const VAGUE_ADJECTIVES = [
   'easy',
   'quick',
 ];
-const SUCCESS_INDICATORS = ['successfully', 'complete', 'confirm', 'verify', 'validate', 'pass', 'receive'];
+const SUCCESS_INDICATORS = [
+  'successfully',
+  'complete',
+  'confirm',
+  'verify',
+  'validate',
+  'pass',
+  'receive',
+];
 const CONDITIONAL_WORDS = ['when', 'given', 'then', 'after', 'before', 'upon'];
 
 @Injectable()
@@ -585,7 +603,8 @@ Respond in JSON format:
     }
 
     // Check for measurable outcomes (keep regex for numeric patterns)
-    const measurablePatterns = /\b(within|less than|more than|at least|exactly|between|\d+\s*(seconds?|ms|minutes?))\b/i;
+    const measurablePatterns =
+      /\b(within|less than|more than|at least|exactly|between|\d+\s*(seconds?|ms|minutes?))\b/i;
     if (measurablePatterns.test(atom.description)) {
       score += 5;
     } else {

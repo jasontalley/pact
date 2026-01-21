@@ -25,6 +25,7 @@ In an era where code execution is abundant and iteration is infinite, **intent b
 **Software is not code—software is realized intent.**
 
 Pact recognizes that:
+
 - Intent has an atomic unit (the smallest irreducible behavioral primitive)
 - Validators are the substrate (tests are proof, not documentation)
 - There is one semantic phase shift (the Commitment Boundary)
@@ -43,29 +44,34 @@ Pact recognizes that:
 ### Installation
 
 1. **Clone the repository**:
+
    ```bash
    git clone <repository-url>
    cd pact
    ```
 
 2. **Configure environment** (optional - defaults work for development):
+
    ```bash
    cp .env.example .env.development
    # Edit .env.development if needed (e.g., add your OPENAI_API_KEY)
    ```
 
 3. **Start the development environment**:
+
    ```bash
    docker-compose up -d
    ```
 
 4. **Verify services are running**:
+
    ```bash
    docker-compose ps
    # Should show: postgres (healthy), pact-app (running), pact-test (running), redis (running)
    ```
 
 5. **Check application health**:
+
    ```bash
    curl http://localhost:3000/health
    # Should return: {"status":"ok","timestamp":"..."}
@@ -81,25 +87,29 @@ Pact recognizes that:
 ### Intent Atoms
 
 **Intent Atoms** are the smallest unit of committed intent. They are:
+
 - **Observable**: Can be seen in a running system
 - **Falsifiable**: Can be proven wrong
 - **Implementation-agnostic**: Describe WHAT, not HOW
 - **Immutable after commitment**: Can only be superseded, never edited
 
 **Example**:
-```
+
+```bash
 IA-001: "User authentication must complete within 2 seconds"
 ```
 
 ### Molecules
 
 **Molecules** are descriptive groupings of atoms that represent features or capabilities. They are:
+
 - **Mutable**: Can be recomposed endlessly
 - **Non-authoritative**: Atoms are truth; molecules are lenses
 - **Human-facing**: For organization and understanding
 
 **Example**:
-```
+
+```bash
 M-001: Secure Checkout
   - IA-003: Payment processes securely
   - IA-004: Payment completes within 5 seconds
@@ -108,6 +118,7 @@ M-001: Secure Checkout
 ### Commitment Boundary
 
 The **Commitment Boundary** is the explicit phase transition where:
+
 - Ambiguity collapses
 - Interpretation freezes
 - Intent becomes immutable
@@ -197,7 +208,7 @@ docker-compose run --rm app npm run test:quality
 
 ## 📁 Project Structure
 
-```
+```bash
 pact/
 ├── src/                    # NestJS application source
 │   ├── modules/           # Feature modules (atoms, molecules, validators, etc.)
@@ -266,15 +277,19 @@ Pact uses specialized AI agents to automate key transformations while maintainin
 ### Current Agents
 
 #### ✅ Atomization Agent
+
 Converts ideas/requirements into properly-formed atoms with atomicity and testability analysis.
 
 #### ✅ Atom Quality Validator
+
 Reviews proposed atoms for quality (5 dimensions, 0-100 score) before commitment.
 
 #### 🔨 Test-Atom Coupling Agent (In Progress)
+
 Detects orphan tests, unrealized atoms, and test-atom mismatches (INV-009 violations).
 
 #### ⏳ Test Quality Analyzer (Pending)
+
 Enforces 7 quality dimensions on tests before implementation (Red phase gate).
 
 **See**: [ideas/pact-agents.md](./ideas/pact-agents.md) for full agent specifications.
@@ -300,21 +315,27 @@ Enforces 7 quality dimensions on tests before implementation (Red phase gate).
 ## 🗺️ Development Roadmap
 
 ### Phase 0: Foundation (Weeks 1-4) - Current
+
 Core infrastructure and first 4 agents operational.
 
 ### Phase 1: Core Intent System (Weeks 5-8)
+
 Intent Atom CRUD API, Canvas UI, Commitment ceremony.
 
 ### Phase 2: Validators & Commitment (Weeks 9-12)
+
 Validator definition, format translation, Commitment ceremony UI.
 
 ### Phase 3: Commitment Boundary (Weeks 13-16)
+
 Explicit commitment ceremony, global invariant checking, Commitment Artifact generation.
 
 ### Phase 4: Agent-Driven Realization (Weeks 17-20)
+
 Test generation from validators, code generation from Intent Atoms.
 
 ### Phase 5: Evidence Collection (Weeks 21-24)
+
 Evidence Artifact generation, real-time stream, timeline view.
 
 **See**: [docs/implementation-guide-2026-01-12.md](./docs/implementation-guide-2026-01-12.md) for full roadmap.
@@ -324,21 +345,25 @@ Evidence Artifact generation, real-time stream, timeline view.
 ## 📚 Documentation
 
 ### For Users
+
 - **[Quick Start](#-quick-start)** - Get started in 5 minutes
 - **[Core Concepts](#-core-concepts)** - Understand Intent Atoms, Molecules, Commitment Boundary
 - **[Development Workflow](#️-development-workflow)** - Daily development commands
 
 ### For Developers
+
 - **[CLAUDE.md](./CLAUDE.md)** - Comprehensive developer documentation
 - **[docs/index.md](./docs/index.md)** - Detailed system documentation
 - **[docs/implementation-guide-2026-01-12.md](./docs/implementation-guide-2026-01-12.md)** - Implementation roadmap
 
 ### For Architects
+
 - **[docs/architectural-review-response-2026-01-12.md](./docs/architectural-review-response-2026-01-12.md)** - Architectural decisions
 - **[ingest/manifesto.md](./ingest/manifesto.md)** - The Intent-Centric Software Manifesto
 - **[ingest/taxonomy.md](./ingest/taxonomy.md)** - ProdOS Canonical Taxonomy
 
 ### Key Documents
+
 - **[Requirements Synthesis](./docs/requirements/requirements-synthesis-2026-01-12.md)** - Full requirements
 - **[Acceptance Criteria](./docs/acceptance-criteria/pact-acceptance-criteria-2026-01-12.md)** - 90 test scenarios
 - **[Test Quality Metrics](./ingest/test-quality.md)** - Test quality taxonomy
@@ -379,6 +404,7 @@ UNLICENSED - Private project
 ## 🙋 Support
 
 For issues or questions:
+
 - See [docs/index.md](./docs/index.md) for system documentation
 - Check [docs/implementation-checklist.md](./docs/implementation-checklist.md) for current status
 - Review [CLAUDE.md](./CLAUDE.md) for developer guidelines
@@ -388,12 +414,14 @@ For issues or questions:
 ## 🌟 Why Pact?
 
 Traditional software development suffers from:
+
 - **Intent Loss**: Requirements drift from original vision
 - **Ambiguity Accumulation**: Unclear specifications lead to implementation errors
 - **Test-Intent Decoupling**: Tests become disconnected from original intent
 - **Agent Confusion**: AI assistants lack clear boundaries for decision-making
 
 Pact solves these problems by:
+
 - **Preserving Intent**: Intent doesn't drift from original vision
 - **Enforcing Quality**: Quality gates prevent poor intent from being committed
 - **Tracing Decisions**: Every test, every line of code traces back to committed intent

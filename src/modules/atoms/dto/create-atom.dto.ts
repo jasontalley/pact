@@ -82,7 +82,8 @@ export class CreateAtomDto {
   @ApiProperty({
     description: 'Behavioral description of the Intent Atom',
     minLength: 10,
-    example: 'When a user submits the login form with valid credentials, the system authenticates and redirects to the dashboard',
+    example:
+      'When a user submits the login form with valid credentials, the system authenticates and redirects to the dashboard',
   })
   @IsString()
   @IsNotEmpty()
@@ -96,9 +97,13 @@ export class CreateAtomDto {
   })
   @IsString()
   @IsNotEmpty()
-  @IsEnum(['functional', 'performance', 'security', 'reliability', 'usability', 'maintainability'], {
-    message: 'Category must be one of: functional, performance, security, reliability, usability, maintainability',
-  })
+  @IsEnum(
+    ['functional', 'performance', 'security', 'reliability', 'usability', 'maintainability'],
+    {
+      message:
+        'Category must be one of: functional, performance, security, reliability, usability, maintainability',
+    },
+  )
   category: AtomCategory;
 
   @ApiPropertyOptional({

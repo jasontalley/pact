@@ -22,10 +22,7 @@ describe('AtomicityCheckerService', () => {
     } as unknown as jest.Mocked<LLMService>;
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        AtomicityCheckerService,
-        { provide: LLMService, useValue: mockLLMService },
-      ],
+      providers: [AtomicityCheckerService, { provide: LLMService, useValue: mockLLMService }],
     }).compile();
 
     service = module.get<AtomicityCheckerService>(AtomicityCheckerService);
@@ -98,9 +95,7 @@ describe('AtomicityCheckerService', () => {
      * Must detect compound statements with "and" conjunction
      */
     it('should fail single responsibility check for compound "and" statements', async () => {
-      const result = await service.checkAtomicity(
-        'User can login and view their dashboard',
-      );
+      const result = await service.checkAtomicity('User can login and view their dashboard');
 
       // Verifies compound statement is detected as non-atomic
       expect(result.heuristicScores.singleResponsibility.passed).toBe(false);
@@ -112,9 +107,7 @@ describe('AtomicityCheckerService', () => {
      * Must detect compound statements with "or" conjunction
      */
     it('should fail single responsibility check for compound "or" statements', async () => {
-      const result = await service.checkAtomicity(
-        'User can edit or delete their profile',
-      );
+      const result = await service.checkAtomicity('User can edit or delete their profile');
 
       // Verifies compound statement with "or" is detected
       expect(result.heuristicScores.singleResponsibility.passed).toBe(false);
@@ -136,9 +129,7 @@ describe('AtomicityCheckerService', () => {
      * Must detect "as well as" compound phrase
      */
     it('should detect "as well as" compound phrase', async () => {
-      const result = await service.checkAtomicity(
-        'User can save as well as export their data',
-      );
+      const result = await service.checkAtomicity('User can save as well as export their data');
 
       // Verifies "as well as" is detected as compound
       expect(result.heuristicScores.singleResponsibility.passed).toBe(false);
@@ -151,9 +142,7 @@ describe('AtomicityCheckerService', () => {
      * Must detect observable verbs like "display" and "show"
      */
     it('should pass observable outcome for verbs like "display"', async () => {
-      const result = await service.checkAtomicity(
-        'System displays confirmation message',
-      );
+      const result = await service.checkAtomicity('System displays confirmation message');
 
       // Verifies observable verb is detected
       expect(result.heuristicScores.observableOutcome.passed).toBe(true);
@@ -164,9 +153,7 @@ describe('AtomicityCheckerService', () => {
      * Must fail when no observable outcome is present
      */
     it('should fail observable outcome for internal processing', async () => {
-      const result = await service.checkAtomicity(
-        'System validates user credentials internally',
-      );
+      const result = await service.checkAtomicity('System validates user credentials internally');
 
       // Verifies lack of observable outcome is detected
       expect(result.heuristicScores.observableOutcome.passed).toBe(false);
@@ -177,9 +164,7 @@ describe('AtomicityCheckerService', () => {
      * Must detect "user can see" pattern
      */
     it('should detect "user can see" pattern as observable', async () => {
-      const result = await service.checkAtomicity(
-        'User can see their account balance',
-      );
+      const result = await service.checkAtomicity('User can see their account balance');
 
       // Verifies "user can see" pattern is recognized
       expect(result.heuristicScores.observableOutcome.passed).toBe(true);
@@ -192,9 +177,7 @@ describe('AtomicityCheckerService', () => {
      * Must detect technology-specific terms like "SQL"
      */
     it('should fail for technology-specific terms', async () => {
-      const result = await service.checkAtomicity(
-        'System retrieves user data using SQL query',
-      );
+      const result = await service.checkAtomicity('System retrieves user data using SQL query');
 
       // Verifies technology term is detected
       expect(result.heuristicScores.implementationAgnostic.passed).toBe(false);
@@ -205,9 +188,7 @@ describe('AtomicityCheckerService', () => {
      * Must detect implementation phrases like "via API"
      */
     it('should fail for implementation phrases like "via API"', async () => {
-      const result = await service.checkAtomicity(
-        'System sends notification via REST API',
-      );
+      const result = await service.checkAtomicity('System sends notification via REST API');
 
       // Verifies implementation phrase is detected
       expect(result.heuristicScores.implementationAgnostic.passed).toBe(false);
@@ -231,9 +212,7 @@ describe('AtomicityCheckerService', () => {
      * Must detect database-specific terms
      */
     it('should detect database terms like "postgres" or "mongo"', async () => {
-      const result = await service.checkAtomicity(
-        'System stores data in postgres database',
-      );
+      const result = await service.checkAtomicity('System stores data in postgres database');
 
       // Verifies database term is detected
       expect(result.heuristicScores.implementationAgnostic.passed).toBe(false);
@@ -246,9 +225,7 @@ describe('AtomicityCheckerService', () => {
      * Must pass when time constraint is specified
      */
     it('should pass for time-bounded statements', async () => {
-      const result = await service.checkAtomicity(
-        'System responds within 3 seconds',
-      );
+      const result = await service.checkAtomicity('System responds within 3 seconds');
 
       // Verifies time constraint is recognized
       expect(result.heuristicScores.measurableCriteria.passed).toBe(true);
@@ -259,9 +236,7 @@ describe('AtomicityCheckerService', () => {
      * Must pass when numeric threshold is specified
      */
     it('should pass for numeric thresholds', async () => {
-      const result = await service.checkAtomicity(
-        'System allows at least 5 login attempts',
-      );
+      const result = await service.checkAtomicity('System allows at least 5 login attempts');
 
       // Verifies numeric threshold is recognized
       expect(result.heuristicScores.measurableCriteria.passed).toBe(true);
@@ -272,9 +247,7 @@ describe('AtomicityCheckerService', () => {
      * Must fail for vague qualifiers without measurements
      */
     it('should fail for vague qualifiers like "fast" or "efficient"', async () => {
-      const result = await service.checkAtomicity(
-        'System provides fast response to user',
-      );
+      const result = await service.checkAtomicity('System provides fast response to user');
 
       // Verifies vague qualifier is penalized
       expect(result.heuristicScores.measurableCriteria.passed).toBe(false);
@@ -285,9 +258,7 @@ describe('AtomicityCheckerService', () => {
      * Must fail for "usually" and similar uncertain language
      */
     it('should fail for uncertain language like "usually"', async () => {
-      const result = await service.checkAtomicity(
-        'System usually completes the operation',
-      );
+      const result = await service.checkAtomicity('System usually completes the operation');
 
       // Verifies uncertain language is detected
       expect(result.heuristicScores.measurableCriteria.passed).toBe(false);
@@ -300,9 +271,7 @@ describe('AtomicityCheckerService', () => {
      * Must fail for overly broad statements with "all" or "every"
      */
     it('should fail for overly broad scope with "all"', async () => {
-      const result = await service.checkAtomicity(
-        'System handles all user requests',
-      );
+      const result = await service.checkAtomicity('System handles all user requests');
 
       // Verifies broad scope is detected
       expect(result.heuristicScores.reasonableScope.passed).toBe(false);
@@ -337,9 +306,7 @@ describe('AtomicityCheckerService', () => {
      * Must fail for "entire system" or "complete system" phrases
      */
     it('should fail for "complete system" phrases', async () => {
-      const result = await service.checkAtomicity(
-        'Complete system must be available at all times',
-      );
+      const result = await service.checkAtomicity('Complete system must be available at all times');
 
       // Verifies system-wide scope is detected
       expect(result.heuristicScores.reasonableScope.passed).toBe(false);
@@ -537,7 +504,8 @@ describe('AtomicityCheckerService', () => {
      * Must handle very long input
      */
     it('should handle very long input', async () => {
-      const longIntent = 'User can view their complete profile information including personal details such as name, email, phone number, address, and preferences while also having the ability to see their recent activity history, notification settings, security options, linked accounts, and billing information all on a single comprehensive dashboard page that updates in real time';
+      const longIntent =
+        'User can view their complete profile information including personal details such as name, email, phone number, address, and preferences while also having the ability to see their recent activity history, notification settings, security options, linked accounts, and billing information all on a single comprehensive dashboard page that updates in real time';
 
       const result = await service.checkAtomicity(longIntent);
 
@@ -583,11 +551,7 @@ describe('AtomicityCheckerService', () => {
      * Score must never be negative for any heuristic
      */
     it('should never return negative score values', async () => {
-      const intents = [
-        '',
-        'x',
-        'System handles all requests using SQL and REST API quickly',
-      ];
+      const intents = ['', 'x', 'System handles all requests using SQL and REST API quickly'];
 
       for (const intent of intents) {
         const result = await service.checkAtomicity(intent);
@@ -645,23 +609,23 @@ describe('AtomicityCheckerService', () => {
 
       // Verifies singleResponsibility score is at most maxScore
       expect(result.heuristicScores.singleResponsibility.score).toBeLessThanOrEqual(
-        result.heuristicScores.singleResponsibility.maxScore
+        result.heuristicScores.singleResponsibility.maxScore,
       );
       // Verifies observableOutcome score is at most maxScore
       expect(result.heuristicScores.observableOutcome.score).toBeLessThanOrEqual(
-        result.heuristicScores.observableOutcome.maxScore
+        result.heuristicScores.observableOutcome.maxScore,
       );
       // Verifies implementationAgnostic score is at most maxScore
       expect(result.heuristicScores.implementationAgnostic.score).toBeLessThanOrEqual(
-        result.heuristicScores.implementationAgnostic.maxScore
+        result.heuristicScores.implementationAgnostic.maxScore,
       );
       // Verifies measurableCriteria score is at most maxScore
       expect(result.heuristicScores.measurableCriteria.score).toBeLessThanOrEqual(
-        result.heuristicScores.measurableCriteria.maxScore
+        result.heuristicScores.measurableCriteria.maxScore,
       );
       // Verifies reasonableScope score is at most maxScore
       expect(result.heuristicScores.reasonableScope.score).toBeLessThanOrEqual(
-        result.heuristicScores.reasonableScope.maxScore
+        result.heuristicScores.reasonableScope.maxScore,
       );
     });
 
@@ -702,9 +666,7 @@ describe('AtomicityCheckerService', () => {
      * Suggestions length boundary: must have at least 1 for violations
      */
     it('should have at least 1 suggestion when violations exist', async () => {
-      const result = await service.checkAtomicity(
-        'User can login and logout',
-      );
+      const result = await service.checkAtomicity('User can login and logout');
 
       // Verifies at least one violation exists
       expect(result.violations.length).toBeGreaterThanOrEqual(1);
@@ -733,10 +695,7 @@ describe('AtomicityCheckerService', () => {
     it('should have total score less than or equal to 100 (5 heuristics × 20)', async () => {
       const result = await service.checkAtomicity('User can view profile data');
 
-      const totalScore = Object.values(result.heuristicScores).reduce(
-        (sum, h) => sum + h.score,
-        0,
-      );
+      const totalScore = Object.values(result.heuristicScores).reduce((sum, h) => sum + h.score, 0);
 
       // Verifies total score does not exceed maximum
       expect(totalScore).toBeLessThanOrEqual(100);
@@ -749,9 +708,7 @@ describe('AtomicityCheckerService', () => {
      * Violations array must have exactly 0 length for perfect atomic intent
      */
     it('should have exactly 0 violations for perfectly atomic intent', async () => {
-      const result = await service.checkAtomicity(
-        'System displays user name within 1 second',
-      );
+      const result = await service.checkAtomicity('System displays user name within 1 second');
 
       // Verifies atomic intent has no violations
       expect(result.violations.length).toBe(0);
@@ -762,9 +719,7 @@ describe('AtomicityCheckerService', () => {
      * Suggestions array must have length > 0 for non-atomic intent
      */
     it('should have suggestions length greater than 0 for non-atomic', async () => {
-      const result = await service.checkAtomicity(
-        'User can login and logout using API calls',
-      );
+      const result = await service.checkAtomicity('User can login and logout using API calls');
 
       // Verifies suggestions are provided
       expect(result.suggestions.length).toBeGreaterThan(0);
@@ -775,9 +730,7 @@ describe('AtomicityCheckerService', () => {
      * Confidence must not be exactly 0 for valid intent
      */
     it('should not have confidence of exactly 0 for valid intent', async () => {
-      const result = await service.checkAtomicity(
-        'User can view their profile information',
-      );
+      const result = await service.checkAtomicity('User can view their profile information');
 
       // Verifies confidence is not zero
       expect(result.confidence).not.toBe(0);
@@ -826,9 +779,7 @@ describe('AtomicityCheckerService', () => {
      * Violations count must be greater than 0 for compound intent
      */
     it('should have violations greater than 0 for compound intent', async () => {
-      const result = await service.checkAtomicity(
-        'User can edit and delete records',
-      );
+      const result = await service.checkAtomicity('User can edit and delete records');
 
       // Verifies compound intent generates violations
       expect(result.violations.length).toBeGreaterThan(0);
@@ -865,9 +816,7 @@ describe('AtomicityCheckerService', () => {
      * Feedback string length boundary: must not be empty when heuristic fails
      */
     it('should have non-empty feedback when heuristic fails', async () => {
-      const result = await service.checkAtomicity(
-        'User can login and logout',
-      );
+      const result = await service.checkAtomicity('User can login and logout');
 
       // Verifies feedback is not empty for failing heuristic
       expect(result.heuristicScores.singleResponsibility.feedback.length).toBeGreaterThan(0);
@@ -878,9 +827,7 @@ describe('AtomicityCheckerService', () => {
      * Passing heuristic should have score greater than 0
      */
     it('should have score greater than 0 for passing heuristic', async () => {
-      const result = await service.checkAtomicity(
-        'System displays notification within 2 seconds',
-      );
+      const result = await service.checkAtomicity('System displays notification within 2 seconds');
 
       // Verifies passing heuristic has positive score
       if (result.heuristicScores.observableOutcome.passed) {
@@ -895,9 +842,7 @@ describe('AtomicityCheckerService', () => {
      * Must NOT mark compound "and" intent as atomic
      */
     it('should NOT mark compound "and" intent as atomic', async () => {
-      const result = await service.checkAtomicity(
-        'User can login and view dashboard',
-      );
+      const result = await service.checkAtomicity('User can login and view dashboard');
 
       // Verifies compound intent is NOT atomic
       expect(result.isAtomic).not.toBe(true);
@@ -910,9 +855,7 @@ describe('AtomicityCheckerService', () => {
      * Must NOT mark compound "or" intent as atomic
      */
     it('should NOT mark compound "or" intent as atomic', async () => {
-      const result = await service.checkAtomicity(
-        'User can create or update their profile',
-      );
+      const result = await service.checkAtomicity('User can create or update their profile');
 
       // Verifies compound intent with "or" is NOT atomic
       expect(result.isAtomic).not.toBe(true);
@@ -923,9 +866,7 @@ describe('AtomicityCheckerService', () => {
      * Must NOT pass implementation-agnostic for SQL mentions
      */
     it('should NOT pass implementation-agnostic for SQL', async () => {
-      const result = await service.checkAtomicity(
-        'System retrieves data using SQL queries',
-      );
+      const result = await service.checkAtomicity('System retrieves data using SQL queries');
 
       // Verifies SQL mention fails implementation check
       expect(result.heuristicScores.implementationAgnostic.passed).not.toBe(true);
@@ -936,9 +877,7 @@ describe('AtomicityCheckerService', () => {
      * Must NOT pass implementation-agnostic for database mentions
      */
     it('should NOT pass implementation-agnostic for database mentions', async () => {
-      const result = await service.checkAtomicity(
-        'System stores user data in the database',
-      );
+      const result = await service.checkAtomicity('System stores user data in the database');
 
       // Verifies database mention fails implementation check
       expect(result.heuristicScores.implementationAgnostic.passed).not.toBe(true);
@@ -949,9 +888,7 @@ describe('AtomicityCheckerService', () => {
      * Must NOT pass measurable criteria for vague "fast"
      */
     it('should NOT pass measurable criteria for vague qualifiers', async () => {
-      const result = await service.checkAtomicity(
-        'System responds fast to user requests',
-      );
+      const result = await service.checkAtomicity('System responds fast to user requests');
 
       // Verifies vague "fast" fails measurable criteria
       expect(result.heuristicScores.measurableCriteria.passed).not.toBe(true);
@@ -962,9 +899,7 @@ describe('AtomicityCheckerService', () => {
      * Must NOT pass measurable criteria for "usually"
      */
     it('should NOT pass measurable criteria for uncertain language', async () => {
-      const result = await service.checkAtomicity(
-        'System usually processes requests properly',
-      );
+      const result = await service.checkAtomicity('System usually processes requests properly');
 
       // Verifies "usually" fails measurable criteria
       expect(result.heuristicScores.measurableCriteria.passed).not.toBe(true);
@@ -975,9 +910,7 @@ describe('AtomicityCheckerService', () => {
      * Must NOT pass reasonable scope for "all" keyword
      */
     it('should NOT pass reasonable scope for "all" keyword', async () => {
-      const result = await service.checkAtomicity(
-        'System handles all user interactions',
-      );
+      const result = await service.checkAtomicity('System handles all user interactions');
 
       // Verifies "all" keyword fails scope check
       expect(result.heuristicScores.reasonableScope.passed).not.toBe(true);
@@ -988,9 +921,7 @@ describe('AtomicityCheckerService', () => {
      * Must NOT pass reasonable scope for "every" keyword
      */
     it('should NOT pass reasonable scope for "every" keyword', async () => {
-      const result = await service.checkAtomicity(
-        'System validates every user input',
-      );
+      const result = await service.checkAtomicity('System validates every user input');
 
       // Verifies "every" keyword fails scope check
       expect(result.heuristicScores.reasonableScope.passed).not.toBe(true);
@@ -1016,9 +947,7 @@ describe('AtomicityCheckerService', () => {
      * Must NOT return empty violations array for non-atomic intent
      */
     it('should NOT return empty violations for non-atomic intent', async () => {
-      const result = await service.checkAtomicity(
-        'User can login and logout using REST API',
-      );
+      const result = await service.checkAtomicity('User can login and logout using REST API');
 
       // Verifies violations are captured
       expect(result.violations.length).not.toBe(0);

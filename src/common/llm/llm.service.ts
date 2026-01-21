@@ -17,6 +17,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ChatOpenAI } from '@langchain/openai';
 import { BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { LangChainTracer } from '@langchain/core/tracers/tracer_langchain';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const CircuitBreaker = require('opossum');
 import pRetry, { AbortError } from 'p-retry';
@@ -76,6 +77,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
   private redis: Redis | null = null;
   private primaryLLM: ChatOpenAI;
   private fallbackLLMs: ChatOpenAI[] = [];
+  private tracer: LangChainTracer | null = null;
 
   constructor(
     @InjectRepository(LLMConfiguration)
@@ -134,7 +136,29 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
     // Initialize rate limiter
     this.initializeRateLimiter();
 
+    // Initialize LangSmith tracer if enabled
+    this.initializeTracer();
+
     this.logger.log('LLM Service initialized successfully');
+  }
+
+  /**
+   * Initialize LangSmith tracer for observability
+   */
+  private initializeTracer() {
+    const tracingEnabled = process.env.LANGCHAIN_TRACING_V2 === 'true';
+    const apiKey = process.env.LANGCHAIN_API_KEY;
+
+    if (tracingEnabled && apiKey) {
+      this.tracer = new LangChainTracer({
+        projectName: process.env.LANGCHAIN_PROJECT || 'pact-agents',
+      });
+      this.logger.log(
+        `LangSmith tracer initialized (project: ${process.env.LANGCHAIN_PROJECT || 'pact-agents'})`,
+      );
+    } else {
+      this.logger.warn('LangSmith tracing disabled (LANGCHAIN_TRACING_V2 not set or no API key)');
+    }
   }
 
   /**
@@ -241,10 +265,14 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
+    // GPT-5-nano has restrictions: no custom max_tokens or temperature
+    // Other GPT-5 models (mini, full) may have different restrictions
+    const isGpt5Nano = modelConfig.modelName === 'gpt-5-nano';
+
     return new ChatOpenAI({
       modelName: modelConfig.modelName,
-      temperature: modelConfig.temperature,
-      maxTokens: modelConfig.maxTokens,
+      ...(isGpt5Nano ? {} : { temperature: modelConfig.temperature }),
+      ...(isGpt5Nano ? {} : { maxTokens: modelConfig.maxTokens }),
       openAIApiKey: apiKey,
       timeout: this.config.defaultTimeout,
     });
@@ -261,7 +289,8 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
 
     const options = {
       timeout: this.config.defaultTimeout,
-      errorThresholdPercentage: (this.config.circuitBreaker.failureThreshold / 10) * 100,
+      errorThresholdPercentage: 50, // Open circuit when 50% of requests fail
+      volumeThreshold: this.config.circuitBreaker.failureThreshold, // Minimum requests before evaluating
       resetTimeout: this.config.circuitBreaker.timeout,
       rollingCountTimeout: this.config.circuitBreaker.monitoringWindow,
       rollingCountBuckets: 10,
@@ -563,8 +592,29 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
       return new HumanMessage(msg.content);
     });
 
-    // Invoke the LLM
-    const response = await llmClient.invoke(messages);
+    // Build callbacks array with tracer if available
+    const callbacks = this.tracer ? [this.tracer] : [];
+
+    // Invoke the LLM with tracing (awaitHandlers ensures traces are sent before returning)
+    const response = await llmClient.invoke(messages, {
+      callbacks,
+      runName: request.agentName || 'llm-call',
+      metadata: {
+        requestId,
+        agentName: request.agentName,
+        purpose: request.purpose,
+      },
+      tags: [request.agentName || 'pact', 'llm-call'],
+    });
+
+    // Wait for tracer handlers to complete (ensures trace is sent to LangSmith)
+    if (this.tracer) {
+      try {
+        await Promise.all(callbacks.map((cb) => (cb as any).awaitHandlers?.()));
+      } catch {
+        // Ignore errors from awaiting handlers
+      }
+    }
 
     const latencyMs = Date.now() - startTime;
 

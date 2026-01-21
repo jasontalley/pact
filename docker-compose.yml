@@ -30,6 +30,8 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
+    env_file:
+      - .env.development
     environment:
       DATABASE_HOST: postgres
       DATABASE_PORT: 5432
@@ -37,6 +39,8 @@ services:
       DATABASE_PASSWORD: pact_dev_password
       DATABASE_NAME: pact_development
       NODE_ENV: development
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       postgres:
         condition: service_healthy
@@ -70,6 +74,44 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+
+  # Next.js frontend (dev server only - no test infrastructure)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: pact-frontend
+    ports:
+      - "3001:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3000
+      - NEXT_PUBLIC_WS_URL=ws://localhost:3000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - app
+    command: npm run dev
+
+  # Frontend test runner (separate container for isolation)
+  # Uses Playwright image with browsers pre-installed for E2E tests
+  # NOTE: No volume mounts - this container is self-contained to ensure
+  # Playwright version in node_modules matches the Docker image's browsers
+  frontend-test:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.test
+    container_name: pact-frontend-test
+    environment:
+      - NEXT_PUBLIC_API_URL=http://app:3000
+      - NEXT_PUBLIC_WS_URL=ws://app:3000
+      - PLAYWRIGHT_BASE_URL=http://frontend:3000
+      - CI=true
+    depends_on:
+      - app
+      - frontend
+    command: npm test
 
 volumes:
   postgres_data:

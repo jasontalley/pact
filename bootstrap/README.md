@@ -72,6 +72,7 @@ Bootstrap Scaffolding (CODE - demolished):
 | BS-003 | seed | Seed database with atom definitions from test annotations | Pact can manage atoms via UI/API without seed step | @jasontalley | TBD | Phase 1 |
 | BS-004 | seed | Project atoms from database to filesystem | Pact provides built-in projection via API/CLI | @jasontalley | TBD | Phase 1 |
 | BS-005 | tooling | Test-atom coupling analyzer for coupling score gate | Pact runtime provides built-in coupling analysis | @jasontalley | TBD | Phase 1 |
+| BS-010 | tooling | Agent evaluation framework for measuring LLM agent efficacy | Pact has built-in evaluation infrastructure | @jasontalley | TBD | Phase 2 |
 
 ---
 

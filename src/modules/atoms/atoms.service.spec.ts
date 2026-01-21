@@ -299,10 +299,12 @@ describe('AtomsService', () => {
         committedAt: null,
       };
       mockAtomRepository.findOne.mockResolvedValue(mockAtom);
-      mockAtomRepository.save.mockImplementation((atom) => Promise.resolve({
-        ...atom,
-        committedAt: fixedDate,
-      }));
+      mockAtomRepository.save.mockImplementation((atom) =>
+        Promise.resolve({
+          ...atom,
+          committedAt: fixedDate,
+        }),
+      );
 
       const result = await service.commit('test-uuid');
 
@@ -325,10 +327,12 @@ describe('AtomsService', () => {
         committedAt: null,
       };
       mockAtomRepository.findOne.mockResolvedValue(mockAtom);
-      mockAtomRepository.save.mockImplementation((atom) => Promise.resolve({
-        ...atom,
-        committedAt: fixedDate,
-      }));
+      mockAtomRepository.save.mockImplementation((atom) =>
+        Promise.resolve({
+          ...atom,
+          committedAt: fixedDate,
+        }),
+      );
 
       const result = await service.commit('test-uuid');
 
@@ -407,9 +411,7 @@ describe('AtomsService', () => {
         atomId: 'IA-002',
       };
       // First call returns the atom to supersede, second returns the new atom
-      mockAtomRepository.findOne
-        .mockResolvedValueOnce(mockAtom)
-        .mockResolvedValueOnce(mockNewAtom);
+      mockAtomRepository.findOne.mockResolvedValueOnce(mockAtom).mockResolvedValueOnce(mockNewAtom);
       mockAtomRepository.save.mockResolvedValue({
         ...mockAtom,
         status: 'superseded',
@@ -441,9 +443,7 @@ describe('AtomsService', () => {
         atomId: 'IA-001',
         status: 'committed',
       };
-      mockAtomRepository.findOne
-        .mockResolvedValueOnce(mockAtom)
-        .mockResolvedValueOnce(null);
+      mockAtomRepository.findOne.mockResolvedValueOnce(mockAtom).mockResolvedValueOnce(null);
 
       // IA-024: Must throw NotFoundException when new atom doesn't exist
       await expect(service.supersede('old-uuid', 'non-existent')).rejects.toThrow(
@@ -490,9 +490,9 @@ describe('AtomsService', () => {
       mockAtomRepository.findOne.mockResolvedValue(mockAtom);
 
       // IA-025/INV-004: Must throw ForbiddenException for committed atom
-      await expect(
-        service.update('test-uuid', { description: 'New desc' }),
-      ).rejects.toThrow(ForbiddenException);
+      await expect(service.update('test-uuid', { description: 'New desc' })).rejects.toThrow(
+        ForbiddenException,
+      );
     });
 
     // @atom IA-025
@@ -505,9 +505,9 @@ describe('AtomsService', () => {
       mockAtomRepository.findOne.mockResolvedValue(mockAtom);
 
       // IA-025: Must throw ForbiddenException for superseded atom
-      await expect(
-        service.update('test-uuid', { description: 'New desc' }),
-      ).rejects.toThrow(ForbiddenException);
+      await expect(service.update('test-uuid', { description: 'New desc' })).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 
@@ -931,7 +931,10 @@ describe('AtomsService', () => {
 
     // @atom IA-033
     it('should delegate findSupersessionChain to repository', async () => {
-      const mockChain = [{ id: '1', atomId: 'IA-001' }, { id: '2', atomId: 'IA-002' }];
+      const mockChain = [
+        { id: '1', atomId: 'IA-001' },
+        { id: '2', atomId: 'IA-002' },
+      ];
       mockAtomsRepository.findSupersessionChain.mockResolvedValue(mockChain);
 
       const result = await service.findSupersessionChain('1');

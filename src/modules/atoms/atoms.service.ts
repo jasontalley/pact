@@ -46,9 +46,7 @@ export class AtomsService {
       order: { atomId: 'DESC' },
     });
 
-    const nextId = latestAtom
-      ? Number.parseInt(latestAtom.atomId.split('-')[1], 10) + 1
-      : 1;
+    const nextId = latestAtom ? Number.parseInt(latestAtom.atomId.split('-')[1], 10) + 1 : 1;
     return `IA-${String(nextId).padStart(3, '0')}`;
   }
 

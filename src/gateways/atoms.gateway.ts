@@ -62,9 +62,7 @@ export type AtomEvent =
   },
   namespace: '/atoms',
 })
-export class AtomsGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
-{
+export class AtomsGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 

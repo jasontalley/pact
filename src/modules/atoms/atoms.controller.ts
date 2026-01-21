@@ -11,13 +11,7 @@ import {
   HttpStatus,
   Optional,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiParam,
-  ApiBody,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
 import { AtomsService } from './atoms.service';
 import { CreateAtomDto } from './dto/create-atom.dto';
 import { UpdateAtomDto } from './dto/update-atom.dto';
@@ -59,9 +53,7 @@ export class AtomsController {
   @Get('tags')
   @ApiOperation({ summary: 'Get popular tags with usage counts' })
   @ApiResponse({ status: 200, description: 'List of tags with counts' })
-  getPopularTags(
-    @Query('limit') limit?: string,
-  ): Promise<Array<{ tag: string; count: number }>> {
+  getPopularTags(@Query('limit') limit?: string): Promise<Array<{ tag: string; count: number }>> {
     const parsedLimit = limit ? Number.parseInt(limit, 10) : 20;
     return this.atomsService.getPopularTags(parsedLimit);
   }
@@ -96,10 +88,7 @@ export class AtomsController {
   @ApiResponse({ status: 200, description: 'Atom updated successfully', type: Atom })
   @ApiResponse({ status: 403, description: 'Cannot update non-draft atom' })
   @ApiResponse({ status: 404, description: 'Atom not found' })
-  update(
-    @Param('id') id: string,
-    @Body() updateAtomDto: UpdateAtomDto,
-  ): Promise<Atom> {
+  update(@Param('id') id: string, @Body() updateAtomDto: UpdateAtomDto): Promise<Atom> {
     return this.atomsService.update(id, updateAtomDto);
   }
 
@@ -131,10 +120,7 @@ export class AtomsController {
   @ApiResponse({ status: 200, description: 'Atom superseded successfully', type: Atom })
   @ApiResponse({ status: 400, description: 'Already superseded' })
   @ApiResponse({ status: 404, description: 'Atom not found' })
-  supersede(
-    @Param('id') id: string,
-    @Body('newAtomId') newAtomId: string,
-  ): Promise<Atom> {
+  supersede(@Param('id') id: string, @Body('newAtomId') newAtomId: string): Promise<Atom> {
     return this.atomsService.supersede(id, newAtomId);
   }
 
@@ -194,9 +180,7 @@ export class AtomsController {
   })
   @ApiResponse({ status: 400, description: 'Invalid input' })
   @ApiResponse({ status: 503, description: 'Refinement service not available' })
-  async analyzeIntent(
-    @Body() analyzeIntentDto: AnalyzeIntentDto,
-  ): Promise<IntentAnalysisResult> {
+  async analyzeIntent(@Body() analyzeIntentDto: AnalyzeIntentDto): Promise<IntentAnalysisResult> {
     if (!this.intentRefinementService) {
       throw new Error('Intent refinement service is not available');
     }
@@ -219,7 +203,10 @@ export class AtomsController {
         type: 'object',
         properties: {
           id: { type: 'string' },
-          type: { type: 'string', enum: ['clarification', 'decomposition', 'precision', 'rewrite'] },
+          type: {
+            type: 'string',
+            enum: ['clarification', 'decomposition', 'precision', 'rewrite'],
+          },
           original: { type: 'string' },
           suggested: { type: 'string' },
           reasoning: { type: 'string' },
@@ -284,7 +271,8 @@ export class AtomsController {
   @Get(':id/refinement-history')
   @ApiOperation({
     summary: 'Get refinement history for an atom',
-    description: 'Returns the complete refinement history showing how the atom description evolved over time.',
+    description:
+      'Returns the complete refinement history showing how the atom description evolved over time.',
   })
   @ApiParam({ name: 'id', description: 'UUID or atomId of the atom' })
   @ApiResponse({

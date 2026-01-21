@@ -1,0 +1,135 @@
+{
+  "name": "atomicity-evaluation",
+  "description": "Golden dataset for evaluating atomicity agent accuracy",
+  "version": "1.0.0",
+  "examples": [
+    {
+      "id": "atomic-simple-functional",
+      "input": "User can log in with valid credentials",
+      "expected": {
+        "isAtomic": true,
+        "category": "functional",
+        "confidence_min": 0.8
+      },
+      "tags": ["atomic", "functional", "simple"]
+    },
+    {
+      "id": "atomic-performance",
+      "input": "API response time must be under 200ms",
+      "expected": {
+        "isAtomic": true,
+        "category": "performance",
+        "confidence_min": 0.85
+      },
+      "tags": ["atomic", "performance", "measurable"]
+    },
+    {
+      "id": "atomic-security",
+      "input": "User passwords must be hashed before storage",
+      "expected": {
+        "isAtomic": true,
+        "category": "security",
+        "confidence_min": 0.8
+      },
+      "tags": ["atomic", "security"]
+    },
+    {
+      "id": "non-atomic-compound",
+      "input": "User can log in and view their dashboard",
+      "expected": {
+        "isAtomic": false,
+        "reason": "compound behavior",
+        "suggestedDecomposition": [
+          "User can log in with valid credentials",
+          "User can view their dashboard after authentication"
+        ]
+      },
+      "tags": ["non-atomic", "compound"]
+    },
+    {
+      "id": "non-atomic-vague",
+      "input": "System should be fast",
+      "expected": {
+        "isAtomic": false,
+        "reason": "not measurable/testable"
+      },
+      "tags": ["non-atomic", "vague", "unmeasurable"]
+    },
+    {
+      "id": "non-atomic-implementation",
+      "input": "Payment must be processed using Stripe API",
+      "expected": {
+        "isAtomic": false,
+        "reason": "implementation-specific"
+      },
+      "tags": ["non-atomic", "implementation-specific"]
+    },
+    {
+      "id": "atomic-with-timing",
+      "input": "User receives email confirmation within 30 seconds of registration",
+      "expected": {
+        "isAtomic": true,
+        "category": "functional",
+        "confidence_min": 0.8
+      },
+      "tags": ["atomic", "functional", "timing"]
+    },
+    {
+      "id": "non-atomic-multiple-actions",
+      "input": "User can create, edit, and delete posts",
+      "expected": {
+        "isAtomic": false,
+        "reason": "multiple distinct actions",
+        "suggestedDecomposition": [
+          "User can create posts",
+          "User can edit posts",
+          "User can delete posts"
+        ]
+      },
+      "tags": ["non-atomic", "multiple-actions"]
+    },
+    {
+      "id": "atomic-error-handling",
+      "input": "System displays error message when login fails",
+      "expected": {
+        "isAtomic": true,
+        "category": "usability",
+        "confidence_min": 0.75
+      },
+      "tags": ["atomic", "usability", "error-handling"]
+    },
+    {
+      "id": "atomic-reliability",
+      "input": "System maintains 99.9% uptime",
+      "expected": {
+        "isAtomic": true,
+        "category": "reliability",
+        "confidence_min": 0.85
+      },
+      "tags": ["atomic", "reliability", "sla"]
+    },
+    {
+      "id": "non-atomic-conditional",
+      "input": "If user is admin, they can delete any post; otherwise they can only delete their own",
+      "expected": {
+        "isAtomic": false,
+        "reason": "conditional/branching logic",
+        "suggestedDecomposition": [
+          "Admin users can delete any post",
+          "Non-admin users can only delete their own posts"
+        ]
+      },
+      "tags": ["non-atomic", "conditional"]
+    },
+    {
+      "id": "atomic-boundary",
+      "input": "Username must be between 3 and 30 characters",
+      "expected": {
+        "isAtomic": true,
+        "category": "functional",
+        "confidence_min": 0.85
+      },
+      "tags": ["atomic", "validation", "boundary"]
+    }
+  ]
+}

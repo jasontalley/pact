@@ -192,7 +192,9 @@ export class IntentRefinementService {
     }
 
     if (atom.status !== 'draft') {
-      throw new Error(`Cannot refine atom with status '${atom.status}'. Only draft atoms can be refined.`);
+      throw new Error(
+        `Cannot refine atom with status '${atom.status}'. Only draft atoms can be refined.`,
+      );
     }
 
     const previousDescription = atom.description;
@@ -280,10 +282,7 @@ export class IntentRefinementService {
 
   // --- Private helper methods ---
 
-  private generateClarifyingQuestions(
-    intent: string,
-    result: AtomicityResult,
-  ): string[] {
+  private generateClarifyingQuestions(intent: string, result: AtomicityResult): string[] {
     const questions: string[] = [];
 
     if (!result.heuristicScores.observableOutcome.passed) {
@@ -307,10 +306,7 @@ export class IntentRefinementService {
     return questions.slice(0, 3); // Limit to 3 questions
   }
 
-  private generateDecompositionSuggestions(
-    intent: string,
-    result: AtomicityResult,
-  ): string[] {
+  private generateDecompositionSuggestions(intent: string, result: AtomicityResult): string[] {
     if (result.heuristicScores.singleResponsibility.passed) {
       return [];
     }
@@ -324,10 +320,7 @@ export class IntentRefinementService {
     return [];
   }
 
-  private generatePrecisionImprovements(
-    intent: string,
-    result: AtomicityResult,
-  ): string[] {
+  private generatePrecisionImprovements(intent: string, result: AtomicityResult): string[] {
     const improvements: string[] = [];
 
     if (!result.heuristicScores.measurableCriteria.passed) {
@@ -453,10 +446,7 @@ Respond with JSON array:
     }
   }
 
-  private async interpretFeedback(
-    currentDescription: string,
-    feedback: string,
-  ): Promise<string> {
+  private async interpretFeedback(currentDescription: string, feedback: string): Promise<string> {
     // If LLM available, use it to interpret feedback
     if (this.llmService) {
       try {

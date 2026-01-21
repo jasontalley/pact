@@ -2,8 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { AppModule } from '../src/app.module';
 
-let app: INestApplication;
-let moduleFixture: TestingModule;
+let app: INestApplication | undefined;
+let moduleFixture: TestingModule | undefined;
 
 /**
  * Global setup for E2E tests.
@@ -41,8 +41,8 @@ export async function setupE2EApp(): Promise<INestApplication> {
 export async function teardownE2EApp(): Promise<void> {
   if (app) {
     await app.close();
-    app = null;
-    moduleFixture = null;
+    app = undefined;
+    moduleFixture = undefined;
   }
 }
 

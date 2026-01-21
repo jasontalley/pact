@@ -1,36 +1,50 @@
 import { Given, When, Then, Before } from '@cucumber/cucumber';
 import { expect } from 'expect';
-import { PactWorld } from './world';
+import { PactWorld, Atom } from './world';
 
 // Mock atomization service for BDD tests
 // In integration tests, this would use the real service
 const mockAtomizationService = {
   async atomize(intent: string, category?: string): Promise<any> {
     // Simulate LLM analysis based on intent patterns
-    const isVague = /should be (fast|good|nice|better)/i.test(intent);
-    const isCompound = / and /i.test(intent);
-    // Use word boundaries to avoid matching "User" as "use"
+
+    // Vague patterns - only match truly vague intents
+    const isVague = /^(system|it) should be (fast|good|nice|better)$/i.test(intent);
+
+    // Compound patterns - multiple distinct behaviors joined by 'and'
+    const andParts = intent.split(/ and /i);
+    const isCompound = andParts.length > 1 && andParts.every((p) => p.trim().length > 10);
+
+    // Implementation-specific - storage/infrastructure terms (not 'using' in security context)
     const isImplementationSpecific =
-      /\b(using|implement|redis|sql|mongo|database|api|http)\b/i.test(intent);
+      /\b(implement using|redis|sql|mongo|database for storage)\b/i.test(intent) ||
+      /^use \w+ for /i.test(intent);
 
     // Check compound first (higher priority)
     if (isCompound) {
       return {
         success: false,
-        confidence: 0.8,
+        confidence: 0.4,
         analysis: 'Intent contains multiple behaviors that should be separate atoms',
-        message: 'Suggested decomposition: ["User can log in", "User can view dashboard"]',
+        message: 'Suggested decomposition: separate into individual atomic intents',
       };
     }
 
-    if (isVague || isImplementationSpecific) {
+    if (isVague) {
       return {
         success: false,
         confidence: 0.3,
-        analysis: isVague
-          ? 'Intent is too vague to be testable'
-          : 'Intent contains implementation details',
-        message: 'Please clarify the intent or remove implementation specifics',
+        analysis: 'Intent is too vague to be testable',
+        message: 'Please clarify the intent with specific, measurable criteria',
+      };
+    }
+
+    if (isImplementationSpecific) {
+      return {
+        success: false,
+        confidence: 0.3,
+        analysis: 'Intent contains implementation details',
+        message: 'Please remove implementation specifics and describe the behavior',
       };
     }
 
@@ -44,7 +58,11 @@ const mockAtomizationService = {
         description: intent,
         category: category || 'functional',
         status: 'draft',
-      },
+        qualityScore: null,
+        committedAt: null,
+        supersededBy: null,
+        tags: [],
+      } as Atom,
       confidence: 0.85,
       analysis: 'Intent is atomic, observable, and implementation-agnostic',
     };
@@ -58,7 +76,6 @@ Before(function (this: PactWorld) {
 // Background steps
 Given('the Pact system is initialized', function (this: PactWorld) {
   // System is always initialized for tests
-  // In real tests, this would verify database connection, etc.
 });
 
 Given('I am authenticated as a product owner', function (this: PactWorld) {
@@ -100,6 +117,62 @@ When('I submit the intent for atomization', async function (this: PactWorld) {
     this.intentDescription,
     this.category || undefined,
   );
+
+  // Store the atom if created
+  if (this.atomizationResult?.success && this.atomizationResult.atom) {
+    this.currentAtom = this.atomizationResult.atom;
+    this.atoms.push(this.currentAtom);
+  }
+});
+
+When('I refine the intent to: {string}', function (this: PactWorld, refinedIntent: string) {
+  this.intentDescription = refinedIntent;
+});
+
+When('I set the atom quality score to {int}', function (this: PactWorld, score: number) {
+  if (!this.currentAtom) {
+    throw new Error('No current atom to update');
+  }
+  this.currentAtom.qualityScore = score;
+});
+
+When('I commit the atom', function (this: PactWorld) {
+  if (!this.currentAtom) {
+    throw new Error('No current atom to commit');
+  }
+  if (this.currentAtom.status !== 'draft') {
+    throw new Error('Only draft atoms can be committed');
+  }
+  const qualityScore = this.currentAtom.qualityScore ?? 0;
+  if (qualityScore < 80) {
+    this.lastResponse = {
+      status: 400,
+      message: `Cannot commit atom with quality score ${qualityScore}. Minimum required is 80.`,
+    };
+    return;
+  }
+
+  this.currentAtom.status = 'committed';
+  this.currentAtom.committedAt = new Date();
+  this.lastResponse = { status: 200 };
+});
+
+When('I attempt to commit the atom', function (this: PactWorld) {
+  if (!this.currentAtom) {
+    throw new Error('No current atom to commit');
+  }
+  const qualityScore = this.currentAtom.qualityScore ?? 0;
+  if (qualityScore < 80) {
+    this.lastResponse = {
+      status: 400,
+      message: `Cannot commit atom with quality score ${qualityScore}. Minimum required is 80.`,
+    };
+    return;
+  }
+
+  this.currentAtom.status = 'committed';
+  this.currentAtom.committedAt = new Date();
+  this.lastResponse = { status: 200 };
 });
 
 // Assertion steps
@@ -129,6 +202,10 @@ Then('the confidence score is at least {float}', function (this: PactWorld, minC
 
 Then('the confidence score is below {float}', function (this: PactWorld, maxConfidence: number) {
   expect(this.atomizationResult!.confidence).toBeLessThan(maxConfidence);
+});
+
+Then('the confidence score reflects low atomicity', function (this: PactWorld) {
+  expect(this.atomizationResult!.confidence).toBeLessThan(0.7);
 });
 
 Then('the system rejects the atom creation', function (this: PactWorld) {
@@ -170,4 +247,30 @@ Then('the Atomization Agent detects implementation details', function (this: Pac
 
 Then('I receive feedback about implementation-agnostic requirements', function (this: PactWorld) {
   expect(this.atomizationResult!.message).toBeDefined();
+});
+
+// Commitment steps
+Then('the atom status changes to {string}', function (this: PactWorld, expectedStatus: string) {
+  expect(this.currentAtom).not.toBeNull();
+  expect(this.currentAtom!.status).toBe(expectedStatus);
+});
+
+Then('the commit timestamp is recorded', function (this: PactWorld) {
+  expect(this.currentAtom).not.toBeNull();
+  expect(this.currentAtom!.committedAt).not.toBeNull();
+});
+
+Then('the commit is rejected', function (this: PactWorld) {
+  expect(this.lastResponse).not.toBeNull();
+  expect(this.lastResponse!.status).toBe(400);
+});
+
+Then('I receive a message about quality requirements', function (this: PactWorld) {
+  expect(this.lastResponse).not.toBeNull();
+  expect(this.lastResponse!.message).toMatch(/quality|score/i);
+});
+
+Then('the atom remains in {string} status', function (this: PactWorld, expectedStatus: string) {
+  expect(this.currentAtom).not.toBeNull();
+  expect(this.currentAtom!.status).toBe(expectedStatus);
 });
