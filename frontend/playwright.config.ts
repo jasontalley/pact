@@ -1,4 +1,16 @@
 import { defineConfig, devices } from '@playwright/test';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Resolve paths relative to this config file's location
+// This config is in frontend/, so we go up one level to get project root
+const __filename = typeof __filename !== 'undefined' 
+  ? __filename 
+  : fileURLToPath(import.meta.url);
+const __dirname = typeof __dirname !== 'undefined'
+  ? __dirname
+  : path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, '..');
 
 /**
  * Playwright E2E test configuration for Pact frontend
@@ -18,8 +30,10 @@ export default defineConfig({
     timeout: 10000,
   },
   reporter: [
-    ['html', { outputFolder: 'test-results/html-report' }],
-    ['json', { outputFile: 'test-results/results.json' }],
+    // HTML reporter first to avoid directory conflicts
+    // Use absolute path resolved from config file location
+    ['html', { outputFolder: path.resolve(projectRoot, 'test-results/frontend/e2e/html-report') }],
+    ['json', { outputFile: path.resolve(projectRoot, 'test-results/frontend/e2e/results.json') }],
     ['list'],
   ],
   use: {
@@ -64,5 +78,5 @@ export default defineConfig({
       },
 
   // Output directory for test artifacts
-  outputDir: 'test-results/artifacts',
+  outputDir: path.resolve(projectRoot, 'test-results/frontend/e2e/artifacts'),
 });

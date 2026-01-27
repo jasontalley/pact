@@ -1,12 +1,28 @@
 'use client';
 
-import { useCallback } from 'react';
+import { Suspense, useCallback } from 'react';
 import { useLayoutStore } from '@/stores/layout';
 import { useRefinementWizardStore } from '@/stores/refinement-wizard';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+function SidebarSkeleton() {
+  return (
+    <aside className="w-64 border-r bg-card h-full overflow-y-auto">
+      <div className="p-4 space-y-6">
+        <div className="h-6 w-20 bg-muted animate-pulse rounded" />
+        <div className="h-10 bg-muted animate-pulse rounded" />
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-8 bg-muted animate-pulse rounded" />
+          ))}
+        </div>
+      </div>
+    </aside>
+  );
+}
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -55,7 +71,9 @@ export function AppLayout({ children, showSidebar = true, fullHeight = false }: 
 
               {/* Sidebar content */}
               <div className="relative h-full md:h-auto">
-                <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+                <Suspense fallback={<SidebarSkeleton />}>
+                  <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+                </Suspense>
               </div>
             </div>
           </>

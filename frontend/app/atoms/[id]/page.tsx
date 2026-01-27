@@ -7,9 +7,11 @@ import { AppLayout } from '@/components/layout';
 import { useAtom, useCommitAtom, useDeleteAtom, useUpdateAtom } from '@/hooks/atoms/use-atoms';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { QualityBadge } from '@/components/quality/QualityBadge';
+import { ValidatorList, CreateValidatorDialog } from '@/components/validators';
 import { formatDateTime } from '@/lib/utils/format';
 import { ArrowLeft } from 'lucide-react';
 import type { AtomCategory } from '@/types/atom';
+import type { Validator } from '@/types/validator';
 
 const categories: { value: AtomCategory; label: string }[] = [
   { value: 'functional', label: 'Functional' },
@@ -34,7 +36,9 @@ export default function AtomDetailPage({ params }: AtomDetailPageProps) {
   const [showCommitConfirm, setShowCommitConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showCreateValidatorDialog, setShowCreateValidatorDialog] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [validatorToEdit, setValidatorToEdit] = useState<Validator | null>(null);
 
   // Edit form state
   const [editDescription, setEditDescription] = useState('');
@@ -203,6 +207,15 @@ export default function AtomDetailPage({ params }: AtomDetailPageProps) {
             </div>
           </div>
         )}
+
+        {/* Validators */}
+        <div className="bg-card rounded-lg border p-6 mb-6">
+          <ValidatorList
+            atomId={atom.id}
+            onCreateValidator={() => setShowCreateValidatorDialog(true)}
+            onEditValidator={(validator) => setValidatorToEdit(validator)}
+          />
+        </div>
 
         {/* Metadata */}
         <div className="bg-card rounded-lg border p-6 mb-6">
@@ -394,6 +407,13 @@ export default function AtomDetailPage({ params }: AtomDetailPageProps) {
             </div>
           </div>
         )}
+
+        {/* Create Validator Dialog */}
+        <CreateValidatorDialog
+          atomId={atom.id}
+          isOpen={showCreateValidatorDialog}
+          onClose={() => setShowCreateValidatorDialog(false)}
+        />
       </div>
     </AppLayout>
   );

@@ -16,7 +16,7 @@ module.exports = {
     '!src/config/**/*.ts', // Configuration factories are environment-driven, no business logic
     '!bootstrap/**/*', // Bootstrap code not counted in coverage
   ],
-  coverageDirectory: './coverage',
+  coverageDirectory: './test-results/backend/unit/coverage',
   testEnvironment: 'node',
   roots: ['<rootDir>/src/', '<rootDir>/test/'],
   transformIgnorePatterns: [

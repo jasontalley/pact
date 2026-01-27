@@ -17,11 +17,16 @@ apiClient.interceptors.response.use(
   (error: AxiosError<{ message?: string; statusCode?: number }>) => {
     // Extract error message from response
     const message = error.response?.data?.message || error.message;
-    console.error('[API Error]', {
+
+    // Use warn for network errors (backend down), error for actual API errors
+    const isNetworkError = !error.response && error.code === 'ERR_NETWORK';
+    const logMethod = isNetworkError ? console.warn : console.error;
+
+    logMethod('[API Error]', {
       url: error.config?.url,
       method: error.config?.method,
       status: error.response?.status,
-      message,
+      message: isNetworkError ? 'Network error (is the backend running?)' : message,
     });
     return Promise.reject(error);
   }

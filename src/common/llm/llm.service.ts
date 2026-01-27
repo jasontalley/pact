@@ -1,23 +1,18 @@
 /**
- * BOOTSTRAP SCAFFOLDING - DO NOT DEPEND ON THIS
- * Scaffold ID: BS-003
- * Type: Runtime
- * Purpose: Production-ready LLM service abstraction with safeguards
- * Exit Criterion: LLM service is production-validated and patterns are proven
- * Target Removal: Phase 2 (will be promoted to permanent infrastructure)
- * Owner: @jasontalley
+ * LLM Service - Multi-Provider Abstraction Layer
  *
- * This service provides a production-ready abstraction layer for LLM interactions
- * with circuit breakers, retries, rate limiting, cost tracking, and caching.
+ * Production-ready LLM service with:
+ * - Multi-provider support (OpenAI, Anthropic, Ollama)
+ * - Intelligent model routing based on task type
+ * - Circuit breakers, retries, rate limiting
+ * - Cost tracking and budget enforcement
+ * - Response caching
  */
 
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ChatOpenAI } from '@langchain/openai';
-import { BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { LangChainTracer } from '@langchain/core/tracers/tracer_langchain';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const CircuitBreaker = require('opossum');
 import pRetry, { AbortError } from 'p-retry';
@@ -28,8 +23,21 @@ import { createHash } from 'node:crypto';
 
 import { LLMConfiguration } from '../../modules/llm/llm-configuration.entity';
 import { LLMUsageTracking } from '../../modules/llm/llm-usage-tracking.entity';
-import { LLMServiceConfig, LLMModelConfig, loadLLMConfig } from '../../config/llm/llm.config';
+import { LLMServiceConfig, loadLLMConfig } from '../../config/llm/llm.config';
+import {
+  ProviderRegistry,
+  LLMProvider,
+  LLMProviderType,
+  ProviderRequest,
+  ProviderResponse,
+  AgentTaskType,
+  ModelCapabilities,
+} from './providers';
+import { ModelRouter, RoutingOptions, BudgetMode, RoutingDecision } from './routing';
 
+/**
+ * Extended LLM Request with routing options
+ */
 export interface LLMRequest {
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
   agentName?: string;
@@ -37,7 +45,15 @@ export interface LLMRequest {
   temperature?: number;
   maxTokens?: number;
   useCache?: boolean;
-  bypassRateLimit?: boolean; // For emergency scenarios only
+  bypassRateLimit?: boolean;
+  // New routing options
+  taskType?: AgentTaskType;
+  preferredProvider?: LLMProviderType;
+  preferredModel?: string;
+  budgetMode?: BudgetMode;
+  maxCost?: number;
+  // GPT-5.2 specific
+  reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 }
 
 export interface LLMResponse {
@@ -52,6 +68,11 @@ export interface LLMResponse {
   retryCount: number;
   modelUsed: string;
   providerUsed: string;
+  // New fields
+  routingDecision?: {
+    reason: string;
+    fallbacksAvailable: number;
+  };
 }
 
 export class BudgetExceededError extends Error {
@@ -68,16 +89,20 @@ export class RateLimitExceededError extends Error {
   }
 }
 
+export class NoProviderAvailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NoProviderAvailableError';
+  }
+}
+
 @Injectable()
 export class LLMService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(LLMService.name);
   private config: LLMServiceConfig;
-  private circuitBreaker: any; // Circuit breaker instance
+  private circuitBreakers: Map<LLMProviderType, any> = new Map();
   private rateLimiter: RateLimiterMemory | RateLimiterRedis | null = null;
   private redis: Redis | null = null;
-  private primaryLLM: ChatOpenAI;
-  private fallbackLLMs: ChatOpenAI[] = [];
-  private tracer: LangChainTracer | null = null;
 
   constructor(
     @InjectRepository(LLMConfiguration)
@@ -85,6 +110,8 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
     @InjectRepository(LLMUsageTracking)
     private readonly usageRepository: Repository<LLMUsageTracking>,
     private readonly configService: ConfigService,
+    @Optional() private readonly providerRegistry?: ProviderRegistry,
+    @Optional() private readonly modelRouter?: ModelRouter,
   ) {}
 
   async onModuleInit() {
@@ -94,32 +121,30 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy() {
     this.logger.log('Shutting down LLM Service...');
 
-    // Shutdown circuit breaker first (has internal timers)
-    if (this.circuitBreaker) {
-      this.circuitBreaker.shutdown();
-      this.circuitBreaker = null;
-      this.logger.log('Circuit breaker shutdown');
+    // Shutdown all circuit breakers
+    for (const [name, breaker] of this.circuitBreakers) {
+      breaker.shutdown();
+      this.logger.log(`Circuit breaker for ${name} shutdown`);
     }
+    this.circuitBreakers.clear();
 
-    // Close Redis connection - use disconnect() for immediate cleanup
-    // quit() is graceful but can hang if retryStrategy keeps reconnecting
+    // Close Redis connection
     if (this.redis) {
       this.redis.disconnect();
       this.redis = null;
       this.logger.log('Redis connection closed');
     }
 
-    // Clear rate limiter reference
     this.rateLimiter = null;
   }
 
   /**
-   * Initialize the LLM service with configuration from database or config file
+   * Initialize the LLM service
    */
   private async initialize() {
     this.logger.log('Initializing LLM Service...');
 
-    // Load configuration (database takes precedence over config file)
+    // Load configuration
     await this.loadConfiguration();
 
     // Initialize Redis for caching
@@ -127,46 +152,33 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
       this.initializeRedis();
     }
 
-    // Initialize LLM clients
-    this.initializeLLMClients();
-
-    // Initialize circuit breaker
-    this.initializeCircuitBreaker();
+    // Initialize circuit breakers per provider
+    this.initializeCircuitBreakers();
 
     // Initialize rate limiter
     this.initializeRateLimiter();
 
-    // Initialize LangSmith tracer if enabled
-    this.initializeTracer();
+    // Log provider status
+    if (this.providerRegistry) {
+      const statuses = this.providerRegistry.getProviderStatuses();
+      this.logger.log(
+        `Available providers: ${
+          statuses
+            .filter((s) => s.available)
+            .map((s) => s.name)
+            .join(', ') || 'none'
+        }`,
+      );
+    }
 
     this.logger.log('LLM Service initialized successfully');
   }
 
   /**
-   * Initialize LangSmith tracer for observability
-   */
-  private initializeTracer() {
-    const tracingEnabled = process.env.LANGCHAIN_TRACING_V2 === 'true';
-    const apiKey = process.env.LANGCHAIN_API_KEY;
-
-    if (tracingEnabled && apiKey) {
-      this.tracer = new LangChainTracer({
-        projectName: process.env.LANGCHAIN_PROJECT || 'pact-agents',
-      });
-      this.logger.log(
-        `LangSmith tracer initialized (project: ${process.env.LANGCHAIN_PROJECT || 'pact-agents'})`,
-      );
-    } else {
-      this.logger.warn('LangSmith tracing disabled (LANGCHAIN_TRACING_V2 not set or no API key)');
-    }
-  }
-
-  /**
-   * Load configuration from database or fall back to config file
+   * Load configuration from database or config file
    */
   private async loadConfiguration() {
     try {
-      // Try to load active configuration from database
       const dbConfig = await this.configRepository.findOne({
         where: { isActive: true },
       });
@@ -184,9 +196,6 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /**
-   * Map database configuration to service configuration
-   */
   private mapDatabaseConfigToServiceConfig(dbConfig: LLMConfiguration): LLMServiceConfig {
     return {
       primaryModel: dbConfig.primaryModel,
@@ -203,7 +212,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Initialize Redis connection for caching
+   * Initialize Redis for caching
    */
   private initializeRedis() {
     const isTest = process.env.NODE_ENV === 'test';
@@ -213,14 +222,10 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
         port: this.configService.get<number>('REDIS_PORT') || 6379,
         maxRetriesPerRequest: isTest ? 0 : 3,
         retryStrategy: (times) => {
-          // In test mode, don't retry to prevent Jest from hanging
-          if (isTest || times > 3) {
-            return null; // Stop retrying
-          }
-          const delay = Math.min(times * 50, 2000);
-          return delay;
+          if (isTest || times > 3) return null;
+          return Math.min(times * 50, 2000);
         },
-        lazyConnect: isTest, // Don't connect immediately in tests
+        lazyConnect: isTest,
       });
 
       this.redis.on('error', (error) => {
@@ -237,114 +242,75 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Initialize LLM clients (primary and fallbacks)
+   * Initialize circuit breakers for each provider
    */
-  private initializeLLMClients() {
-    // Initialize primary model
-    this.primaryLLM = this.createLLMClient(this.config.primaryModel);
-
-    // Initialize fallback models
-    this.fallbackLLMs = this.config.fallbackModels.map((modelConfig) =>
-      this.createLLMClient(modelConfig),
-    );
-
-    this.logger.log(
-      `Initialized ${1 + this.fallbackLLMs.length} LLM clients (1 primary, ${this.fallbackLLMs.length} fallbacks)`,
-    );
-  }
-
-  /**
-   * Create an LLM client from configuration
-   */
-  private createLLMClient(modelConfig: LLMModelConfig): ChatOpenAI {
-    const apiKey = modelConfig.apiKey || this.configService.get<string>('OPENAI_API_KEY');
-
-    if (!apiKey) {
-      this.logger.warn(
-        `No API key configured for ${modelConfig.provider}:${modelConfig.modelName}`,
-      );
-    }
-
-    // GPT-5-nano has restrictions: no custom max_tokens or temperature
-    // Other GPT-5 models (mini, full) may have different restrictions
-    const isGpt5Nano = modelConfig.modelName === 'gpt-5-nano';
-
-    return new ChatOpenAI({
-      modelName: modelConfig.modelName,
-      ...(isGpt5Nano ? {} : { temperature: modelConfig.temperature }),
-      ...(isGpt5Nano ? {} : { maxTokens: modelConfig.maxTokens }),
-      openAIApiKey: apiKey,
-      timeout: this.config.defaultTimeout,
-    });
-  }
-
-  /**
-   * Initialize circuit breaker for fault tolerance
-   */
-  private initializeCircuitBreaker() {
+  private initializeCircuitBreakers() {
     if (!this.config.circuitBreaker.enabled) {
-      this.logger.warn('Circuit breaker is disabled');
+      this.logger.warn('Circuit breakers disabled');
       return;
     }
 
-    const options = {
-      timeout: this.config.defaultTimeout,
-      errorThresholdPercentage: 50, // Open circuit when 50% of requests fail
-      volumeThreshold: this.config.circuitBreaker.failureThreshold, // Minimum requests before evaluating
-      resetTimeout: this.config.circuitBreaker.timeout,
-      rollingCountTimeout: this.config.circuitBreaker.monitoringWindow,
-      rollingCountBuckets: 10,
-      name: 'LLMCircuitBreaker',
-    };
+    const providers: LLMProviderType[] = ['openai', 'anthropic', 'ollama'];
 
-    this.circuitBreaker = new CircuitBreaker(this.executeLLMCall.bind(this), options);
+    for (const providerName of providers) {
+      const options = {
+        timeout: this.config.defaultTimeout,
+        errorThresholdPercentage: 50,
+        volumeThreshold: this.config.circuitBreaker.failureThreshold,
+        resetTimeout: this.config.circuitBreaker.timeout,
+        rollingCountTimeout: this.config.circuitBreaker.monitoringWindow,
+        rollingCountBuckets: 10,
+        name: `LLMCircuitBreaker-${providerName}`,
+      };
 
-    // Circuit breaker event listeners
-    this.circuitBreaker.on('open', () => {
-      this.logger.error('Circuit breaker opened - too many LLM failures');
-    });
+      const breaker = new CircuitBreaker(
+        (request: ProviderRequest, provider: LLMProvider) => provider.invoke(request),
+        options,
+      );
 
-    this.circuitBreaker.on('halfOpen', () => {
-      this.logger.warn('Circuit breaker half-open - testing LLM availability');
-    });
+      breaker.on('open', () => {
+        this.logger.error(`Circuit breaker opened for ${providerName}`);
+      });
 
-    this.circuitBreaker.on('close', () => {
-      this.logger.log('Circuit breaker closed - LLM service restored');
-    });
+      breaker.on('halfOpen', () => {
+        this.logger.warn(`Circuit breaker half-open for ${providerName}`);
+      });
 
-    this.logger.log('Circuit breaker initialized');
+      breaker.on('close', () => {
+        this.logger.log(`Circuit breaker closed for ${providerName}`);
+      });
+
+      this.circuitBreakers.set(providerName, breaker);
+    }
+
+    this.logger.log(`Initialized ${this.circuitBreakers.size} circuit breakers`);
   }
 
   /**
-   * Initialize rate limiter for request throttling
+   * Initialize rate limiter
    */
   private initializeRateLimiter() {
     if (!this.config.rateLimit.enabled) {
-      this.logger.warn('Rate limiter is disabled');
+      this.logger.warn('Rate limiter disabled');
       return;
     }
 
     const opts = {
       points: this.config.rateLimit.requestsPerMinute,
-      duration: 60, // Per 60 seconds
-      blockDuration: 0, // Do not block, just reject
+      duration: 60,
+      blockDuration: 0,
     };
 
-    // Use Redis-based rate limiter if Redis is available, otherwise use in-memory
     if (this.redis) {
       this.rateLimiter = new RateLimiterRedis({
         storeClient: this.redis,
         keyPrefix: 'llm:ratelimit:',
         ...opts,
       });
-      this.logger.log(
-        `Rate limiter initialized (Redis): ${this.config.rateLimit.requestsPerMinute} req/min`,
-      );
+      this.logger.log(`Rate limiter initialized (Redis): ${opts.points} req/min`);
     } else {
       this.rateLimiter = new RateLimiterMemory(opts);
-      this.logger.log(
-        `Rate limiter initialized (Memory): ${this.config.rateLimit.requestsPerMinute} req/min`,
-      );
+      this.logger.log(`Rate limiter initialized (Memory): ${opts.points} req/min`);
     }
   }
 
@@ -354,24 +320,19 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
   async invoke(request: LLMRequest): Promise<LLMResponse> {
     const requestId = uuidv4();
     const startTime = Date.now();
-    let retryCount = 0;
 
     this.logger.log(`LLM request ${requestId} from agent: ${request.agentName || 'unknown'}`);
 
     try {
-      // Check budget before making request
+      // Check budget
       await this.checkBudget();
 
-      // Try to get cached response
+      // Try cache
       if (request.useCache !== false && this.config.cache.enabled) {
-        const cachedResponse = await this.getCachedResponse(request);
-        if (cachedResponse) {
+        const cached = await this.getCachedResponse(request);
+        if (cached) {
           this.logger.log(`Cache hit for request ${requestId}`);
-          return {
-            ...cachedResponse,
-            requestId,
-            cacheHit: true,
-          };
+          return { ...cached, requestId, cacheHit: true };
         }
       }
 
@@ -383,7 +344,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
         request.bypassRateLimit || false,
       );
 
-      // Cache the response
+      // Cache response
       if (request.useCache !== false && this.config.cache.enabled) {
         await this.cacheResponse(request, response);
       }
@@ -396,7 +357,6 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
       const latencyMs = Date.now() - startTime;
       this.logger.error(`LLM request ${requestId} failed after ${latencyMs}ms`, error.stack);
 
-      // Track failed usage
       await this.trackUsage(
         request,
         {
@@ -408,9 +368,9 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
           cost: 0,
           latencyMs,
           cacheHit: false,
-          retryCount,
-          modelUsed: this.config.primaryModel.modelName,
-          providerUsed: this.config.primaryModel.provider,
+          retryCount: 0,
+          modelUsed: request.preferredModel || 'unknown',
+          providerUsed: request.preferredProvider || 'unknown',
         },
         false,
         error.message,
@@ -421,7 +381,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Execute LLM call with rate limiting
+   * Execute with rate limiting
    */
   private async executeWithRateLimit(
     request: LLMRequest,
@@ -434,14 +394,10 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
-      // Consume 1 point from rate limiter
-      // Use agent name or 'default' as key for distributed rate limiting
       const rateLimitKey = request.agentName || 'default';
       await this.rateLimiter.consume(rateLimitKey, 1);
-
       return await this.executeWithRetry(request, requestId, startTime);
     } catch (error) {
-      // rate-limiter-flexible throws RateLimiterRes when limit exceeded
       if (error.msBeforeNext !== undefined) {
         throw new RateLimitExceededError(
           `Rate limit exceeded. Try again in ${Math.ceil(error.msBeforeNext / 1000)} seconds`,
@@ -452,7 +408,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Execute LLM call with retry logic
+   * Execute with retry logic
    */
   private async executeWithRetry(
     request: LLMRequest,
@@ -460,7 +416,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
     startTime: number,
   ): Promise<LLMResponse> {
     if (!this.config.retry.enabled) {
-      return this.executeWithCircuitBreaker(request, requestId, startTime, 0);
+      return this.executeWithRouting(request, requestId, startTime, 0);
     }
 
     let attemptCount = 0;
@@ -468,7 +424,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
     return pRetry(
       async () => {
         attemptCount++;
-        return this.executeWithCircuitBreaker(request, requestId, startTime, attemptCount - 1);
+        return this.executeWithRouting(request, requestId, startTime, attemptCount - 1);
       },
       {
         retries: this.config.retry.maxRetries,
@@ -476,9 +432,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
         minTimeout: this.config.retry.initialDelay,
         maxTimeout: this.config.retry.maxDelay,
         onFailedAttempt: (error) => {
-          this.logger.warn(`Retry attempt ${error.attemptNumber} failed for request ${requestId}`);
-
-          // Don't retry on budget errors or non-retryable errors
+          this.logger.warn(`Retry attempt ${error.attemptNumber} failed for ${requestId}`);
           if (error instanceof BudgetExceededError || error instanceof AbortError) {
             throw error;
           }
@@ -488,175 +442,229 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Execute LLM call with circuit breaker
+   * Execute with intelligent routing
    */
-  private async executeWithCircuitBreaker(
+  private async executeWithRouting(
     request: LLMRequest,
     requestId: string,
     startTime: number,
     retryCount: number,
   ): Promise<LLMResponse> {
-    if (!this.config.circuitBreaker.enabled) {
-      return this.executeLLMCall(request, requestId, startTime, retryCount);
+    // If no provider registry, fall back to legacy behavior
+    if (!this.providerRegistry || !this.modelRouter) {
+      return this.executeLegacy(request, requestId, startTime, retryCount);
+    }
+
+    // Get routing decision
+    const routingOptions: RoutingOptions = {
+      taskType: request.taskType || AgentTaskType.CHAT,
+      budgetMode: request.budgetMode,
+      maxCost: request.maxCost,
+      forceProvider: request.preferredProvider,
+      forceModel: request.preferredModel,
+      allowLocalModels: true,
+      allowCloudModels: true,
+    };
+
+    let decision: RoutingDecision;
+    try {
+      decision = await this.modelRouter.route(routingOptions);
+    } catch (error) {
+      this.logger.warn(`Routing failed: ${error.message}, falling back to legacy`);
+      return this.executeLegacy(request, requestId, startTime, retryCount);
+    }
+
+    // Get provider
+    const provider = this.providerRegistry.getProvider(decision.provider);
+    if (!provider) {
+      throw new NoProviderAvailableError(`Provider ${decision.provider} not available`);
+    }
+
+    // Build provider request
+    const providerRequest: ProviderRequest = {
+      messages: request.messages,
+      model: decision.model,
+      options: {
+        temperature: request.temperature,
+        maxTokens: request.maxTokens,
+        timeout: this.config.defaultTimeout,
+        reasoningEffort: decision.reasoningEffort || request.reasoningEffort,
+      },
+      metadata: {
+        requestId,
+        agentName: request.agentName,
+        purpose: request.purpose,
+        taskType: request.taskType,
+      },
+    };
+
+    // Execute with circuit breaker
+    const response = await this.executeWithCircuitBreaker(
+      providerRequest,
+      provider,
+      decision,
+      retryCount,
+    );
+
+    const latencyMs = Date.now() - startTime;
+
+    // Calculate cost
+    const cost =
+      response.usage.inputTokens * decision.capabilities.costPerInputToken +
+      response.usage.outputTokens * decision.capabilities.costPerOutputToken;
+
+    return {
+      requestId,
+      content: response.content,
+      inputTokens: response.usage.inputTokens,
+      outputTokens: response.usage.outputTokens,
+      totalTokens: response.usage.totalTokens,
+      cost,
+      latencyMs,
+      cacheHit: false,
+      retryCount,
+      modelUsed: response.modelUsed,
+      providerUsed: response.providerUsed,
+      routingDecision: {
+        reason: decision.reason,
+        fallbacksAvailable: decision.fallbacks.length,
+      },
+    };
+  }
+
+  /**
+   * Execute with circuit breaker and fallback
+   */
+  private async executeWithCircuitBreaker(
+    request: ProviderRequest,
+    provider: LLMProvider,
+    decision: RoutingDecision,
+    retryCount: number,
+  ): Promise<ProviderResponse> {
+    const breaker = this.circuitBreakers.get(provider.name);
+
+    // If no circuit breaker, execute directly
+    if (!breaker || !this.config.circuitBreaker.enabled) {
+      return provider.invoke(request);
     }
 
     try {
-      return (await this.circuitBreaker.fire(
-        request,
-        requestId,
-        startTime,
-        retryCount,
-      )) as LLMResponse;
+      return await breaker.fire(request, provider);
     } catch (error: any) {
-      if (error.message && error.message.includes('Breaker is open')) {
-        this.logger.error('Circuit breaker is open, trying fallback models if available');
-
-        // Try fallback models if circuit is open
-        if (this.fallbackLLMs.length > 0) {
-          return this.tryFallbackModels(request, requestId, startTime, retryCount);
-        }
+      // If circuit is open, try fallbacks
+      if (error.message?.includes('Breaker is open') && decision.fallbacks.length > 0) {
+        this.logger.warn(`Circuit open for ${provider.name}, trying fallbacks`);
+        return this.tryFallbacks(request, decision.fallbacks);
       }
       throw error;
     }
   }
 
   /**
-   * Try fallback models when primary fails
+   * Try fallback providers/models
    */
-  private async tryFallbackModels(
-    request: LLMRequest,
-    requestId: string,
-    startTime: number,
-    retryCount: number,
-  ): Promise<LLMResponse> {
-    for (let i = 0; i < this.fallbackLLMs.length; i++) {
-      try {
-        this.logger.log(`Trying fallback model ${i + 1}/${this.fallbackLLMs.length}`);
-        const fallbackLLM = this.fallbackLLMs[i];
-        const fallbackConfig = this.config.fallbackModels[i];
+  private async tryFallbacks(
+    request: ProviderRequest,
+    fallbacks: Array<{ provider: LLMProviderType; model: string }>,
+  ): Promise<ProviderResponse> {
+    for (let i = 0; i < fallbacks.length; i++) {
+      const fallback = fallbacks[i];
+      this.logger.log(
+        `Trying fallback ${i + 1}/${fallbacks.length}: ${fallback.provider}:${fallback.model}`,
+      );
 
-        return await this.executeLLMCallDirect(
-          request,
-          requestId,
-          startTime,
-          retryCount,
-          fallbackLLM,
-          fallbackConfig,
-        );
-      } catch (error) {
-        this.logger.warn(`Fallback model ${i + 1} failed: ${error.message}`);
-        if (i === this.fallbackLLMs.length - 1) {
-          throw error; // Last fallback failed, propagate error
+      const provider = this.providerRegistry?.getProvider(fallback.provider);
+      if (!provider) continue;
+
+      const isAvailable = await provider.isAvailable();
+      if (!isAvailable) continue;
+
+      try {
+        const fallbackRequest = { ...request, model: fallback.model };
+        const breaker = this.circuitBreakers.get(fallback.provider);
+
+        if (breaker && !breaker.opened) {
+          return await breaker.fire(fallbackRequest, provider);
+        } else {
+          return await provider.invoke(fallbackRequest);
         }
+      } catch (error) {
+        this.logger.warn(
+          `Fallback ${fallback.provider}:${fallback.model} failed: ${error.message}`,
+        );
       }
     }
 
-    throw new Error('All fallback models failed');
+    throw new NoProviderAvailableError('All providers and fallbacks failed');
   }
 
   /**
-   * Execute the actual LLM API call
+   * Legacy execution (backward compatibility)
    */
-  private async executeLLMCall(
+  private async executeLegacy(
     request: LLMRequest,
     requestId: string,
     startTime: number,
     retryCount: number,
   ): Promise<LLMResponse> {
-    return this.executeLLMCallDirect(
-      request,
-      requestId,
-      startTime,
-      retryCount,
-      this.primaryLLM,
-      this.config.primaryModel,
+    // Use default provider from config
+    const provider = this.providerRegistry?.getProvider(
+      this.config.primaryModel.provider as LLMProviderType,
     );
-  }
 
-  /**
-   * Execute LLM call with specific client and config
-   */
-  private async executeLLMCallDirect(
-    request: LLMRequest,
-    requestId: string,
-    startTime: number,
-    retryCount: number,
-    llmClient: ChatOpenAI,
-    modelConfig: LLMModelConfig,
-  ): Promise<LLMResponse> {
-    // Convert request messages to LangChain format
-    const messages: BaseMessage[] = request.messages.map((msg) => {
-      if (msg.role === 'system') {
-        return new SystemMessage(msg.content);
-      }
-      return new HumanMessage(msg.content);
-    });
+    if (!provider) {
+      throw new NoProviderAvailableError(
+        `Default provider ${this.config.primaryModel.provider} not available`,
+      );
+    }
 
-    // Build callbacks array with tracer if available
-    const callbacks = this.tracer ? [this.tracer] : [];
-
-    // Invoke the LLM with tracing (awaitHandlers ensures traces are sent before returning)
-    const response = await llmClient.invoke(messages, {
-      callbacks,
-      runName: request.agentName || 'llm-call',
+    const providerRequest: ProviderRequest = {
+      messages: request.messages,
+      model: this.config.primaryModel.modelName,
+      options: {
+        temperature: request.temperature ?? this.config.primaryModel.temperature,
+        maxTokens: request.maxTokens ?? this.config.primaryModel.maxTokens,
+        timeout: this.config.defaultTimeout,
+      },
       metadata: {
         requestId,
         agentName: request.agentName,
         purpose: request.purpose,
       },
-      tags: [request.agentName || 'pact', 'llm-call'],
-    });
+    };
 
-    // Wait for tracer handlers to complete (ensures trace is sent to LangSmith)
-    if (this.tracer) {
-      try {
-        await Promise.all(callbacks.map((cb) => (cb as any).awaitHandlers?.()));
-      } catch {
-        // Ignore errors from awaiting handlers
-      }
-    }
-
+    const response = await provider.invoke(providerRequest);
     const latencyMs = Date.now() - startTime;
 
-    // Extract token usage (OpenAI provides this in response metadata)
-    const inputTokens = (response as any).response_metadata?.tokenUsage?.promptTokens || 0;
-    const outputTokens = (response as any).response_metadata?.tokenUsage?.completionTokens || 0;
-    const totalTokens = inputTokens + outputTokens;
-
-    // Calculate cost
-    const inputCost = inputTokens * modelConfig.costPerInputToken;
-    const outputCost = outputTokens * modelConfig.costPerOutputToken;
-    const totalCost = inputCost + outputCost;
+    const cost =
+      response.usage.inputTokens * this.config.primaryModel.costPerInputToken +
+      response.usage.outputTokens * this.config.primaryModel.costPerOutputToken;
 
     return {
       requestId,
-      content: response.content as string,
-      inputTokens,
-      outputTokens,
-      totalTokens,
-      cost: totalCost,
+      content: response.content,
+      inputTokens: response.usage.inputTokens,
+      outputTokens: response.usage.outputTokens,
+      totalTokens: response.usage.totalTokens,
+      cost,
       latencyMs,
       cacheHit: false,
       retryCount,
-      modelUsed: modelConfig.modelName,
-      providerUsed: modelConfig.provider,
+      modelUsed: response.modelUsed,
+      providerUsed: response.providerUsed,
     };
   }
 
   /**
-   * Check if budget allows this request
+   * Check budget limits
    */
   private async checkBudget(): Promise<void> {
-    if (!this.config.budget.enabled) {
-      return;
-    }
+    if (!this.config.budget.enabled) return;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
 
-    // Get daily cost
     const dailyCostResult = await this.usageRepository
       .createQueryBuilder('usage')
       .select('SUM(usage.total_cost)', 'total')
@@ -666,7 +674,6 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
 
     const dailyCost = Number.parseFloat(dailyCostResult?.total || '0');
 
-    // Get monthly cost
     const monthlyCostResult = await this.usageRepository
       .createQueryBuilder('usage')
       .select('SUM(usage.total_cost)', 'total')
@@ -676,7 +683,6 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
 
     const monthlyCost = Number.parseFloat(monthlyCostResult?.total || '0');
 
-    // Check budget limits
     if (this.config.budget.hardStop && dailyCost >= this.config.budget.dailyLimit) {
       throw new BudgetExceededError(
         `Daily budget limit exceeded: $${dailyCost.toFixed(2)} / $${this.config.budget.dailyLimit}`,
@@ -689,7 +695,6 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    // Check alert thresholds
     const dailyThreshold =
       (this.config.budget.dailyLimit * this.config.budget.alertThreshold) / 100;
     const monthlyThreshold =
@@ -697,32 +702,27 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
 
     if (dailyCost >= dailyThreshold) {
       this.logger.warn(
-        `Daily budget alert: $${dailyCost.toFixed(2)} / $${this.config.budget.dailyLimit} (${((dailyCost / this.config.budget.dailyLimit) * 100).toFixed(1)}%)`,
+        `Daily budget alert: $${dailyCost.toFixed(2)} / $${this.config.budget.dailyLimit}`,
       );
     }
 
     if (monthlyCost >= monthlyThreshold) {
       this.logger.warn(
-        `Monthly budget alert: $${monthlyCost.toFixed(2)} / $${this.config.budget.monthlyLimit} (${((monthlyCost / this.config.budget.monthlyLimit) * 100).toFixed(1)}%)`,
+        `Monthly budget alert: $${monthlyCost.toFixed(2)} / $${this.config.budget.monthlyLimit}`,
       );
     }
   }
 
   /**
-   * Get cached response if available
+   * Get cached response
    */
   private async getCachedResponse(request: LLMRequest): Promise<LLMResponse | null> {
-    if (!this.redis || !this.config.cache.enabled) {
-      return null;
-    }
+    if (!this.redis || !this.config.cache.enabled) return null;
 
     try {
       const cacheKey = this.generateCacheKey(request);
       const cached = await this.redis.get(cacheKey);
-
-      if (cached) {
-        return JSON.parse(cached);
-      }
+      if (cached) return JSON.parse(cached);
     } catch (error) {
       this.logger.warn('Failed to get cached response', error);
     }
@@ -731,12 +731,10 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Cache the LLM response
+   * Cache response
    */
   private async cacheResponse(request: LLMRequest, response: LLMResponse): Promise<void> {
-    if (!this.redis || !this.config.cache.enabled) {
-      return;
-    }
+    if (!this.redis || !this.config.cache.enabled) return;
 
     try {
       const cacheKey = this.generateCacheKey(request);
@@ -747,13 +745,15 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Generate cache key from request
+   * Generate cache key
    */
   private generateCacheKey(request: LLMRequest): string {
     const requestString = JSON.stringify({
       messages: request.messages,
-      temperature: request.temperature || this.config.primaryModel.temperature,
-      maxTokens: request.maxTokens || this.config.primaryModel.maxTokens,
+      temperature: request.temperature,
+      maxTokens: request.maxTokens,
+      preferredProvider: request.preferredProvider,
+      preferredModel: request.preferredModel,
     });
 
     const hash = createHash('sha256').update(requestString).digest('hex');
@@ -761,7 +761,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Track LLM usage in database
+   * Track usage
    */
   private async trackUsage(
     request: LLMRequest,
@@ -777,13 +777,13 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
         inputTokens: response.inputTokens,
         outputTokens: response.outputTokens,
         totalTokens: response.totalTokens,
-        inputCost: response.inputTokens * this.config.primaryModel.costPerInputToken,
-        outputCost: response.outputTokens * this.config.primaryModel.costPerOutputToken,
+        inputCost: 0, // Will be calculated based on actual provider
+        outputCost: 0,
         totalCost: response.cost,
         latencyMs: response.latencyMs,
         cacheHit: response.cacheHit,
         retryCount: response.retryCount,
-        circuitBreakerOpen: this.circuitBreaker?.opened || false,
+        circuitBreakerOpen: false,
         agentName: request.agentName || null,
         purpose: request.purpose || null,
         success,
@@ -793,7 +793,50 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
       await this.usageRepository.save(tracking);
     } catch (error) {
       this.logger.error('Failed to track usage', error);
-      // Don't fail the request if tracking fails
     }
+  }
+
+  // ============================================================
+  // Public utility methods
+  // ============================================================
+
+  /**
+   * Get available providers
+   */
+  getAvailableProviders(): LLMProviderType[] {
+    return this.providerRegistry?.getProviderNames() || [];
+  }
+
+  /**
+   * Get provider status
+   */
+  getProviderStatuses() {
+    return this.providerRegistry?.getProviderStatuses() || [];
+  }
+
+  /**
+   * Get model capabilities
+   */
+  getModelCapabilities(model: string): ModelCapabilities | undefined {
+    return this.providerRegistry?.getModelCapabilities(model);
+  }
+
+  /**
+   * Estimate cost for a task
+   */
+  estimateTaskCost(
+    taskType: AgentTaskType,
+    inputTokens: number,
+    outputTokens: number,
+    budgetMode?: BudgetMode,
+  ) {
+    return this.modelRouter?.estimateTaskCost(taskType, inputTokens, outputTokens, budgetMode);
+  }
+
+  /**
+   * Get recommended models for a task
+   */
+  getRecommendedModels(taskType: AgentTaskType, budgetMode?: BudgetMode) {
+    return this.modelRouter?.getRecommendedModels(taskType, budgetMode);
   }
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { AppLayout } from '@/components/layout';
@@ -9,7 +10,7 @@ import { QualityBadge } from '@/components/quality/QualityBadge';
 import { formatDistanceToNow } from '@/lib/utils/format';
 import type { AtomStatus, AtomCategory } from '@/types/atom';
 
-export default function AtomsListPage() {
+function AtomsListContent() {
   const searchParams = useSearchParams();
 
   // Get filter values from URL (managed by Sidebar)
@@ -145,5 +146,33 @@ export default function AtomsListPage() {
         )}
       </div>
     </AppLayout>
+  );
+}
+
+function AtomsListSkeleton() {
+  return (
+    <AppLayout showSidebar>
+      <div className="p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <div className="h-9 w-48 bg-muted animate-pulse rounded" />
+            <div className="h-5 w-64 bg-muted animate-pulse rounded mt-2" />
+          </div>
+        </div>
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-24 bg-muted rounded-lg animate-pulse" />
+          ))}
+        </div>
+      </div>
+    </AppLayout>
+  );
+}
+
+export default function AtomsListPage() {
+  return (
+    <Suspense fallback={<AtomsListSkeleton />}>
+      <AtomsListContent />
+    </Suspense>
   );
 }

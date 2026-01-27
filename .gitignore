@@ -28,10 +28,12 @@ lerna-debug.log*
 # OS files
 .DS_Store
 
-# Test coverage
-/coverage
+# Test results (centralized)
+/test-results/**/*
+!/test-results/README.md
 
-# Test reports (generated)
+# Legacy test result locations (kept for migration period)
+/coverage
 test/reports/*.html
 
 # Generated data exports

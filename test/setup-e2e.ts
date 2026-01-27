@@ -37,10 +37,17 @@ export async function setupE2EApp(): Promise<INestApplication> {
   // This ensures tests start with a clean slate
   try {
     const dataSource = moduleFixture.get(DataSource);
-    if (dataSource && dataSource.isInitialized) {
-      // Clean atoms table (main table for E2E tests)
+    if (dataSource?.isInitialized) {
+      // Clean tables in order of dependencies
       // Use TRUNCATE with RESTART IDENTITY to reset auto-incrementing IDs
+      // Commitments depend on atoms, so clean them first
+      await dataSource.query('TRUNCATE TABLE commitment_atoms RESTART IDENTITY CASCADE');
+      await dataSource.query('TRUNCATE TABLE commitments RESTART IDENTITY CASCADE');
+      await dataSource.query('TRUNCATE TABLE validators RESTART IDENTITY CASCADE');
       await dataSource.query('TRUNCATE TABLE atoms RESTART IDENTITY CASCADE');
+      // Note: We don't truncate invariant_configs or validator_templates
+      // because built-in configs/templates are seeded on module init
+      // and should persist across tests.
     }
   } catch (error) {
     // Log but don't fail - some environments may not support TRUNCATE

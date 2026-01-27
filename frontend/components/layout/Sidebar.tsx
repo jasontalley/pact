@@ -47,7 +47,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const searchParams = useSearchParams();
 
   const { data: tagsData } = useTags();
-  const popularTags = tagsData?.tags?.slice(0, 10) ?? [];
+  const popularTags = tagsData?.slice(0, 10) ?? [];
 
   const currentStatus = searchParams.get('status');
   const currentCategory = searchParams.get('category');

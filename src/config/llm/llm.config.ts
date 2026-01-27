@@ -7,10 +7,10 @@
  */
 
 export interface LLMModelConfig {
-  provider: 'openai' | 'anthropic' | 'azure-openai';
+  provider: 'openai' | 'anthropic' | 'ollama' | 'azure-openai';
   modelName: string;
   apiKey?: string;
-  endpoint?: string; // For Azure or custom endpoints
+  endpoint?: string; // For Azure, Ollama, or custom endpoints
   temperature: number;
   maxTokens?: number;
   costPerInputToken: number; // In dollars
@@ -98,20 +98,20 @@ export interface LLMServiceConfig {
 export const defaultLLMConfig: LLMServiceConfig = {
   primaryModel: {
     provider: 'openai',
-    modelName: 'gpt-4-turbo-preview',
+    modelName: 'gpt-5-nano', // Most cost-effective for testing
     temperature: 0.2,
     maxTokens: 4096,
-    costPerInputToken: 0.00001, // $0.01 per 1K input tokens
-    costPerOutputToken: 0.00003, // $0.03 per 1K output tokens
+    costPerInputToken: 0.00000005, // $0.05 per 1M input tokens
+    costPerOutputToken: 0.0000004, // $0.40 per 1M output tokens
   },
   fallbackModels: [
     {
       provider: 'openai',
-      modelName: 'gpt-3.5-turbo',
+      modelName: 'gpt-5-mini', // Balanced fallback
       temperature: 0.2,
       maxTokens: 4096,
-      costPerInputToken: 0.0000005, // $0.0005 per 1K tokens
-      costPerOutputToken: 0.0000015, // $0.0015 per 1K tokens
+      costPerInputToken: 0.0000004, // $0.40 per 1M input tokens
+      costPerOutputToken: 0.0000016, // $1.60 per 1M output tokens
     },
   ],
   defaultTimeout: 30000, // 30 seconds
@@ -186,6 +186,33 @@ export function loadLLMConfig(): LLMServiceConfig {
 
   if (process.env.OPENAI_MODEL) {
     config.primaryModel.modelName = process.env.OPENAI_MODEL;
+  }
+
+  // Support selecting default provider via environment
+  const defaultProvider = process.env.LLM_DEFAULT_PROVIDER as
+    | LLMModelConfig['provider']
+    | undefined;
+  if (
+    defaultProvider &&
+    ['openai', 'anthropic', 'ollama', 'azure-openai'].includes(defaultProvider)
+  ) {
+    config.primaryModel.provider = defaultProvider;
+
+    // Update model and API key based on provider
+    switch (defaultProvider) {
+      case 'anthropic':
+        config.primaryModel.modelName = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5';
+        config.primaryModel.apiKey = process.env.ANTHROPIC_API_KEY;
+        config.primaryModel.costPerInputToken = 0.000003; // $3 per 1M
+        config.primaryModel.costPerOutputToken = 0.000015; // $15 per 1M
+        break;
+      case 'ollama':
+        config.primaryModel.modelName = process.env.OLLAMA_MODEL || 'llama3.2:latest';
+        config.primaryModel.endpoint = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+        config.primaryModel.costPerInputToken = 0; // Free - local
+        config.primaryModel.costPerOutputToken = 0;
+        break;
+    }
   }
 
   if (process.env.LLM_DAILY_BUDGET) {

@@ -3,6 +3,9 @@ import { AtomsController } from './atoms.controller';
 import { AtomsService } from './atoms.service';
 import { CreateAtomDto } from './dto/create-atom.dto';
 import { AtomCategory } from './atom.entity';
+import { ValidatorsService } from '../validators/validators.service';
+import { ValidatorType, ValidatorFormat } from '../validators/validator.entity';
+import { CommittedAtomGuard } from '../../common/guards/committed-atom.guard';
 
 describe('AtomsController', () => {
   let controller: AtomsController;
@@ -22,6 +25,15 @@ describe('AtomsController', () => {
     findSupersessionChain: jest.fn(),
   };
 
+  const mockValidatorsService = {
+    findByAtom: jest.fn(),
+    create: jest.fn(),
+    getValidationStatus: jest.fn(),
+  };
+
+  // Mock guard that always allows access
+  const mockGuard = { canActivate: jest.fn().mockReturnValue(true) };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AtomsController],
@@ -30,8 +42,15 @@ describe('AtomsController', () => {
           provide: AtomsService,
           useValue: mockAtomsService,
         },
+        {
+          provide: ValidatorsService,
+          useValue: mockValidatorsService,
+        },
       ],
-    }).compile();
+    })
+      .overrideGuard(CommittedAtomGuard)
+      .useValue(mockGuard)
+      .compile();
 
     controller = module.get<AtomsController>(AtomsController);
     jest.clearAllMocks();
@@ -414,6 +433,188 @@ describe('AtomsController', () => {
 
       // IA-036: Controller must propagate not found error
       await expect(controller.remove('non-existent')).rejects.toThrow('Atom not found');
+    });
+  });
+
+  // @atom IA-PHASE2-007
+  describe('GET /atoms/:id/validators', () => {
+    const mockValidator = {
+      id: 'validator-uuid-123',
+      atomId: 'atom-uuid-123',
+      name: 'Test Validator',
+      validatorType: 'gherkin' as ValidatorType,
+      content: 'Given a test',
+      format: 'gherkin' as ValidatorFormat,
+      isActive: true,
+    };
+
+    // @atom IA-PHASE2-007
+    it('should return validators for an atom', async () => {
+      mockValidatorsService.findByAtom.mockResolvedValue([mockValidator]);
+
+      const result = await controller.getValidators('atom-uuid-123');
+
+      // IA-PHASE2-007: Service findByAtom must be called with atom ID
+      expect(mockValidatorsService.findByAtom).toHaveBeenCalledWith('atom-uuid-123');
+      // IA-PHASE2-007: Result must contain validator array
+      expect(result).toHaveLength(1);
+      // IA-PHASE2-007: First validator must match mock data
+      expect(result[0].id).toBe('validator-uuid-123');
+    });
+
+    // @atom IA-PHASE2-007 - Boundary: empty validators
+    it('should return empty array when atom has no validators', async () => {
+      mockValidatorsService.findByAtom.mockResolvedValue([]);
+
+      const result = await controller.getValidators('atom-uuid-123');
+
+      // IA-PHASE2-007: Empty result must return empty array
+      expect(result).toEqual([]);
+      expect(Array.isArray(result)).toBe(true);
+    });
+  });
+
+  // @atom IA-PHASE2-007
+  describe('POST /atoms/:id/validators', () => {
+    const mockAtom = {
+      id: 'atom-uuid-123',
+      atomId: 'IA-001',
+      description: 'Test atom',
+      status: 'draft',
+    };
+
+    const mockValidator = {
+      id: 'validator-uuid-456',
+      atomId: 'atom-uuid-123',
+      name: 'New Validator',
+      validatorType: 'gherkin' as ValidatorType,
+      content: 'Given a test\nWhen executed\nThen it passes',
+      format: 'gherkin' as ValidatorFormat,
+      isActive: true,
+    };
+
+    // @atom IA-PHASE2-007
+    it('should create a validator for an atom', async () => {
+      mockAtomsService.findOne.mockResolvedValue(mockAtom);
+      mockValidatorsService.create.mockResolvedValue(mockValidator);
+
+      const createDto = {
+        name: 'New Validator',
+        validatorType: 'gherkin' as ValidatorType,
+        content: 'Given a test\nWhen executed\nThen it passes',
+        format: 'gherkin' as ValidatorFormat,
+      };
+
+      const result = await controller.createValidator('atom-uuid-123', createDto);
+
+      // IA-PHASE2-007: Service must verify atom exists first
+      expect(mockAtomsService.findOne).toHaveBeenCalledWith('atom-uuid-123');
+      // IA-PHASE2-007: ValidatorsService.create must be called with atomId from URL
+      expect(mockValidatorsService.create).toHaveBeenCalledWith({
+        ...createDto,
+        atomId: 'atom-uuid-123',
+      });
+      // IA-PHASE2-007: Result must contain created validator
+      expect(result.id).toBe('validator-uuid-456');
+      expect(result.atomId).toBe('atom-uuid-123');
+    });
+
+    // @atom IA-PHASE2-007 - Negative: atom not found
+    it('should propagate NotFoundException when atom does not exist', async () => {
+      mockAtomsService.findOne.mockRejectedValue(new Error('Atom not found'));
+
+      await expect(
+        controller.createValidator('invalid-uuid', {
+          name: 'Test',
+          validatorType: 'gherkin' as ValidatorType,
+          content: 'Given a test',
+          format: 'gherkin' as ValidatorFormat,
+        }),
+      ).rejects.toThrow('Atom not found');
+
+      // IA-PHASE2-007: ValidatorsService.create must not be called if atom not found
+      expect(mockValidatorsService.create).not.toHaveBeenCalled();
+    });
+  });
+
+  // @atom IA-PHASE2-007
+  describe('GET /atoms/:id/validation-status', () => {
+    // @atom IA-PHASE2-007
+    it('should return validation status summary for an atom', async () => {
+      const mockStatus = {
+        atomId: 'atom-uuid-123',
+        totalValidators: 5,
+        activeValidators: 3,
+        inactiveValidators: 2,
+        byType: {
+          gherkin: 3,
+          executable: 1,
+          declarative: 1,
+        },
+      };
+      mockValidatorsService.getValidationStatus.mockResolvedValue(mockStatus);
+
+      const result = await controller.getValidationStatus('atom-uuid-123');
+
+      // IA-PHASE2-007: Service getValidationStatus must be called with atom ID
+      expect(mockValidatorsService.getValidationStatus).toHaveBeenCalledWith('atom-uuid-123');
+      // IA-PHASE2-007: Result must contain total validator count
+      expect(result.totalValidators).toBe(5);
+      // IA-PHASE2-007: Result must contain active/inactive counts
+      expect(result.activeValidators).toBe(3);
+      expect(result.inactiveValidators).toBe(2);
+      // IA-PHASE2-007: Result must contain counts by type
+      expect(result.byType.gherkin).toBe(3);
+    });
+
+    // @atom IA-PHASE2-007 - Negative: atom not found
+    it('should propagate NotFoundException when atom does not exist', async () => {
+      mockValidatorsService.getValidationStatus.mockRejectedValue(new Error('Atom not found'));
+
+      await expect(controller.getValidationStatus('invalid-uuid')).rejects.toThrow(
+        'Atom not found',
+      );
+    });
+  });
+
+  // Tests for Intent Refinement endpoints (when service is not available)
+  describe('Intent Refinement endpoints without service', () => {
+    it('analyzeIntent should throw when refinement service unavailable', async () => {
+      await expect(controller.analyzeIntent({ intent: 'test intent' })).rejects.toThrow(
+        'Intent refinement service is not available',
+      );
+    });
+
+    it('suggestRefinements should throw when refinement service unavailable', async () => {
+      mockAtomsService.findOne.mockResolvedValue({ description: 'test' });
+      await expect(controller.suggestRefinements('atom-uuid')).rejects.toThrow(
+        'Intent refinement service is not available',
+      );
+    });
+
+    it('refineAtom should throw when refinement service unavailable', async () => {
+      await expect(
+        controller.refineAtom('atom-uuid', { feedback: 'clarify this' }),
+      ).rejects.toThrow('Intent refinement service is not available');
+    });
+
+    it('getRefinementHistory should throw when refinement service unavailable', async () => {
+      await expect(controller.getRefinementHistory('atom-uuid')).rejects.toThrow(
+        'Intent refinement service is not available',
+      );
+    });
+
+    it('acceptSuggestion should throw when refinement service unavailable', async () => {
+      await expect(
+        controller.acceptSuggestion('atom-uuid', {
+          id: 'sugg-1',
+          type: 'precision',
+          original: 'User can log in',
+          suggested: 'User can log in with valid credentials',
+          reasoning: 'Added specificity',
+          confidence: 0.85,
+        }),
+      ).rejects.toThrow('Intent refinement service is not available');
     });
   });
 });

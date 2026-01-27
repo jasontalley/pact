@@ -145,40 +145,21 @@ export class AtomQualityService {
 
   /**
    * Validates an atom against all 5 quality dimensions
+   * Uses a single LLM call to evaluate all dimensions at once for efficiency
    */
   async validateAtom(atom: AtomForValidation): Promise<AtomQualityResult> {
     this.logger.log(`Validating atom quality: ${atom.atomId}`);
 
-    // Evaluate each dimension
-    const [
-      observable,
-      falsifiable,
-      implementationAgnostic,
-      unambiguousLanguage,
-      clearSuccessCriteria,
-    ] = await Promise.all([
-      this.evaluateObservable(atom),
-      this.evaluateFalsifiable(atom),
-      this.evaluateImplementationAgnostic(atom),
-      this.evaluateUnambiguousLanguage(atom),
-      this.evaluateClearSuccessCriteria(atom),
-    ]);
-
-    const dimensions = {
-      observable,
-      falsifiable,
-      implementationAgnostic,
-      unambiguousLanguage,
-      clearSuccessCriteria,
-    };
+    // Evaluate all dimensions in a single LLM call
+    const dimensions = await this.evaluateAllDimensions(atom);
 
     // Calculate total score
     const totalScore =
-      observable.score +
-      falsifiable.score +
-      implementationAgnostic.score +
-      unambiguousLanguage.score +
-      clearSuccessCriteria.score;
+      dimensions.observable.score +
+      dimensions.falsifiable.score +
+      dimensions.implementationAgnostic.score +
+      dimensions.unambiguousLanguage.score +
+      dimensions.clearSuccessCriteria.score;
 
     // Determine decision based on gating logic
     const decision = this.determineDecision(totalScore);
@@ -205,7 +186,148 @@ export class AtomQualityService {
   }
 
   /**
-   * Evaluate Observable dimension (0-25)
+   * Evaluate all 5 quality dimensions in a single LLM call
+   * This is more efficient than 5 separate calls (~5x faster, lower cost)
+   */
+  private async evaluateAllDimensions(
+    atom: AtomForValidation,
+  ): Promise<AtomQualityResult['dimensions']> {
+    const prompt = `Evaluate this intent atom against all 5 quality dimensions.
+
+Intent Atom: "${atom.description}"
+Category: ${atom.category}
+
+Evaluate each dimension and provide scores, feedback, and suggestions:
+
+1. OBSERVABLE (0-25 points): Can this behavior be directly observed and measured?
+   - Does it describe a visible, external behavior (not internal state)?
+   - Can we write a test that observes this behavior happening?
+   - Is there a clear trigger and response that can be monitored?
+   Score Guidelines: 25=clearly observable, 20=observable but needs clarification, 15=partially observable, 10=difficult to observe, 5=very difficult, 0=not observable
+
+2. FALSIFIABLE (0-25 points): Can we prove this behavior is NOT happening?
+   - Is there a clear condition that would fail the test?
+   - Can we define what "violation" of this behavior looks like?
+   - Are success/failure states clearly distinguishable?
+   Score Guidelines: 25=clearly falsifiable, 20=falsifiable but needs precision, 15=partially falsifiable, 10=difficult to falsify, 5=very difficult, 0=not falsifiable
+
+3. IMPLEMENTATION-AGNOSTIC (0-20 points): Is it free of implementation details?
+   - Does it describe WHAT the system does, not HOW it does it?
+   - Does it avoid mentioning specific technologies (databases, APIs, frameworks)?
+   - Could this intent be satisfied by different implementations?
+   Score Guidelines: 20=completely agnostic, 16=mostly agnostic, 12=some implementation details, 8=significant coupling, 4=heavily tied, 0=describes implementation
+
+4. UNAMBIGUOUS LANGUAGE (0-15 points): Is the wording clear and specific?
+   - Does every term have a clear, singular meaning?
+   - Are there any vague words like "fast", "good", "user-friendly", "efficient"?
+   - Would two people reading this describe the same behavior?
+   Score Guidelines: 15=crystal clear, 12=mostly clear, 9=some ambiguity, 6=several vague words, 3=significantly ambiguous, 0=completely vague
+
+5. CLEAR SUCCESS CRITERIA (0-15 points): Is there a clear definition of "done"?
+   - Can we definitively say "this atom is satisfied" or "this atom is violated"?
+   - Are there explicit conditions, thresholds, or outcomes defined?
+   - Is the acceptance criteria binary (pass/fail)?
+   Score Guidelines: 15=crystal clear criteria, 12=clear but minor edge cases, 9=implied but not explicit, 6=vague criteria, 3=very unclear, 0=no discernible criteria
+
+Respond in JSON format:
+{
+  "observable": {
+    "score": <number 0-25>,
+    "feedback": "<one sentence explanation>",
+    "suggestions": ["<improvement 1>", "<improvement 2>"]
+  },
+  "falsifiable": {
+    "score": <number 0-25>,
+    "feedback": "<one sentence explanation>",
+    "suggestions": ["<improvement 1>", "<improvement 2>"]
+  },
+  "implementationAgnostic": {
+    "score": <number 0-20>,
+    "feedback": "<one sentence explanation>",
+    "suggestions": ["<improvement 1>", "<improvement 2>"]
+  },
+  "unambiguousLanguage": {
+    "score": <number 0-15>,
+    "feedback": "<one sentence explanation>",
+    "suggestions": ["<improvement 1>", "<improvement 2>"]
+  },
+  "clearSuccessCriteria": {
+    "score": <number 0-15>,
+    "feedback": "<one sentence explanation>",
+    "suggestions": ["<improvement 1>", "<improvement 2>"]
+  }
+}`;
+
+    try {
+      const response = await this.llmService.invoke({
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality across all dimensions simultaneously.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        agentName: 'AtomQualityValidator',
+        purpose: 'Evaluating all atom quality dimensions in a single call',
+      });
+
+      const parsed = this.parseAllDimensionsResponse(response.content);
+
+      return {
+        observable: {
+          name: 'Observable',
+          maxScore: 25,
+          score: Math.min(25, Math.max(0, parsed.observable?.score || 0)),
+          feedback: parsed.observable?.feedback || 'Unable to evaluate observability',
+          suggestions: parsed.observable?.suggestions || [],
+        },
+        falsifiable: {
+          name: 'Falsifiable',
+          maxScore: 25,
+          score: Math.min(25, Math.max(0, parsed.falsifiable?.score || 0)),
+          feedback: parsed.falsifiable?.feedback || 'Unable to evaluate falsifiability',
+          suggestions: parsed.falsifiable?.suggestions || [],
+        },
+        implementationAgnostic: {
+          name: 'Implementation-Agnostic',
+          maxScore: 20,
+          score: Math.min(20, Math.max(0, parsed.implementationAgnostic?.score || 0)),
+          feedback:
+            parsed.implementationAgnostic?.feedback ||
+            'Unable to evaluate implementation-agnosticism',
+          suggestions: parsed.implementationAgnostic?.suggestions || [],
+        },
+        unambiguousLanguage: {
+          name: 'Unambiguous Language',
+          maxScore: 15,
+          score: Math.min(15, Math.max(0, parsed.unambiguousLanguage?.score || 0)),
+          feedback: parsed.unambiguousLanguage?.feedback || 'Unable to evaluate language clarity',
+          suggestions: parsed.unambiguousLanguage?.suggestions || [],
+        },
+        clearSuccessCriteria: {
+          name: 'Clear Success Criteria',
+          maxScore: 15,
+          score: Math.min(15, Math.max(0, parsed.clearSuccessCriteria?.score || 0)),
+          feedback: parsed.clearSuccessCriteria?.feedback || 'Unable to evaluate success criteria',
+          suggestions: parsed.clearSuccessCriteria?.suggestions || [],
+        },
+      };
+    } catch (error) {
+      this.logger.warn(`LLM evaluation failed, using heuristics: ${error}`);
+      // Fallback to heuristic evaluation for all dimensions
+      return {
+        observable: this.heuristicObservable(atom),
+        falsifiable: this.heuristicFalsifiable(atom),
+        implementationAgnostic: this.heuristicImplementationAgnostic(atom),
+        unambiguousLanguage: this.heuristicUnambiguousLanguage(atom),
+        clearSuccessCriteria: this.heuristicClearSuccessCriteria(atom),
+      };
+    }
+  }
+
+  /**
+   * Evaluate Observable dimension (0-25) - DEPRECATED: Use evaluateAllDimensions instead
    * Can the behavior be observed and measured?
    */
   private async evaluateObservable(atom: AtomForValidation): Promise<QualityDimension> {
@@ -555,7 +677,38 @@ Respond in JSON format:
   }
 
   /**
+   * Parse JSON response from LLM for all dimensions, handling markdown code blocks
+   */
+  private parseAllDimensionsResponse(content: string): {
+    observable?: { score: number; feedback: string; suggestions: string[] };
+    falsifiable?: { score: number; feedback: string; suggestions: string[] };
+    implementationAgnostic?: { score: number; feedback: string; suggestions: string[] };
+    unambiguousLanguage?: { score: number; feedback: string; suggestions: string[] };
+    clearSuccessCriteria?: { score: number; feedback: string; suggestions: string[] };
+  } {
+    try {
+      // Remove markdown code blocks if present
+      let cleaned = content.trim();
+      if (cleaned.startsWith('```json')) {
+        cleaned = cleaned.slice(7);
+      } else if (cleaned.startsWith('```')) {
+        cleaned = cleaned.slice(3);
+      }
+      if (cleaned.endsWith('```')) {
+        cleaned = cleaned.slice(0, -3);
+      }
+      cleaned = cleaned.trim();
+
+      return JSON.parse(cleaned);
+    } catch (error) {
+      this.logger.warn(`Failed to parse LLM response as JSON: ${error}`);
+      return {};
+    }
+  }
+
+  /**
    * Parse JSON response from LLM, handling markdown code blocks
+   * @deprecated Use parseAllDimensionsResponse instead
    */
   private parseJsonResponse(content: string): {
     score: number;

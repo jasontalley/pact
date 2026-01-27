@@ -1,8 +1,8 @@
 # Pact System Documentation
 
-**Version**: 1.0  
-**Last Updated**: 2026-01-16  
-**Status**: Phase 0 in Progress (Weeks 1-4)
+**Version**: 3.5
+**Last Updated**: 2026-01-27
+**Status**: Phase 3.5 Complete, Phase 4 Ready
 
 ---
 
@@ -45,13 +45,30 @@ Pact introduces:
 
 ### Current Status
 
-**Phase 0 (Weeks 1-4)**: Foundation infrastructure and core agents
+**Phase 0**: Foundation infrastructure and core agents ✅
+**Phase 1**: Core Intent System ✅
+**Phase 2**: Validators & Templates ✅
+**Phase 3**: Commitment Boundary & Invariants ✅
+**Phase 3.5**: Multi-Provider LLM & Agent UI ✅
 
-- ✅ **Complete**: Development infrastructure (Docker, NestJS, PostgreSQL)
-- ✅ **Complete**: Atomization Agent (converts ideas to atoms)
-- ✅ **Complete**: Atom Quality Validator (gates commitment quality)
-- 🔨 **In Progress**: Test-Atom Coupling Agent (detects orphan tests and mismatches)
-- ⏳ **Pending**: Test Quality Analyzer Integration (7-dimension quality enforcement)
+- ✅ Development infrastructure (Docker, NestJS, PostgreSQL)
+- ✅ Atomization Agent with iterative refinement
+- ✅ Atom Quality Validator (5 quality dimensions)
+- ✅ Intent Atom CRUD with Canvas UI
+- ✅ Validator CRUD with AI-powered translation
+- ✅ Template library (21 built-in templates)
+- ✅ Project configuration system
+- ✅ 9 built-in invariant checkers (INV-001 through INV-009)
+- ✅ Commitment Artifact data model with immutability
+- ✅ Agent-driven commitment flow
+- ✅ Supersession mechanics for atoms and commitments
+- ✅ Commitment UI (review dialog, list, detail pages)
+- ✅ Invariant configuration UI
+- ✅ Multi-provider LLM support (OpenAI, Anthropic, Ollama)
+- ✅ Intelligent model routing (task-aware selection)
+- ✅ Agent invocation UI (wizards + chat interface)
+- ✅ LLM configuration and usage dashboard
+- ✅ Cost tracking across all providers
 
 ---
 
@@ -136,11 +153,11 @@ Ideas (mutable)
 ### Technology Stack
 
 - **Backend**: NestJS + TypeScript
-- **Database**: PostgreSQL (10 tables: 8 core + 2 LLM tracking)
-- **Frontend**: React/Next.js (planned)
+- **Database**: PostgreSQL (15 tables: 13 core + 2 LLM tracking)
+- **Frontend**: React/Next.js with Canvas UI, shadcn/ui, React Query
 - **Infrastructure**: Docker + Docker Compose
-- **AI/Agents**: LangChain, OpenAI, Model Context Protocol (MCP)
-- **Testing**: Jest (unit), Cucumber/Gherkin (BDD), Supertest (API)
+- **AI/Agents**: LangChain, Multi-provider LLM (OpenAI, Anthropic, Ollama), Model Context Protocol (MCP)
+- **Testing**: Jest (unit), Vitest (frontend), Playwright (E2E), Supertest (API)
 
 ---
 
@@ -318,20 +335,29 @@ it('processes payment securely using TLS 1.3', () => {
 
 ### Database Schema
 
-**Core Tables** (8):
+**Core Tables** (9):
 
-1. `atoms` - Intent atoms
+1. `atoms` - Intent atoms with quality scores and refinement history
 2. `molecules` - Descriptive groupings
 3. `molecule_atoms` - Many-to-many relationships
-4. `validators` - Test/validation rules
-5. `evidence` - Execution results
-6. `clarifications` - Post-commitment ambiguity resolution (INV-009)
-7. `agent_actions` - Agent decision audit log
-8. `bootstrap_scaffolds` - Temporary code tracking
+4. `validators` - Validators with format translation and execution tracking
+5. `validator_templates` - Reusable validator patterns (21 built-in)
+6. `evidence` - Execution results
+7. `clarifications` - Post-commitment ambiguity resolution (INV-009)
+8. `agent_actions` - Agent decision audit log
+9. `bootstrap_scaffolds` - Temporary code tracking
+
+**Phase 3 Tables** (4):
+10. `projects` - Project organization
+11. `invariant_configs` - Configurable invariant rules
+12. `commitments` - Immutable commitment artifacts
+13. `commitment_atoms` - Commitment-atom associations
 
 **LLM Tracking Tables** (2):
-9. `llm_configurations` - LLM settings
-10. `llm_usage_tracking` - Usage metrics
+14. `llm_configurations` - LLM settings
+15. `llm_usage_tracking` - Usage metrics
+
+**See**: [docs/schema.md](schema.md) for full schema documentation (v3.0)
 
 ---
 
@@ -389,6 +415,35 @@ it('processes payment securely using TLS 1.3', () => {
 - Global invariant checking engine
 - Commitment Artifact generation (immutable JSON)
 - Override mechanism (with justification + logging)
+
+### Phase 3.5: Multi-Provider LLM & Agent UI (Interlude) ✅
+
+**Goal**: Enhance LLM service with multiple providers and create Agent UI
+
+**Deliverables**:
+
+- ✅ Multi-provider support (OpenAI GPT-5 family, Anthropic Claude, Ollama local)
+- ✅ Intelligent model selection (task-aware routing with cost optimization)
+- ✅ Provider abstraction layer with health monitoring
+- ✅ Agent invocation UI:
+  - Atomization Wizard (natural language → atoms)
+  - Refinement Panel (quality improvement)
+  - Brownfield Wizard (infer atoms from tests)
+  - Chat Interface (conversational agent)
+- ✅ LLM Settings page (provider configuration, API keys)
+- ✅ Usage Dashboard (cost breakdown, token usage, trends)
+- ✅ Budget controls (daily/monthly limits, hard stop)
+- ✅ Cost tracking across all providers
+
+**Key Features**:
+
+- Provider Registry with lazy initialization and health caching
+- Model Router with rule-based selection and fallback chains
+- Cross-provider fallback (OpenAI → Anthropic → Ollama)
+- Circuit breaker per provider (not global)
+- Admin API for configuration management
+
+**Status**: ✅ Complete
 
 ### Phase 4: Agent-Driven Realization (Weeks 17-20)
 
@@ -674,18 +729,37 @@ Pact uses specialized AI agents to automate key transformations while maintainin
 
 ### Implementation
 
-- [ideas/implementation-kickoff.md](../ideas/implementation-kickoff.md) - Phase 0 implementation plan
 - [docs/implementation-guide-2026-01-12.md](implementation-guide-2026-01-12.md) - Full implementation roadmap
-- [docs/implementation-checklist.md](implementation-checklist.md) - Current status tracking
+- [docs/implementation-checklist.md](implementation-checklist.md) - Phase 0/1 status tracking
+- [docs/implementation-checklist-phase2.md](implementation-checklist-phase2.md) - Phase 2 status tracking
+- [docs/implementation-checklist-phase3.md](implementation-checklist-phase3.md) - Phase 3 status tracking
+- [docs/implementation-checklist-phase3.5.md](implementation-checklist-phase3.5.md) - Phase 3.5 status tracking (LLM & Agent UI)
+
+### User Guides
+
+- [docs/user-guide/creating-atoms.md](user-guide/creating-atoms.md) - Creating Intent Atoms
+- [docs/user-guide/creating-validators.md](user-guide/creating-validators.md) - Creating Validators
+- [docs/user-guide/validator-templates.md](user-guide/validator-templates.md) - Using Validator Templates
+- [docs/user-guide/canvas-navigation.md](user-guide/canvas-navigation.md) - Canvas UI Navigation
+- [docs/user-guide/refinement-workflow.md](user-guide/refinement-workflow.md) - Refinement Workflow
+- [docs/user-guide/committing-atoms.md](user-guide/committing-atoms.md) - Committing Atoms
+- [docs/user-guide/configuring-invariants.md](user-guide/configuring-invariants.md) - Configuring Invariants
+- [docs/user-guide/supersession.md](user-guide/supersession.md) - Supersession
+
+### Architecture
+
+- [docs/architectural-review-response-2026-01-12.md](architectural-review-response-2026-01-12.md) - Architectural decisions
+- [docs/architecture/validator-translation.md](architecture/validator-translation.md) - Validator Translation Service
+- [docs/architecture/commitment-boundary.md](architecture/commitment-boundary.md) - Commitment Boundary & Invariant Checking
+- [docs/architecture/llm-providers.md](architecture/llm-providers.md) - Multi-Provider LLM Architecture (Phase 3.5)
+- [docs/schema.md](schema.md) - Database Schema (v3.0)
+- [docs/ui.md](ui.md) - UI Architecture
+- [docs/ux.md](ux.md) - UX Specification
 
 ### Requirements
 
 - [docs/requirements/requirements-synthesis-2026-01-12.md](requirements/requirements-synthesis-2026-01-12.md) - Requirements synthesis
 - [docs/acceptance-criteria/pact-acceptance-criteria-2026-01-12.md](acceptance-criteria/pact-acceptance-criteria-2026-01-12.md) - Acceptance criteria (90 scenarios)
-
-### Architecture
-
-- [docs/architectural-review-response-2026-01-12.md](architectural-review-response-2026-01-12.md) - Architectural decisions
 
 ### Agents
 

@@ -1,15 +1,17 @@
 import { Module, Global } from '@nestjs/common';
 import { AtomsGateway } from './atoms.gateway';
+import { ValidatorsGateway } from './validators.gateway';
+import { CommitmentsGateway } from './commitments.gateway';
 
 /**
  * Module for WebSocket gateways
  *
- * Marked as @Global so the AtomsGateway can be injected
+ * Marked as @Global so the gateways can be injected
  * into services without explicit imports.
  */
 @Global()
 @Module({
-  providers: [AtomsGateway],
-  exports: [AtomsGateway],
+  providers: [AtomsGateway, ValidatorsGateway, CommitmentsGateway],
+  exports: [AtomsGateway, ValidatorsGateway, CommitmentsGateway],
 })
 export class GatewaysModule {}

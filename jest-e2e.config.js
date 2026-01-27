@@ -14,4 +14,7 @@ module.exports = {
   maxWorkers: 1,
   // Run tests in a specific order
   testSequencer: './test/sequencer.js',
+  // Note: E2E test results are primarily console output
+  // To generate JSON reports, use: npm run test:e2e -- --json --outputFile=test-results/backend/e2e/reports/results.json
+  // HTML reporters can be added via jest-html-reporters package if needed
 };

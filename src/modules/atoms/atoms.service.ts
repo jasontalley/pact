@@ -12,6 +12,7 @@ import { AtomsRepository } from './atoms.repository';
 import { CreateAtomDto } from './dto/create-atom.dto';
 import { UpdateAtomDto } from './dto/update-atom.dto';
 import { AtomSearchDto, PaginatedAtomsResponse } from './dto/atom-search.dto';
+import { SupersedeAtomDto, SupersessionResultDto } from './dto/supersede-atom.dto';
 import { AtomsGateway } from '../../gateways/atoms.gateway';
 
 /**
@@ -254,6 +255,65 @@ export class AtomsService {
     this.atomsGateway?.emitAtomSuperseded(atom.id, newAtom.id);
 
     return savedAtom;
+  }
+
+  /**
+   * Supersede an atom by creating a new version with updated content
+   *
+   * This is a convenience method that:
+   * 1. Creates a new atom with the provided description
+   * 2. Marks the original atom as superseded
+   * 3. Links the original to the new atom
+   *
+   * Use this when you need to "fix" or "update" a committed atom.
+   * The original atom remains immutable; this creates a new version.
+   */
+  async supersedeWithNewAtom(
+    id: string,
+    supersedeDto: SupersedeAtomDto,
+  ): Promise<SupersessionResultDto> {
+    const originalAtom = await this.findOne(id);
+
+    if (originalAtom.status === 'superseded') {
+      throw new BadRequestException('Atom is already superseded');
+    }
+
+    if (originalAtom.status === 'draft') {
+      throw new BadRequestException(
+        'Cannot supersede a draft atom. Either update it directly or commit it first.',
+      );
+    }
+
+    // Create the new superseding atom
+    const newAtom = await this.create({
+      description: supersedeDto.newDescription,
+      category: supersedeDto.category ?? (originalAtom.category as AtomCategory),
+      qualityScore: supersedeDto.qualityScore,
+      tags: supersedeDto.tags ?? [...originalAtom.tags],
+      observableOutcomes: supersedeDto.observableOutcomes ?? originalAtom.observableOutcomes,
+      falsifiabilityCriteria:
+        supersedeDto.falsifiabilityCriteria ?? originalAtom.falsifiabilityCriteria,
+      parentIntent: originalAtom.id, // Link to original as parent
+    });
+
+    // Mark the original as superseded
+    originalAtom.status = 'superseded';
+    originalAtom.supersededBy = newAtom.id;
+
+    const savedOriginal = await this.atomRepository.save(originalAtom);
+
+    // Emit WebSocket event
+    this.atomsGateway?.emitAtomSuperseded(originalAtom.id, newAtom.id);
+
+    const reasonSuffix = supersedeDto.supersessionReason
+      ? `. Reason: ${supersedeDto.supersessionReason}`
+      : '';
+
+    return {
+      originalAtom: savedOriginal,
+      newAtom,
+      message: `Atom ${originalAtom.atomId} superseded by ${newAtom.atomId}${reasonSuffix}`,
+    };
   }
 
   /**

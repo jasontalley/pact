@@ -696,7 +696,7 @@ if (require.main === module) {
     // Generate HTML report if requested
     if (generateReport) {
       const html = generateHtmlReport(results);
-      const outputPath = reportPath || 'test/reports/quality-report.html';
+      const outputPath = reportPath || 'test-results/quality/quality-report.html';
       const outputDir = path.dirname(outputPath);
 
       if (!fs.existsSync(outputDir)) {

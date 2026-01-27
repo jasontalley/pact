@@ -4,7 +4,12 @@ node_modules
 .pnp.js
 
 # Testing
+# Note: Coverage and test results are now in centralized /test-results/ directory
 coverage
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
 
 # Next.js
 .next/
@@ -41,9 +46,3 @@ next-env.d.ts
 .vscode/
 *.swp
 *.swo
-
-# Playwright
-/test-results/
-/playwright-report/
-/blob-report/
-/playwright/.cache/

@@ -1,15 +1,17 @@
 'use client';
 
 import { memo } from 'react';
-import { Handle, Position, NodeProps } from '@xyflow/react';
+import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { QualityBadge } from '@/components/quality/QualityBadge';
 import type { Atom, AtomCategory } from '@/types/atom';
 
-interface AtomNodeData {
+type AtomNodeData = {
   atom: Atom;
-}
+};
+
+export type AtomNodeType = Node<AtomNodeData & Record<string, unknown>, 'atom'>;
 
 const categoryColors: Record<AtomCategory, string> = {
   functional: 'border-l-purple-500',
@@ -23,7 +25,7 @@ const categoryColors: Record<AtomCategory, string> = {
 /**
  * Custom ReactFlow node for atoms
  */
-function AtomNodeComponent({ data, selected }: NodeProps<AtomNodeData>) {
+function AtomNodeComponent({ data, selected }: NodeProps<AtomNodeType>) {
   const { atom } = data;
   const categoryColor = categoryColors[atom.category] || 'border-l-gray-500';
 

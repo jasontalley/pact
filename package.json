@@ -28,6 +28,7 @@
     "pact:seed:list": "node bootstrap/seed/seed-atoms.js list",
     "pact:project": "node bootstrap/seed/project-atoms.js project",
     "pact:verify": "node bootstrap/seed/project-atoms.js verify",
+    "pact:brownfield": "docker-compose run --rm app npx ts-node scripts/run-brownfield-analysis.ts",
     "typeorm": "typeorm-ts-node-commonjs -d src/config/database/data-source.ts",
     "migration:generate": "typeorm-ts-node-commonjs migration:generate -d src/config/database/data-source.ts",
     "migration:create": "typeorm-ts-node-commonjs migration:create",
@@ -37,7 +38,10 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@langchain/anthropic": "^0.3.34",
     "@langchain/core": "^0.3.0",
+    "@langchain/langgraph": "^0.2.3",
+    "@langchain/ollama": "^0.1.6",
     "@langchain/openai": "^0.3.0",
     "@modelcontextprotocol/sdk": "^0.4.0",
     "@nestjs/common": "^11.1.0",

@@ -10,8 +10,15 @@ import {
   HttpCode,
   HttpStatus,
   Optional,
+  Inject,
+  forwardRef,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
+import {
+  CommittedAtomGuard,
+  AllowCommittedAtomOperation,
+} from '../../common/guards/committed-atom.guard';
 import { AtomsService } from './atoms.service';
 import { CreateAtomDto } from './dto/create-atom.dto';
 import { UpdateAtomDto } from './dto/update-atom.dto';
@@ -19,6 +26,7 @@ import { AtomSearchDto, PaginatedAtomsResponse } from './dto/atom-search.dto';
 import { AnalyzeIntentDto } from './dto/analyze-intent.dto';
 import { RefineAtomDto } from './dto/refine-atom.dto';
 import { AcceptSuggestionDto } from './dto/accept-suggestion.dto';
+import { SupersedeAtomDto, SupersessionResultDto } from './dto/supersede-atom.dto';
 import { Atom, RefinementRecord } from './atom.entity';
 import {
   IntentRefinementService,
@@ -26,13 +34,20 @@ import {
   RefinementSuggestion,
   RefinementResult,
 } from '../agents/intent-refinement.service';
+import { ValidatorsService } from '../validators/validators.service';
+import { CreateValidatorDto } from '../validators/dto/create-validator.dto';
+import { Validator } from '../validators/validator.entity';
 
 @ApiTags('atoms')
 @Controller('atoms')
+@UseGuards(CommittedAtomGuard)
 export class AtomsController {
   constructor(
     private readonly atomsService: AtomsService,
     @Optional() private readonly intentRefinementService?: IntentRefinementService,
+    @Optional()
+    @Inject(forwardRef(() => ValidatorsService))
+    private readonly validatorsService?: ValidatorsService,
   ) {}
 
   @Post()
@@ -114,7 +129,8 @@ export class AtomsController {
   }
 
   @Patch(':id/supersede')
-  @ApiOperation({ summary: 'Supersede an atom with a new atom' })
+  @AllowCommittedAtomOperation()
+  @ApiOperation({ summary: 'Supersede an atom with an existing atom' })
   @ApiParam({ name: 'id', description: 'UUID of the atom to supersede' })
   @ApiBody({ schema: { properties: { newAtomId: { type: 'string' } } } })
   @ApiResponse({ status: 200, description: 'Atom superseded successfully', type: Atom })
@@ -122,6 +138,29 @@ export class AtomsController {
   @ApiResponse({ status: 404, description: 'Atom not found' })
   supersede(@Param('id') id: string, @Body('newAtomId') newAtomId: string): Promise<Atom> {
     return this.atomsService.supersede(id, newAtomId);
+  }
+
+  @Post(':id/supersede-with-new')
+  @AllowCommittedAtomOperation()
+  @ApiOperation({
+    summary: 'Supersede an atom by creating a new version',
+    description:
+      'Creates a new atom with the provided description and marks the original as superseded. ' +
+      'Use this to "fix" or "update" a committed atom. The original remains immutable.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID of the atom to supersede' })
+  @ApiResponse({
+    status: 201,
+    description: 'Atom superseded and new version created',
+    type: SupersessionResultDto,
+  })
+  @ApiResponse({ status: 400, description: 'Cannot supersede draft atom or already superseded' })
+  @ApiResponse({ status: 404, description: 'Atom not found' })
+  supersedeWithNewAtom(
+    @Param('id') id: string,
+    @Body() supersedeDto: SupersedeAtomDto,
+  ): Promise<SupersessionResultDto> {
+    return this.atomsService.supersedeWithNewAtom(id, supersedeDto);
   }
 
   @Post(':id/tags')
@@ -144,6 +183,95 @@ export class AtomsController {
   @ApiResponse({ status: 404, description: 'Atom not found' })
   removeTag(@Param('id') id: string, @Param('tag') tag: string): Promise<Atom> {
     return this.atomsService.removeTag(id, tag);
+  }
+
+  // ========================
+  // Validator Endpoints
+  // ========================
+
+  @Get(':id/validators')
+  @ApiOperation({
+    summary: 'Get validators for an atom',
+    description: 'Returns all validators associated with the specified atom.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID of the atom' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of validators for the atom',
+    type: [Validator],
+  })
+  @ApiResponse({ status: 404, description: 'Atom not found' })
+  async getValidators(@Param('id') id: string): Promise<Validator[]> {
+    if (!this.validatorsService) {
+      throw new Error('Validators service is not available');
+    }
+    return this.validatorsService.findByAtom(id);
+  }
+
+  @Post(':id/validators')
+  @ApiOperation({
+    summary: 'Create a validator for an atom',
+    description:
+      'Creates a new validator associated with the specified atom. This is a shorthand for POST /validators with the atomId pre-filled.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID of the atom' })
+  @ApiResponse({
+    status: 201,
+    description: 'Validator created successfully',
+    type: Validator,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid input data' })
+  @ApiResponse({ status: 404, description: 'Atom not found' })
+  async createValidator(
+    @Param('id') id: string,
+    @Body() createValidatorDto: Omit<CreateValidatorDto, 'atomId'>,
+  ): Promise<Validator> {
+    if (!this.validatorsService) {
+      throw new Error('Validators service is not available');
+    }
+    // Ensure the atom exists first
+    await this.atomsService.findOne(id);
+    // Create validator with the atom ID from the URL
+    return this.validatorsService.create({
+      ...createValidatorDto,
+      atomId: id,
+    } as CreateValidatorDto);
+  }
+
+  @Get(':id/validation-status')
+  @ApiOperation({
+    summary: 'Get validation status summary for an atom',
+    description:
+      'Returns a summary of all validators for the atom including counts by type and active/inactive status.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID of the atom' })
+  @ApiResponse({
+    status: 200,
+    description: 'Validation status summary',
+    schema: {
+      type: 'object',
+      properties: {
+        atomId: { type: 'string' },
+        totalValidators: { type: 'number' },
+        activeValidators: { type: 'number' },
+        inactiveValidators: { type: 'number' },
+        byType: {
+          type: 'object',
+          properties: {
+            gherkin: { type: 'number' },
+            executable: { type: 'number' },
+            declarative: { type: 'number' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Atom not found' })
+  async getValidationStatus(@Param('id') id: string) {
+    if (!this.validatorsService) {
+      throw new Error('Validators service is not available');
+    }
+    return this.validatorsService.getValidationStatus(id);
   }
 
   // ========================

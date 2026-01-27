@@ -1,8 +1,8 @@
 # Pact Database Schema Documentation
 
-**Version**: 1.0  
-**Last Updated**: 2026-01-16  
-**Database**: PostgreSQL 16  
+**Version**: 3.0
+**Last Updated**: 2026-01-27
+**Database**: PostgreSQL 16
 **ORM**: TypeORM
 
 ---
@@ -23,18 +23,19 @@
 
 ## Overview
 
-The Pact database schema consists of **10 tables** organized into two categories:
+The Pact database schema consists of **15 tables** organized into three categories:
 
-- **Core Tables (8)**: Intent management, validation, evidence, and system tracking
+- **Core Tables (9)**: Intent management, validation, evidence, templates, and system tracking
+- **Phase 3 Tables (4)**: Projects, invariants, commitments, and commitment-atom associations
 - **LLM Tracking Tables (2)**: Configuration and usage tracking for AI agents
 
 ### Schema Statistics
 
-- **Total Tables**: 10
-- **Total Indexes**: 15+ (including composite and partial indexes)
+- **Total Tables**: 11
+- **Total Indexes**: 17+ (including composite and partial indexes)
 - **Total Views**: 2 (cost aggregation views)
-- **Foreign Key Relationships**: 8
-- **JSONB Columns**: 8 (for flexible metadata storage)
+- **Foreign Key Relationships**: 9
+- **JSONB Columns**: 11 (for flexible metadata storage)
 
 ### Design Principles
 
@@ -223,7 +224,7 @@ VALUES (
 
 ### 4. `validators`
 
-**Purpose**: Stores validators (tests and validation rules) linked to atoms. Validators are the "substrate" that prove atoms are satisfied.
+**Purpose**: Stores validators (tests and validation rules) linked to atoms. Validators are the "substrate" that prove atoms are satisfied. Phase 2 enhanced with format translation, templates, and execution tracking.
 
 **TypeORM Entity**: `Validator` (`src/modules/validators/validator.entity.ts`)
 
@@ -231,35 +232,153 @@ VALUES (
 |--------|------|-------------|-------------|
 | `id` | UUID | PRIMARY KEY, DEFAULT `uuid_generate_v4()` | Internal unique identifier |
 | `atom_id` | UUID | NOT NULL, FK → `atoms(id)` ON DELETE CASCADE | Reference to atom |
+| `name` | VARCHAR(255) | NOT NULL | Human-readable validator name |
+| `description` | TEXT | NULLABLE | Detailed explanation of what this validator checks |
 | `validator_type` | VARCHAR(50) | NOT NULL | Type: gherkin, executable, declarative |
 | `content` | TEXT | NOT NULL | Validator content (Gherkin, code, etc.) |
-| `format` | VARCHAR(20) | NOT NULL | Format: gherkin, typescript, json |
+| `format` | VARCHAR(50) | NOT NULL | Current format: gherkin, natural_language, typescript, json |
+| `original_format` | VARCHAR(50) | NOT NULL | Format originally written in (for translation tracking) |
+| `translated_content` | JSONB | DEFAULT '{}' | Cached translations to other formats |
+| `template_id` | UUID | NULLABLE | Reference to template if derived from one |
+| `parameters` | JSONB | DEFAULT '{}' | Template parameters if applicable |
+| `is_active` | BOOLEAN | DEFAULT true | Whether validator is currently active |
+| `execution_count` | INTEGER | DEFAULT 0 | Number of times executed |
+| `last_executed_at` | TIMESTAMP | NULLABLE | Timestamp of last execution |
 | `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Creation timestamp |
+| `updated_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Last update timestamp |
 | `metadata` | JSONB | DEFAULT '{}' | Extensible metadata |
+
+**Indexes**:
+- `idx_validators_atom_id` on `atom_id`
+- `idx_validators_is_active` on `is_active`
 
 **Relationships**:
 - Many-to-one with `atoms` (each validator belongs to one atom)
+- Many-to-one with `validator_templates` (optional, if derived from template)
 - Referenced by `evidence` (evidence links to validator that produced it)
 
 **Business Rules**:
-- Validators must reference a committed atom (enforced in application)
 - Multiple validators can exist for the same atom
 - Validator content format must match `format` field
+- Once created, `original_format` is immutable
+- Soft-delete via `is_active = false` preserves history
+
+**JSONB Schemas**:
+
+**`translated_content`** - Cached format translations:
+```json
+{
+  "gherkin": "Feature: ...\n  Scenario: ...",
+  "natural_language": "The system must ensure...",
+  "typescript": "describe('...', () => { ... })",
+  "json": "{ \"rules\": [...] }",
+  "translatedAt": {
+    "gherkin": "2026-01-21T10:30:00Z"
+  },
+  "confidenceScores": {
+    "gherkin": 0.95
+  }
+}
+```
 
 **Example**:
 ```sql
-INSERT INTO validators (atom_id, validator_type, content, format)
+INSERT INTO validators (atom_id, name, description, validator_type, content, format, original_format)
 VALUES (
   (SELECT id FROM atoms WHERE atom_id = 'IA-003'),
+  'Payment Processing Time',
+  'Validates that payment processing completes within the required time limit',
   'gherkin',
   'Given a payment request\nWhen user submits payment\nThen payment processes within 5 seconds',
+  'gherkin',
   'gherkin'
 );
 ```
 
 ---
 
-### 5. `evidence`
+### 5. `validator_templates`
+
+**Purpose**: Stores reusable validator patterns for common validation scenarios. Templates allow users to quickly create validators by filling in parameters.
+
+**TypeORM Entity**: `ValidatorTemplate` (`src/modules/validators/validator-template.entity.ts`)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PRIMARY KEY, DEFAULT `uuid_generate_v4()` | Internal unique identifier |
+| `name` | VARCHAR(255) | NOT NULL | Human-readable template name |
+| `description` | TEXT | NOT NULL | What this template validates |
+| `category` | VARCHAR(50) | NOT NULL | Category for organization |
+| `format` | VARCHAR(50) | NOT NULL | Format: gherkin, natural_language, typescript, json |
+| `template_content` | TEXT | NOT NULL | Template with {{placeholder}} markers |
+| `parameters_schema` | JSONB | NOT NULL | JSON Schema for parameters |
+| `example_usage` | TEXT | NULLABLE | Example instantiation |
+| `tags` | JSONB | DEFAULT '[]' | Searchable tags |
+| `is_builtin` | BOOLEAN | DEFAULT false | System template (immutable) vs user-created |
+| `usage_count` | INTEGER | DEFAULT 0 | Number of validators created from template |
+| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Creation timestamp |
+| `updated_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Last update timestamp |
+| `metadata` | JSONB | DEFAULT '{}' | Extensible metadata |
+
+**Indexes**:
+- `idx_validator_templates_category` on `category`
+- `idx_validator_templates_is_builtin` on `is_builtin`
+
+**Categories**:
+- `authentication` - User authentication patterns
+- `authorization` - Access control patterns
+- `data-integrity` - Data validation patterns
+- `performance` - Performance requirement patterns
+- `state-transition` - State machine patterns
+- `error-handling` - Error handling patterns
+- `custom` - User-defined patterns
+
+**Business Rules**:
+- Built-in templates (`is_builtin = true`) cannot be modified or deleted
+- Template parameters must follow `parameters_schema` JSON Schema
+- `usage_count` increments when validators are created from template
+
+**JSONB Schemas**:
+
+**`parameters_schema`** - JSON Schema for template parameters:
+```json
+{
+  "type": "object",
+  "properties": {
+    "roleName": {
+      "type": "string",
+      "description": "The role required for access"
+    },
+    "resource": {
+      "type": "string",
+      "description": "The resource being accessed"
+    }
+  },
+  "required": ["roleName", "resource"]
+}
+```
+
+**Example**:
+```sql
+INSERT INTO validator_templates (name, description, category, format, template_content, parameters_schema, is_builtin)
+VALUES (
+  'Role-Based Access',
+  'Validates that a user with a specific role can access a resource',
+  'authorization',
+  'gherkin',
+  'Feature: {{roleName}} Access Control
+    Scenario: User with {{roleName}} role accesses {{resource}}
+      Given a user with the "{{roleName}}" role
+      When they attempt to access "{{resource}}"
+      Then access should be granted',
+  '{"type":"object","properties":{"roleName":{"type":"string","description":"Role required"},"resource":{"type":"string","description":"Resource to access"}},"required":["roleName","resource"]}',
+  true
+);
+```
+
+---
+
+### 6. `evidence`
 
 **Purpose**: Stores immutable execution results that prove atoms are satisfied or violated. Evidence is first-class and immutable (INV-007).
 
@@ -434,9 +553,239 @@ VALUES (
 
 ---
 
+## Phase 3 Tables (Commitment Boundary)
+
+### 9. `projects`
+
+**Purpose**: Stores Pact projects - the top-level organizational unit for intent management.
+
+**TypeORM Entity**: `Project` (`src/modules/projects/project.entity.ts`)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PRIMARY KEY, DEFAULT `uuid_generate_v4()` | Internal unique identifier |
+| `name` | VARCHAR(255) | NOT NULL | Project name |
+| `description` | TEXT | NULLABLE | Human-readable description |
+| `settings` | JSONB | DEFAULT '{}' | Project-level settings |
+| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Creation timestamp |
+| `updated_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Last update timestamp |
+| `metadata` | JSONB | DEFAULT '{}' | Extensible metadata |
+
+**Relationships**:
+
+- One-to-many with `invariant_configs` (project-specific invariant settings)
+- One-to-many with `commitments` (commitments belong to a project)
+
+**JSONB Schema - `settings`**:
+
+```json
+{
+  "enforceInvariants": true,
+  "qualityThreshold": 80
+}
+```
+
+**Example**:
+
+```sql
+INSERT INTO projects (name, description, settings)
+VALUES (
+  'Pact Core',
+  'The core Pact system implementation',
+  '{"enforceInvariants": true, "qualityThreshold": 80}'
+);
+```
+
+---
+
+### 10. `invariant_configs`
+
+**Purpose**: Stores configurable invariant rules that are checked at the Commitment Boundary.
+
+**TypeORM Entity**: `InvariantConfig` (`src/modules/invariants/invariant-config.entity.ts`)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PRIMARY KEY, DEFAULT `uuid_generate_v4()` | Internal unique identifier |
+| `project_id` | UUID | NULLABLE, FK → `projects(id)` | Project this config belongs to (null = global) |
+| `invariant_id` | VARCHAR(20) | NOT NULL | Invariant identifier (e.g., "INV-001") |
+| `name` | VARCHAR(255) | NOT NULL | Human-readable name |
+| `description` | TEXT | NOT NULL | What this invariant enforces |
+| `is_enabled` | BOOLEAN | DEFAULT true | Whether invariant is active |
+| `is_blocking` | BOOLEAN | DEFAULT true | Whether violations block commitment |
+| `check_type` | VARCHAR(50) | DEFAULT 'builtin' | Type: builtin, custom, llm |
+| `check_config` | JSONB | DEFAULT '{}' | Configuration for the checker |
+| `error_message` | TEXT | NOT NULL | Message shown on violation |
+| `suggestion_prompt` | TEXT | NULLABLE | LLM prompt for fix suggestions |
+| `is_builtin` | BOOLEAN | DEFAULT false | System invariant (cannot delete) |
+| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Creation timestamp |
+| `updated_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Last update timestamp |
+
+**Indexes**:
+
+- Unique composite index on (`project_id`, `invariant_id`)
+
+**Relationships**:
+
+- Many-to-one with `projects` (nullable - null means global default)
+
+**Business Rules**:
+
+- Built-in invariants (INV-001 through INV-009) seeded on startup
+- Built-in invariants cannot be deleted
+- Project-specific configs override global defaults
+- `check_type` determines which checker implementation to use
+
+**JSONB Schema - `check_config`**:
+
+```json
+{
+  "checkerName": "ExplicitCommitmentChecker",
+  "rules": [{ "pattern": "^[A-Z]", "field": "description" }],
+  "prompt": "Analyze this atom for ambiguity..."
+}
+```
+
+**Example**:
+
+```sql
+INSERT INTO invariant_configs (invariant_id, name, description, check_type, error_message, is_builtin)
+VALUES (
+  'INV-001',
+  'Explicit Commitment Required',
+  'No intent may become enforceable without an explicit human commitment action.',
+  'builtin',
+  'Commitment requires explicit human authorization.',
+  true
+);
+```
+
+---
+
+### 11. `commitments`
+
+**Purpose**: Stores immutable Commitment Artifacts - the central record of committed intent.
+
+**TypeORM Entity**: `CommitmentArtifact` (`src/modules/commitments/commitment.entity.ts`)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PRIMARY KEY, DEFAULT `uuid_generate_v4()` | Internal unique identifier |
+| `commitment_id` | VARCHAR(20) | UNIQUE, NOT NULL | Human-readable ID (e.g., "COM-001") |
+| `project_id` | UUID | NULLABLE, FK → `projects(id)` | Project this commitment belongs to |
+| `molecule_id` | UUID | NULLABLE, FK → `molecules(id)` | Associated molecule (if any) |
+| `canonical_json` | JSONB | NOT NULL | **IMMUTABLE** snapshot of committed atoms |
+| `committed_by` | VARCHAR(255) | NOT NULL | Human identifier who committed |
+| `committed_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | When commitment was made |
+| `invariant_checks` | JSONB | DEFAULT '[]' | Record of all invariant checks performed |
+| `override_justification` | TEXT | NULLABLE | Justification for any overrides |
+| `supersedes` | UUID | NULLABLE, FK → `commitments(id)` | Commitment this one supersedes |
+| `superseded_by` | UUID | NULLABLE, FK → `commitments(id)` | Commitment that superseded this |
+| `status` | VARCHAR(20) | DEFAULT 'active' | Status: active, superseded |
+| `metadata` | JSONB | DEFAULT '{}' | Extensible metadata |
+
+**Indexes**:
+
+- `idx_commitments_project_id` on `project_id`
+- `idx_commitments_molecule_id` on `molecule_id`
+- `idx_commitments_status` on `status`
+- `idx_commitments_committed_at` on `committed_at`
+
+**Relationships**:
+
+- Many-to-one with `projects` (optional)
+- Many-to-one with `molecules` (optional)
+- Self-referential via `supersedes` / `superseded_by`
+- Many-to-many with `atoms` via `commitment_atoms` join table
+
+**Business Rules**:
+
+- `canonical_json` is IMMUTABLE after creation (enforced by database trigger)
+- `committed_at` cannot be modified (enforced by database trigger)
+- Commitments cannot be deleted (enforced by database trigger)
+- Status can only change from 'active' to 'superseded'
+
+**JSONB Schema - `canonical_json`**:
+
+```json
+[
+  {
+    "atomId": "IA-001",
+    "description": "User authentication must complete within 2 seconds",
+    "category": "performance",
+    "qualityScore": 85,
+    "observableOutcomes": [...],
+    "falsifiabilityCriteria": [...],
+    "tags": ["auth", "performance"]
+  }
+]
+```
+
+**JSONB Schema - `invariant_checks`**:
+
+```json
+[
+  {
+    "invariantId": "INV-001",
+    "name": "Explicit Commitment Required",
+    "passed": true,
+    "severity": "error",
+    "message": "Explicit commitment provided",
+    "checkedAt": "2026-01-27T10:00:00Z"
+  }
+]
+```
+
+**Example**:
+
+```sql
+INSERT INTO commitments (commitment_id, canonical_json, committed_by, status)
+VALUES (
+  'COM-001',
+  '[{"atomId": "IA-001", "description": "User auth within 2s", "category": "performance", "qualityScore": 85}]',
+  'jane.doe@company.com',
+  'active'
+);
+```
+
+---
+
+### 12. `commitment_atoms`
+
+**Purpose**: Join table linking commitments to their constituent atoms with ordering.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `commitment_id` | UUID | PRIMARY KEY, FK → `commitments(id)` | Commitment reference |
+| `atom_id` | UUID | PRIMARY KEY, FK → `atoms(id)` | Atom reference |
+| `position` | INTEGER | NULLABLE | Order within commitment (for display) |
+
+**Indexes**:
+
+- Composite primary key on (`commitment_id`, `atom_id`)
+
+**Business Rules**:
+
+- Each atom can be in multiple commitments (through supersession)
+- Position allows ordered display of atoms within a commitment
+- Deletion cascades from commitments (not atoms)
+
+**Example**:
+
+```sql
+INSERT INTO commitment_atoms (commitment_id, atom_id, position)
+VALUES (
+  (SELECT id FROM commitments WHERE commitment_id = 'COM-001'),
+  (SELECT id FROM atoms WHERE atom_id = 'IA-001'),
+  1
+);
+```
+
+---
+
 ## LLM Tracking Tables
 
-### 9. `llm_configurations`
+### 13. `llm_configurations`
 
 **Purpose**: Stores user-configurable LLM service settings. Enables UI-based management of LLM behavior, cost control, and reliability features.
 
@@ -559,7 +908,7 @@ The schema includes a default configuration inserted on initialization:
 
 ---
 
-### 10. `llm_usage_tracking`
+### 14. `llm_usage_tracking`
 
 **Purpose**: Tracks all LLM API calls for cost monitoring, performance analysis, and budget enforcement.
 
@@ -634,15 +983,15 @@ VALUES (
 ```
 atoms (1) ──< (N) molecule_atoms (N) >── (1) molecules
   │
-  ├──< (N) validators
+  ├──< (N) validators ────────────────>──(N:1) validator_templates
+  │         │
+  │         └──< (N) evidence
   │
   ├──< (N) evidence
   │
   ├──< (N) clarifications
   │
   └──< (1) atoms (superseded_by self-reference)
-
-validators (1) ──< (N) evidence
 
 llm_configurations (1) ──< (N) llm_usage_tracking
 ```
@@ -655,6 +1004,7 @@ llm_configurations (1) ──< (N) llm_usage_tracking
 | `molecule_atoms` | `molecule_id` | `molecules` | `id` | CASCADE |
 | `molecule_atoms` | `atom_id` | `atoms` | `id` | CASCADE |
 | `validators` | `atom_id` | `atoms` | `id` | CASCADE |
+| `validators` | `template_id` | `validator_templates` | `id` | SET NULL |
 | `evidence` | `atom_id` | `atoms` | `id` | CASCADE |
 | `evidence` | `validator_id` | `validators` | `id` | SET NULL |
 | `clarifications` | `atom_id` | `atoms` | `id` | CASCADE |
@@ -820,10 +1170,15 @@ All tables have corresponding TypeORM entities in `src/modules/{module}/{entity}
 | `molecules` | `Molecule` | `molecules` |
 | `molecule_atoms` | (Join table, no entity) | `molecules` |
 | `validators` | `Validator` | `validators` |
+| `validator_templates` | `ValidatorTemplate` | `validators` |
 | `evidence` | `Evidence` | `evidence` |
 | `clarifications` | `Clarification` | `clarifications` |
 | `agent_actions` | `AgentAction` | `agents` |
 | `bootstrap_scaffolds` | `BootstrapScaffold` | `bootstrap` |
+| `projects` | `Project` | `projects` |
+| `invariant_configs` | `InvariantConfig` | `invariants` |
+| `commitments` | `CommitmentArtifact` | `commitments` |
+| `commitment_atoms` | (Join table, no entity) | `commitments` |
 | `llm_configurations` | `LLMConfiguration` | `llm` |
 | `llm_usage_tracking` | `LLMUsageTracking` | `llm` |
 
@@ -990,6 +1345,6 @@ Breaking changes require:
 
 ---
 
-**Last Updated**: 2026-01-16  
-**Schema Version**: 1.0  
+**Last Updated**: 2026-01-27
+**Schema Version**: 3.0 (Phase 3: Commitment Boundary & Invariants)
 **PostgreSQL Version**: 16

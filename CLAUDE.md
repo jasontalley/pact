@@ -882,6 +882,64 @@ For continuous integration, use the Docker-based approach:
 
 This runs the complete test suite with coverage and fails the build if tests fail or coverage drops below 80%.
 
+### Test Results Organization
+
+**Centralized Results Directory**: All test execution results are centralized in `test-results/` at the repo root for easy discovery, while test files themselves remain collocated with source code.
+
+**Directory Structure**:
+
+```
+test-results/
+├── backend/
+│   ├── unit/
+│   │   └── coverage/          # Backend unit test coverage reports
+│   └── e2e/
+│       └── reports/            # Backend E2E test reports (HTML, JSON)
+├── frontend/
+│   ├── unit/
+│   │   └── coverage/          # Frontend unit test coverage reports
+│   └── e2e/
+│       ├── html-report/       # Playwright HTML test report
+│       ├── results.json        # Playwright JSON test results
+│       └── artifacts/          # Screenshots, videos, traces (on failure)
+├── integration/
+│   └── reports/               # Integration test reports
+├── quality/
+│   ├── quality-report.html     # Test quality analysis report
+│   └── coupling-report.json    # Test-atom coupling analysis
+└── analysis/
+    └── brownfield-*.json       # Brownfield analysis reports
+```
+
+**Key Principles**:
+
+1. **Unit Tests Remain Collocated**: Unit test files (`.spec.ts`) stay next to source code in `src/`
+2. **Unit Test Results Centralized**: Coverage reports are generated in `test-results/`
+3. **E2E/Integration Centralized**: All E2E and integration test results in `test-results/`
+4. **Easy Discovery**: Single `test-results/` directory at root for all results
+5. **Clear Organization**: Subdirectories by test type (unit/e2e) and layer (backend/frontend)
+
+**Viewing Reports**:
+
+- **Backend coverage**: `test-results/backend/unit/coverage/lcov-report/index.html`
+- **Frontend coverage**: `test-results/frontend/unit/coverage/index.html`
+- **Frontend E2E**: `npx playwright show-report test-results/frontend/e2e/html-report`
+- **Test quality**: `open test-results/quality/quality-report.html`
+- **Coupling analysis**: `cat test-results/quality/coupling-report.json`
+
+**Configuration**:
+
+- Backend unit coverage: `jest.config.js` → `coverageDirectory: './test-results/backend/unit/coverage'`
+- Frontend unit coverage: `frontend/vitest.config.ts` → `reportsDirectory: '../../test-results/frontend/unit/coverage'`
+- Frontend E2E: `frontend/playwright.config.ts` → outputs to `../../test-results/frontend/e2e/`
+- Test quality: `bootstrap/tooling/test-quality-analyzer.js` → `test-results/quality/quality-report.html`
+- Test coupling: `bootstrap/tooling/test-atom-coupling.js` → `test-results/quality/coupling-report.json`
+- Brownfield analysis: `scripts/run-brownfield-analysis.ts` → `test-results/analysis/brownfield-*.json`
+
+**Gitignore**: The `test-results/` directory is gitignored (except `README.md`) since results are generated artifacts. Historical results are stored in CI/CD artifact storage.
+
+See [test-results/README.md](test-results/README.md) for detailed navigation guide.
+
 ---
 
 ## Important Patterns & Guidelines

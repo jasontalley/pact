@@ -989,4 +989,241 @@ describe('AtomsService', () => {
       expect(result).toEqual(mockTags);
     });
   });
+
+  // @atom INV-004
+  describe('supersedeWithNewAtom', () => {
+    // @atom INV-004 - Convenience supersession method
+    it('should create new atom and supersede the original in one operation', async () => {
+      const originalAtom = {
+        id: 'original-uuid',
+        atomId: 'IA-001',
+        description: 'Original description',
+        category: 'functional',
+        status: 'committed',
+        tags: ['tag1'],
+        observableOutcomes: ['outcome1'],
+        falsifiabilityCriteria: ['criteria1'],
+        supersededBy: null,
+      };
+
+      const newAtom = {
+        id: 'new-uuid',
+        atomId: 'IA-002',
+        description: 'Updated description',
+        category: 'functional',
+        status: 'draft',
+        tags: ['tag1'],
+        parentIntent: 'original-uuid',
+      };
+
+      // First findOne returns original atom
+      mockAtomRepository.findOne
+        .mockResolvedValueOnce(originalAtom) // for supersedeWithNewAtom
+        .mockResolvedValueOnce(null); // for generateAtomId in create
+
+      mockAtomRepository.create.mockReturnValue(newAtom);
+      mockAtomRepository.save
+        .mockResolvedValueOnce(newAtom) // save new atom
+        .mockResolvedValueOnce({
+          ...originalAtom,
+          status: 'superseded',
+          supersededBy: 'new-uuid',
+        }); // save original as superseded
+
+      const result = await service.supersedeWithNewAtom('original-uuid', {
+        newDescription: 'Updated description',
+      });
+
+      // INV-004: Original atom must be marked as superseded
+      expect(result.originalAtom.status).toBe('superseded');
+      expect(result.originalAtom.supersededBy).toBe('new-uuid');
+      // INV-004: New atom must be created
+      expect(result.newAtom).toBeDefined();
+      expect(result.newAtom.description).toBe('Updated description');
+      // INV-004: Message must indicate successful supersession
+      expect(result.message).toContain('superseded');
+    });
+
+    // @atom INV-004 - Cannot supersede draft atoms
+    it('should throw BadRequestException when trying to supersede draft atom', async () => {
+      const draftAtom = {
+        id: 'draft-uuid',
+        atomId: 'IA-001',
+        status: 'draft',
+      };
+      mockAtomRepository.findOne.mockResolvedValue(draftAtom);
+
+      // INV-004: Cannot supersede draft atoms - must commit or update directly
+      await expect(
+        service.supersedeWithNewAtom('draft-uuid', { newDescription: 'New desc' }),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.supersedeWithNewAtom('draft-uuid', { newDescription: 'New desc' }),
+      ).rejects.toThrow('Cannot supersede a draft atom');
+    });
+
+    // @atom INV-004 - Cannot supersede already superseded atoms
+    it('should throw BadRequestException when atom is already superseded', async () => {
+      const supersededAtom = {
+        id: 'superseded-uuid',
+        atomId: 'IA-001',
+        status: 'superseded',
+        supersededBy: 'another-uuid',
+      };
+      mockAtomRepository.findOne.mockResolvedValue(supersededAtom);
+
+      // INV-004: Cannot supersede already superseded atoms
+      await expect(
+        service.supersedeWithNewAtom('superseded-uuid', { newDescription: 'New desc' }),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.supersedeWithNewAtom('superseded-uuid', { newDescription: 'New desc' }),
+      ).rejects.toThrow('Atom is already superseded');
+    });
+
+    // @atom INV-004 - Inherit properties from original
+    it('should inherit category from original atom when not provided', async () => {
+      const originalAtom = {
+        id: 'original-uuid',
+        atomId: 'IA-001',
+        description: 'Original',
+        category: 'security',
+        status: 'committed',
+        tags: ['auth', 'security'],
+        observableOutcomes: ['outcome'],
+        falsifiabilityCriteria: ['criteria'],
+        supersededBy: null,
+      };
+
+      mockAtomRepository.findOne.mockResolvedValueOnce(originalAtom).mockResolvedValueOnce(null);
+
+      mockAtomRepository.create.mockImplementation((data) => ({
+        id: 'new-uuid',
+        atomId: 'IA-002',
+        ...data,
+        status: 'draft',
+      }));
+
+      mockAtomRepository.save.mockImplementation((atom) => Promise.resolve(atom));
+
+      const result = await service.supersedeWithNewAtom('original-uuid', {
+        newDescription: 'Updated security check',
+      });
+
+      // INV-004: New atom must inherit category from original
+      expect(result.newAtom.category).toBe('security');
+      // INV-004: New atom must inherit tags from original
+      expect(result.newAtom.tags).toEqual(['auth', 'security']);
+    });
+
+    // @atom INV-004 - Override properties when provided
+    it('should use provided properties instead of inheriting', async () => {
+      const originalAtom = {
+        id: 'original-uuid',
+        atomId: 'IA-001',
+        description: 'Original',
+        category: 'functional',
+        status: 'committed',
+        tags: ['old-tag'],
+        observableOutcomes: ['old-outcome'],
+        falsifiabilityCriteria: ['old-criteria'],
+        supersededBy: null,
+      };
+
+      mockAtomRepository.findOne.mockResolvedValueOnce(originalAtom).mockResolvedValueOnce(null);
+
+      mockAtomRepository.create.mockImplementation((data) => ({
+        id: 'new-uuid',
+        atomId: 'IA-002',
+        ...data,
+        status: 'draft',
+      }));
+
+      mockAtomRepository.save.mockImplementation((atom) => Promise.resolve(atom));
+
+      const result = await service.supersedeWithNewAtom('original-uuid', {
+        newDescription: 'New description',
+        category: 'performance',
+        tags: ['new-tag'],
+        observableOutcomes: [{ description: 'new-outcome' }],
+        falsifiabilityCriteria: [{ condition: 'new-condition', expectedBehavior: 'new-behavior' }],
+      });
+
+      // INV-004: New atom must use provided category
+      expect(result.newAtom.category).toBe('performance');
+      // INV-004: New atom must use provided tags
+      expect(result.newAtom.tags).toEqual(['new-tag']);
+    });
+
+    // @atom INV-004 - Include supersession reason in message
+    it('should include supersession reason in result message when provided', async () => {
+      const originalAtom = {
+        id: 'original-uuid',
+        atomId: 'IA-001',
+        description: 'Original',
+        category: 'functional',
+        status: 'committed',
+        tags: [],
+        observableOutcomes: [],
+        falsifiabilityCriteria: [],
+        supersededBy: null,
+      };
+
+      mockAtomRepository.findOne.mockResolvedValueOnce(originalAtom).mockResolvedValueOnce(null);
+
+      mockAtomRepository.create.mockReturnValue({
+        id: 'new-uuid',
+        atomId: 'IA-002',
+        description: 'Updated',
+        status: 'draft',
+      });
+
+      mockAtomRepository.save.mockImplementation((atom) => Promise.resolve(atom));
+
+      const result = await service.supersedeWithNewAtom('original-uuid', {
+        newDescription: 'Updated description',
+        supersessionReason: 'Fixed performance constraint',
+      });
+
+      // INV-004: Message must include supersession reason
+      expect(result.message).toContain('Fixed performance constraint');
+    });
+
+    // @atom INV-004 - Link new atom to original as parent
+    it('should set original atom as parentIntent of new atom', async () => {
+      const originalAtom = {
+        id: 'original-uuid',
+        atomId: 'IA-001',
+        description: 'Original',
+        category: 'functional',
+        status: 'committed',
+        tags: [],
+        observableOutcomes: [],
+        falsifiabilityCriteria: [],
+        supersededBy: null,
+      };
+
+      mockAtomRepository.findOne.mockResolvedValueOnce(originalAtom).mockResolvedValueOnce(null);
+
+      let capturedCreateData: any;
+      mockAtomRepository.create.mockImplementation((data) => {
+        capturedCreateData = data;
+        return {
+          id: 'new-uuid',
+          atomId: 'IA-002',
+          ...data,
+          status: 'draft',
+        };
+      });
+
+      mockAtomRepository.save.mockImplementation((atom) => Promise.resolve(atom));
+
+      await service.supersedeWithNewAtom('original-uuid', {
+        newDescription: 'Updated description',
+      });
+
+      // INV-004: New atom must have original as parent
+      expect(capturedCreateData.parentIntent).toBe('original-uuid');
+    });
+  });
 });

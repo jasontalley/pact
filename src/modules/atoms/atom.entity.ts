@@ -1,4 +1,5 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, OneToMany } from 'typeorm';
+import type { Validator } from '../validators/validator.entity';
 
 /**
  * Atom status represents the lifecycle state of an Intent Atom
@@ -127,4 +128,11 @@ export class Atom {
    */
   @Column('jsonb', { default: [] })
   refinementHistory: RefinementRecord[];
+
+  /**
+   * Validators associated with this atom
+   * Phase 2: Validators give Intent Atoms testable, enforceable meaning
+   */
+  @OneToMany('Validator', 'atom')
+  validators: Validator[];
 }

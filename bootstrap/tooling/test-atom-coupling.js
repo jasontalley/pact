@@ -38,6 +38,28 @@ function main() {
   const result = analyzeCoupling(testDirectory);
   printReport(result);
 
+  // Write JSON report
+  const reportPath = 'test-results/quality/coupling-report.json';
+  const reportDir = path.dirname(reportPath);
+  if (!fs.existsSync(reportDir)) {
+    fs.mkdirSync(reportDir, { recursive: true });
+  }
+  fs.writeFileSync(
+    reportPath,
+    JSON.stringify(
+      {
+        timestamp: new Date().toISOString(),
+        testDirectory,
+        summary: result.summary,
+        orphanTests: result.orphanTests,
+        passesGate: result.passesGate,
+      },
+      null,
+      2
+    )
+  );
+  console.log(`\nJSON report written: ${reportPath}`);
+
   if (!result.passesGate) {
     if (warnOnly) {
       console.log(`\n${colors.yellow}WARNING: Coupling check would fail but --warn-only is set${colors.reset}`);

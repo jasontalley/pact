@@ -123,7 +123,9 @@ Minimum thresholds (enforced by CI):
 npm run test:cov
 ```
 
-Report location: `./coverage/lcov-report/index.html`
+**Report locations**:
+- Backend unit coverage: `test-results/backend/unit/coverage/lcov-report/index.html`
+- Frontend unit coverage: `test-results/frontend/unit/coverage/index.html`
 
 ## CI/CD Integration
 
@@ -220,8 +222,32 @@ Common with Redis/database connections. This is a warning, not an error. To inve
 npm test -- --detectOpenHandles
 ```
 
+## Test Results
+
+All test execution results are centralized in the `test-results/` directory at the repo root for easy discovery:
+
+```
+test-results/
+├── backend/
+│   ├── unit/coverage/      # Backend unit test coverage
+│   └── e2e/reports/        # Backend E2E test reports
+├── frontend/
+│   ├── unit/coverage/      # Frontend unit test coverage
+│   └── e2e/                # Frontend E2E results (Playwright)
+├── quality/                # Test quality & coupling reports
+└── analysis/               # Brownfield analysis reports
+```
+
+**Viewing reports**:
+- Coverage: Open HTML files in `test-results/*/unit/coverage/`
+- E2E results: `npx playwright show-report test-results/frontend/e2e/html-report`
+- Quality reports: `open test-results/quality/quality-report.html`
+
+See [test-results/README.md](test-results/README.md) for detailed navigation guide.
+
 ## More Information
 
 - [CLAUDE.md](CLAUDE.md#testing-standards) - Full testing standards
 - [scripts/README.md](scripts/README.md) - Script documentation
 - [ingest/test-quality.md](ingest/test-quality.md) - Quality standards taxonomy
+- [test-results/README.md](test-results/README.md) - Test results directory guide

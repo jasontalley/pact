@@ -378,3 +378,7 @@ fi
 
 echo ""
 echo -e "${BLUE}=== Test run complete ===${NC}"
+echo ""
+echo -e "${CYAN}Test results are available in:${NC}"
+echo -e "  ${YELLOW}test-results/${NC}"
+echo -e "  See ${YELLOW}test-results/README.md${NC} for navigation guide"

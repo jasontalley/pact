@@ -24,7 +24,8 @@ socket.on('disconnect', (reason) => {
 });
 
 socket.on('connect_error', (error) => {
-  console.error('[Socket] Connection error:', error.message);
+  // Use warn instead of error to reduce noise when backend is down
+  console.warn('[Socket] Connection error (is the backend running?):', error.message);
 });
 
 /**
