@@ -24,7 +24,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { ProviderRegistry } from '../../common/llm/providers/provider-registry';
-import { LLMProviderType } from '../../common/llm/providers/types';
+import { LLMProviderType, AgentTaskType } from '../../common/llm/providers/types';
 import { LLMConfiguration } from './llm-configuration.entity';
 import { LLMUsageTracking } from './llm-usage-tracking.entity';
 import {
@@ -100,9 +100,9 @@ export class LLMAdminController {
 
     if (!config) {
       config = this.configRepository.create({
+        configName: 'default',
         isActive: true,
-        createdAt: new Date(),
-      });
+      } as Partial<LLMConfiguration>);
     }
 
     // Update fields
@@ -154,10 +154,10 @@ export class LLMAdminController {
 
     if (!config) {
       config = this.configRepository.create({
+        configName: 'default',
         isActive: true,
         providerConfigs: {},
-        createdAt: new Date(),
-      });
+      } as Partial<LLMConfiguration>);
     }
 
     // Initialize provider configs if not exists
@@ -216,17 +216,18 @@ export class LLMAdminController {
 
     if (!config) {
       config = this.configRepository.create({
+        configName: 'default',
         isActive: true,
-        budgetConfig: {},
-        createdAt: new Date(),
-      });
+      } as Partial<LLMConfiguration>);
     }
 
     // Initialize budget config if not exists
     if (!config.budgetConfig) {
       config.budgetConfig = {
+        enabled: true,
         dailyLimit: 10,
         monthlyLimit: 100,
+        alertThreshold: 80,
         hardStop: false,
         warningThreshold: 80,
       };
@@ -362,73 +363,73 @@ export class LLMAdminController {
   }
 
   private buildBudgetConfig(config: LLMConfiguration | null): BudgetConfigDto {
-    const stored = config?.budgetConfig || {};
+    const stored = config?.budgetConfig;
 
     return {
-      dailyLimitUsd: stored.dailyLimit ?? 10,
-      monthlyLimitUsd: stored.monthlyLimit ?? 100,
-      hardStopEnabled: stored.hardStop ?? false,
-      warningThresholdPercent: stored.warningThreshold ?? 80,
-      alertEmail: stored.alertEmail,
+      dailyLimitUsd: stored?.dailyLimit ?? 10,
+      monthlyLimitUsd: stored?.monthlyLimit ?? 100,
+      hardStopEnabled: stored?.hardStop ?? false,
+      warningThresholdPercent: stored?.warningThreshold ?? 80,
+      alertEmail: stored?.alertEmail,
     };
   }
 
   private getDefaultModelPreferences() {
     return [
       {
-        taskType: 'atomization' as const,
-        preferredProvider: 'anthropic' as const,
+        taskType: AgentTaskType.ATOMIZATION,
+        preferredProvider: 'anthropic' as LLMProviderType,
         preferredModel: 'claude-sonnet-4-5-20250514',
-        fallbackProvider: 'openai' as const,
+        fallbackProvider: 'openai' as LLMProviderType,
         fallbackModel: 'gpt-5-mini',
       },
       {
-        taskType: 'refinement' as const,
-        preferredProvider: 'anthropic' as const,
+        taskType: AgentTaskType.REFINEMENT,
+        preferredProvider: 'anthropic' as LLMProviderType,
         preferredModel: 'claude-haiku-4-5-20250514',
-        fallbackProvider: 'openai' as const,
+        fallbackProvider: 'openai' as LLMProviderType,
         fallbackModel: 'gpt-5-nano',
       },
       {
-        taskType: 'translation' as const,
-        preferredProvider: 'ollama' as const,
+        taskType: AgentTaskType.TRANSLATION,
+        preferredProvider: 'ollama' as LLMProviderType,
         preferredModel: 'llama3.2',
-        fallbackProvider: 'anthropic' as const,
+        fallbackProvider: 'anthropic' as LLMProviderType,
         fallbackModel: 'claude-haiku-4-5-20250514',
       },
       {
-        taskType: 'analysis' as const,
-        preferredProvider: 'anthropic' as const,
+        taskType: AgentTaskType.ANALYSIS,
+        preferredProvider: 'anthropic' as LLMProviderType,
         preferredModel: 'claude-sonnet-4-5-20250514',
-        fallbackProvider: 'openai' as const,
+        fallbackProvider: 'openai' as LLMProviderType,
         fallbackModel: 'gpt-5.2',
       },
       {
-        taskType: 'chat' as const,
-        preferredProvider: 'anthropic' as const,
+        taskType: AgentTaskType.CHAT,
+        preferredProvider: 'anthropic' as LLMProviderType,
         preferredModel: 'claude-haiku-4-5-20250514',
-        fallbackProvider: 'openai' as const,
+        fallbackProvider: 'openai' as LLMProviderType,
         fallbackModel: 'gpt-5-nano',
       },
       {
-        taskType: 'code_generation' as const,
-        preferredProvider: 'ollama' as const,
+        taskType: AgentTaskType.CODE_GENERATION,
+        preferredProvider: 'ollama' as LLMProviderType,
         preferredModel: 'llama3.2',
-        fallbackProvider: 'openai' as const,
+        fallbackProvider: 'openai' as LLMProviderType,
         fallbackModel: 'gpt-5-nano',
       },
       {
-        taskType: 'summarization' as const,
-        preferredProvider: 'openai' as const,
+        taskType: AgentTaskType.SUMMARIZATION,
+        preferredProvider: 'openai' as LLMProviderType,
         preferredModel: 'gpt-5-nano',
-        fallbackProvider: 'ollama' as const,
+        fallbackProvider: 'ollama' as LLMProviderType,
         fallbackModel: 'llama3.2',
       },
       {
-        taskType: 'classification' as const,
-        preferredProvider: 'openai' as const,
+        taskType: AgentTaskType.CLASSIFICATION,
+        preferredProvider: 'openai' as LLMProviderType,
         preferredModel: 'gpt-5-nano',
-        fallbackProvider: 'ollama' as const,
+        fallbackProvider: 'ollama' as LLMProviderType,
         fallbackModel: 'llama3.2',
       },
     ];

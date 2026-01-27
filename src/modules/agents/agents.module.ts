@@ -14,12 +14,14 @@ import { CommitmentAgentService } from './commitment-agent.service';
 import { ContextBuilderService } from './context-builder.service';
 import { Atom } from '../atoms/atom.entity';
 import { AgentAction } from './agent-action.entity';
+import { AtomsModule } from '../atoms/atoms.module';
 import { CommitmentsModule } from '../commitments/commitments.module';
 import { InvariantsModule } from '../invariants/invariants.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Atom, AgentAction]),
+    forwardRef(() => AtomsModule),
     forwardRef(() => CommitmentsModule),
     InvariantsModule,
   ],

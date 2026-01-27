@@ -372,8 +372,8 @@ export class ChatAgentService {
 
       switch (toolCall.name) {
         case 'analyze_intent':
-          result = await this.atomizationService.atomizeIntent({
-            intent: toolCall.arguments.intent as string,
+          result = await this.atomizationService.atomize({
+            intentDescription: toolCall.arguments.intent as string,
           });
           break;
 
