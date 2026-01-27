@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module, forwardRef, OnModuleInit } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AtomizationController } from './atomization.controller';
 import { AtomizationService } from './atomization.service';
@@ -17,6 +17,9 @@ import { AgentAction } from './agent-action.entity';
 import { AtomsModule } from '../atoms/atoms.module';
 import { CommitmentsModule } from '../commitments/commitments.module';
 import { InvariantsModule } from '../invariants/invariants.module';
+import { ToolRegistryService } from './tools/tool-registry.service';
+import { AtomToolsService } from './tools/atom-tools.service';
+import { ATOM_TOOLS } from './tools/atom-tools.definitions';
 
 @Module({
   imports: [
@@ -36,6 +39,8 @@ import { InvariantsModule } from '../invariants/invariants.module';
     AtomicityCheckerService,
     IntentRefinementService,
     CommitmentAgentService,
+    ToolRegistryService,
+    AtomToolsService,
   ],
   exports: [
     AtomizationService,
@@ -46,6 +51,19 @@ import { InvariantsModule } from '../invariants/invariants.module';
     AtomicityCheckerService,
     IntentRefinementService,
     CommitmentAgentService,
+    ToolRegistryService,
   ],
 })
-export class AgentsModule {}
+export class AgentsModule implements OnModuleInit {
+  constructor(
+    private readonly toolRegistry: ToolRegistryService,
+    private readonly atomTools: AtomToolsService,
+  ) {}
+
+  onModuleInit() {
+    // Register all atom tools with the registry
+    for (const toolDef of ATOM_TOOLS) {
+      this.toolRegistry.registerTool(toolDef, this.atomTools);
+    }
+  }
+}

@@ -6,8 +6,17 @@
  */
 
 import { ChatOpenAI } from '@langchain/openai';
-import { BaseMessage, HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
+import {
+  BaseMessage,
+  HumanMessage,
+  SystemMessage,
+  AIMessage,
+  ToolMessage,
+} from '@langchain/core/messages';
 import { LangChainTracer } from '@langchain/core/tracers/tracer_langchain';
+import { StructuredTool } from '@langchain/core/tools';
+import { DynamicStructuredTool } from '@langchain/core/tools';
+import { z } from 'zod';
 
 import { BaseLLMProvider } from './base.provider';
 import {
@@ -16,6 +25,8 @@ import {
   ProviderRequest,
   ProviderResponse,
   ModelCapabilities,
+  ToolDefinition,
+  ToolCall,
 } from './types';
 
 /**
@@ -162,6 +173,9 @@ export class OpenAIProvider extends BaseLLMProvider {
 
   /**
    * Check if OpenAI API is available
+   *
+   * Uses the lightweight /v1/models endpoint instead of making an actual
+   * LLM call to avoid consuming tokens and reduce latency.
    */
   protected async checkAvailability(): Promise<boolean> {
     const apiKey = this.openaiConfig.apiKey || process.env.OPENAI_API_KEY;
@@ -170,16 +184,23 @@ export class OpenAIProvider extends BaseLLMProvider {
     }
 
     try {
-      // Create a minimal test client
-      const testClient = new ChatOpenAI({
-        modelName: this.defaultModel,
-        openAIApiKey: apiKey,
-        maxTokens: 5,
+      // Use the /v1/models endpoint - no tokens consumed, fast response
+      const response = await fetch('https://api.openai.com/v1/models', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+        signal: AbortSignal.timeout(5000),
       });
 
-      // Make a minimal test call
-      await testClient.invoke([new HumanMessage('Hi')]);
-      return true;
+      if (!response.ok) {
+        this.logger.warn(`OpenAI availability check failed: HTTP ${response.status}`);
+        return false;
+      }
+
+      // Verify we can parse the response and it has models
+      const data = await response.json();
+      return Array.isArray(data.data) && data.data.length > 0;
     } catch (error) {
       this.logger.warn(`OpenAI availability check failed: ${error.message}`);
       return false;
@@ -200,7 +221,8 @@ export class OpenAIProvider extends BaseLLMProvider {
       throw new Error('OpenAI API key not configured');
     }
 
-    // Determine if model has restrictions (gpt-5-nano has limited options)
+    // Determine if this is a GPT-5 model (requires max_completion_tokens instead of max_tokens)
+    const isGPT5Model = model.startsWith('gpt-5');
     const isNanoModel = model === 'gpt-5-nano';
     const supportsReasoningEffort = capabilities?.supportsReasoningEffort || false;
 
@@ -211,8 +233,26 @@ export class OpenAIProvider extends BaseLLMProvider {
       timeout: request.options?.timeout || this.config.timeout || 30000,
     };
 
-    // Add temperature and maxTokens only if model supports them
-    if (!isNanoModel) {
+    // GPT-5 models require max_completion_tokens instead of max_tokens
+    // and nano model has limited temperature support
+    if (isGPT5Model) {
+      // GPT-5 models use max_completion_tokens via modelKwargs
+      const maxTokens = request.options?.maxTokens || this.config.defaultMaxTokens || 4096;
+      modelOptions.modelKwargs = {
+        ...((modelOptions.modelKwargs as Record<string, unknown>) || {}),
+        max_completion_tokens: maxTokens,
+      };
+
+      // Only add temperature for non-nano models
+      if (!isNanoModel) {
+        if (request.options?.temperature !== undefined) {
+          modelOptions.temperature = request.options.temperature;
+        } else if (this.config.defaultTemperature !== undefined) {
+          modelOptions.temperature = this.config.defaultTemperature;
+        }
+      }
+    } else {
+      // Legacy models use standard maxTokens parameter
       if (request.options?.temperature !== undefined) {
         modelOptions.temperature = request.options.temperature;
       } else if (this.config.defaultTemperature !== undefined) {
@@ -244,13 +284,35 @@ export class OpenAIProvider extends BaseLLMProvider {
     // Create client for this request
     const client = new ChatOpenAI(modelOptions);
 
+    // Convert tools to LangChain format and bind to client
+    let boundClient = client;
+    if (request.tools && request.tools.length > 0) {
+      const langchainTools = this.convertToolsToLangChain(request.tools);
+      boundClient = client.bindTools(langchainTools) as ChatOpenAI;
+    }
+
     // Convert messages to LangChain format
     const messages: BaseMessage[] = request.messages.map((msg) => {
       switch (msg.role) {
         case 'system':
           return new SystemMessage(msg.content);
-        case 'assistant':
-          return new AIMessage(msg.content);
+        case 'assistant': {
+          const aiMsg = new AIMessage(msg.content);
+          // Add tool calls if present
+          if (msg.toolCalls && msg.toolCalls.length > 0) {
+            (aiMsg as any).tool_calls = msg.toolCalls.map((tc) => ({
+              id: tc.id,
+              name: tc.name,
+              args: tc.arguments,
+            }));
+          }
+          return aiMsg;
+        }
+        case 'tool':
+          return new ToolMessage({
+            content: msg.content,
+            tool_call_id: msg.toolCallId || '',
+          });
         case 'user':
         default:
           return new HumanMessage(msg.content);
@@ -261,7 +323,7 @@ export class OpenAIProvider extends BaseLLMProvider {
     const callbacks = this.tracer ? [this.tracer] : [];
 
     // Invoke the model
-    const response = await client.invoke(messages, {
+    const response = await boundClient.invoke(messages, {
       callbacks,
       runName: request.metadata?.agentName || 'openai-call',
       metadata: {
@@ -287,6 +349,18 @@ export class OpenAIProvider extends BaseLLMProvider {
     const outputTokens = (response as any).response_metadata?.tokenUsage?.completionTokens || 0;
     const finishReason = (response as any).response_metadata?.finish_reason;
 
+    // Extract tool calls from response
+    const toolCalls: ToolCall[] = [];
+    if ((response as any).tool_calls) {
+      for (const tc of (response as any).tool_calls) {
+        toolCalls.push({
+          id: tc.id,
+          name: tc.name,
+          arguments: tc.args || {},
+        });
+      }
+    }
+
     return {
       content: response.content as string,
       usage: {
@@ -298,8 +372,61 @@ export class OpenAIProvider extends BaseLLMProvider {
       providerUsed: 'openai',
       latencyMs: 0, // Will be set by base class
       finishReason,
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       rawResponse: response,
     };
+  }
+
+  /**
+   * Convert ToolDefinition to LangChain StructuredTool
+   */
+  private convertToolsToLangChain(tools: ToolDefinition[]): any[] {
+    const result: any[] = [];
+
+    for (const tool of tools) {
+      // Convert parameters to Zod schema
+      const zodSchema: Record<string, z.ZodTypeAny> = {};
+      for (const [key, param] of Object.entries(tool.parameters.properties)) {
+        switch (param.type) {
+          case 'string':
+            zodSchema[key] = param.enum
+              ? z.enum(param.enum as [string, ...string[]])
+              : z.string().describe(param.description || '');
+            break;
+          case 'number':
+            zodSchema[key] = z.number().describe(param.description || '');
+            break;
+          case 'boolean':
+            zodSchema[key] = z.boolean().describe(param.description || '');
+            break;
+          case 'array':
+            zodSchema[key] = z.array(z.any()).describe(param.description || '');
+            break;
+          case 'object':
+            zodSchema[key] = z.record(z.any()).describe(param.description || '');
+            break;
+          default:
+            zodSchema[key] = z.any().describe(param.description || '');
+        }
+      }
+
+      const schema = z.object(zodSchema);
+
+      // @ts-expect-error - Type instantiation is too deep, but this works at runtime
+      const langchainTool = new DynamicStructuredTool({
+        name: tool.name,
+        description: tool.description,
+        schema,
+        func: async () => {
+          // This is a placeholder - actual execution happens in chat-agent.service
+          throw new Error('Tool execution should be handled by chat-agent service');
+        },
+      });
+
+      result.push(langchainTool);
+    }
+
+    return result;
   }
 
   /**

@@ -15,19 +15,23 @@ export const apiClient = axios.create({
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError<{ message?: string; statusCode?: number }>) => {
-    // Extract error message from response
-    const message = error.response?.data?.message || error.message;
+    // Extract error details explicitly (Axios errors have non-enumerable properties)
+    const url = error.config?.url || 'unknown';
+    const method = error.config?.method?.toUpperCase() || 'unknown';
+    const status = error.response?.status;
+    const message = error.response?.data?.message || error.message || 'Unknown error';
 
     // Use warn for network errors (backend down), error for actual API errors
     const isNetworkError = !error.response && error.code === 'ERR_NETWORK';
     const logMethod = isNetworkError ? console.warn : console.error;
 
-    logMethod('[API Error]', {
-      url: error.config?.url,
-      method: error.config?.method,
-      status: error.response?.status,
-      message: isNetworkError ? 'Network error (is the backend running?)' : message,
-    });
+    // Log with explicit string formatting to avoid empty object issue
+    const errorMessage = isNetworkError
+      ? `Network error (is the backend running at ${API_URL}?)`
+      : message;
+
+    logMethod(`[API Error] ${method} ${url} - ${status || 'no status'}: ${errorMessage}`);
+
     return Promise.reject(error);
   }
 );

@@ -39,7 +39,12 @@ import { ModelRouter, RoutingOptions, BudgetMode, RoutingDecision } from './rout
  * Extended LLM Request with routing options
  */
 export interface LLMRequest {
-  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+  messages: Array<{
+    role: 'system' | 'user' | 'assistant' | 'tool';
+    content: string;
+    toolCalls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
+    toolCallId?: string;
+  }>;
   agentName?: string;
   purpose?: string;
   temperature?: number;
@@ -54,6 +59,8 @@ export interface LLMRequest {
   maxCost?: number;
   // GPT-5.2 specific
   reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+  // Function calling
+  tools?: import('./providers/types').ToolDefinition[];
 }
 
 export interface LLMResponse {
@@ -73,6 +80,8 @@ export interface LLMResponse {
     reason: string;
     fallbacksAvailable: number;
   };
+  // Function calling
+  toolCalls?: import('./providers/types').ToolCall[];
 }
 
 export class BudgetExceededError extends Error {
@@ -482,8 +491,9 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
 
     // Build provider request
     const providerRequest: ProviderRequest = {
-      messages: request.messages,
+      messages: this.convertMessages(request.messages),
       model: decision.model,
+      tools: request.tools,
       options: {
         temperature: request.temperature,
         maxTokens: request.maxTokens,
@@ -529,6 +539,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
         reason: decision.reason,
         fallbacksAvailable: decision.fallbacks.length,
       },
+      toolCalls: response.toolCalls,
     };
   }
 
@@ -619,8 +630,9 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
     }
 
     const providerRequest: ProviderRequest = {
-      messages: request.messages,
+      messages: this.convertMessages(request.messages),
       model: this.config.primaryModel.modelName,
+      tools: request.tools,
       options: {
         temperature: request.temperature ?? this.config.primaryModel.temperature,
         maxTokens: request.maxTokens ?? this.config.primaryModel.maxTokens,
@@ -651,6 +663,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
       cacheHit: false,
       retryCount,
       modelUsed: response.modelUsed,
+      toolCalls: response.toolCalls,
       providerUsed: response.providerUsed,
     };
   }
@@ -831,6 +844,20 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
     budgetMode?: BudgetMode,
   ) {
     return this.modelRouter?.estimateTaskCost(taskType, inputTokens, outputTokens, budgetMode);
+  }
+
+  /**
+   * Convert LLMRequest messages to ProviderMessage format
+   */
+  private convertMessages(
+    messages: LLMRequest['messages'],
+  ): import('./providers/types').ProviderMessage[] {
+    return messages.map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+      toolCalls: msg.toolCalls,
+      toolCallId: msg.toolCallId,
+    }));
   }
 
   /**

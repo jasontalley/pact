@@ -27,7 +27,36 @@ export enum AgentTaskType {
 /**
  * Message role types (normalized across providers)
  */
-export type MessageRole = 'system' | 'user' | 'assistant';
+export type MessageRole = 'system' | 'user' | 'assistant' | 'tool';
+
+/**
+ * Tool/function definition for function calling
+ */
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  parameters: {
+    type: 'object';
+    properties: Record<
+      string,
+      {
+        type: string;
+        description?: string;
+        enum?: string[];
+      }
+    >;
+    required?: string[];
+  };
+}
+
+/**
+ * Tool call from LLM response
+ */
+export interface ToolCall {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+}
 
 /**
  * Normalized message format for provider requests
@@ -35,6 +64,10 @@ export type MessageRole = 'system' | 'user' | 'assistant';
 export interface ProviderMessage {
   role: MessageRole;
   content: string;
+  /** Tool calls made by assistant (for assistant messages) */
+  toolCalls?: ToolCall[];
+  /** Tool call ID (for tool messages) */
+  toolCallId?: string;
 }
 
 /**
@@ -67,6 +100,8 @@ export interface ProviderRequest {
   model?: string;
   /** Request options */
   options?: ProviderRequestOptions;
+  /** Tools/functions available for the LLM to call */
+  tools?: ToolDefinition[];
   /** Metadata for tracing/logging */
   metadata?: {
     requestId?: string;
@@ -103,6 +138,8 @@ export interface ProviderResponse {
   rawResponse?: unknown;
   /** Finish reason from provider */
   finishReason?: 'stop' | 'length' | 'content_filter' | 'tool_calls' | string;
+  /** Tool calls made by the LLM (if any) */
+  toolCalls?: ToolCall[];
 }
 
 /**

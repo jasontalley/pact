@@ -7,25 +7,10 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-import { LLMService } from '../../common/llm/llm.service';
+import { LLMService, LLMRequest } from '../../common/llm/llm.service';
 import { AgentTaskType } from '../../common/llm/providers/types';
-import { AtomizationService } from './atomization.service';
-import { IntentRefinementService } from './intent-refinement.service';
-import { AtomsService } from '../atoms/atoms.service';
 import { ChatRequestDto, ChatResponseDto, ToolCallDto, ToolResultDto } from './dto/chat-agent.dto';
-
-/**
- * Tool definition for the chat agent
- */
-interface AgentTool {
-  name: string;
-  description: string;
-  parameters: {
-    type: 'object';
-    properties: Record<string, { type: string; description: string }>;
-    required?: string[];
-  };
-}
+import { ToolRegistryService } from './tools/tool-registry.service';
 
 /**
  * Chat session for maintaining conversation context
@@ -39,111 +24,20 @@ interface ChatSession {
 }
 
 /**
- * Available tools for the chat agent
+ * System prompt for the chat agent (dynamically includes available tools)
  */
-const AGENT_TOOLS: AgentTool[] = [
-  {
-    name: 'analyze_intent',
-    description: 'Analyze raw intent text for atomicity and suggest improvements',
-    parameters: {
-      type: 'object',
-      properties: {
-        intent: {
-          type: 'string',
-          description: 'The raw intent text to analyze',
-        },
-      },
-      required: ['intent'],
-    },
-  },
-  {
-    name: 'search_atoms',
-    description: 'Search for existing atoms by description, tags, or category',
-    parameters: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'Search query (description keywords)',
-        },
-        category: {
-          type: 'string',
-          description: 'Filter by category (functional, security, performance, etc.)',
-        },
-        status: {
-          type: 'string',
-          description: 'Filter by status (draft, committed, superseded)',
-        },
-      },
-    },
-  },
-  {
-    name: 'get_atom',
-    description: 'Get details of a specific atom by ID or atom ID',
-    parameters: {
-      type: 'object',
-      properties: {
-        atomId: {
-          type: 'string',
-          description: 'The atom ID (e.g., IA-001) or UUID',
-        },
-      },
-      required: ['atomId'],
-    },
-  },
-  {
-    name: 'refine_atom',
-    description: 'Get refinement suggestions for an atom to improve its quality',
-    parameters: {
-      type: 'object',
-      properties: {
-        atomId: {
-          type: 'string',
-          description: 'The atom ID to refine',
-        },
-        feedback: {
-          type: 'string',
-          description: 'Optional feedback to guide refinement',
-        },
-      },
-      required: ['atomId'],
-    },
-  },
-  {
-    name: 'create_atom',
-    description: 'Create a new draft atom from a refined description',
-    parameters: {
-      type: 'object',
-      properties: {
-        description: {
-          type: 'string',
-          description: 'The atom description',
-        },
-        category: {
-          type: 'string',
-          description:
-            'Atom category (functional, security, performance, reliability, usability, maintainability)',
-        },
-        tags: {
-          type: 'string',
-          description: 'Comma-separated tags',
-        },
-      },
-      required: ['description', 'category'],
-    },
-  },
-];
-
-/**
- * System prompt for the chat agent
- */
-const SYSTEM_PROMPT = `You are Pact Assistant, a helpful AI that helps users manage intent atoms and validators for the Pact requirement management system.
+const getSystemPrompt = (
+  availableTools: string[],
+): string => `You are Pact Assistant, a helpful AI that helps users manage intent atoms and validators for the Pact requirement management system.
 
 Your capabilities:
 - Analyze raw intent descriptions for atomicity (testable, indivisible behaviors)
-- Search and retrieve existing atoms
+- Search, list, and retrieve existing atoms
+- Get statistics and counts about atoms
 - Suggest improvements to atom quality
-- Create new atoms from refined descriptions
+- Create, update, commit, and delete atoms
+- Read and explore files in the codebase
+- Search for code patterns and text
 - Help users understand the Pact workflow
 
 Key concepts:
@@ -152,12 +46,21 @@ Key concepts:
 - Commitment: Making an atom immutable (requires quality score >= 80)
 - Supersession: Replacing a committed atom with an updated version
 
+Available tools: ${availableTools.join(', ')}
+
 When users ask you to do something:
-1. Use the appropriate tool if one matches their request
-2. Provide clear, helpful explanations
+1. Use the appropriate tool(s) to get the information you need
+2. Provide clear, helpful explanations based on tool results
 3. Suggest follow-up actions when relevant
 
-Always be concise but thorough. If you're unsure about something, ask for clarification.`;
+Always use tools when you need data. For example:
+- "How many atoms?" → use count_atoms
+- "Show me atoms about authentication" → use search_atoms with query "authentication"
+- "What's the status of IA-001?" → use get_atom with atomId "IA-001"
+- "Show me the chat-agent.service.ts file" → use read_file with file_path "src/modules/agents/chat-agent.service.ts"
+- "Search for AtomsService" → use grep with pattern "AtomsService"
+
+Be concise but thorough. If you're unsure about something, ask for clarification.`;
 
 @Injectable()
 export class ChatAgentService {
@@ -169,9 +72,7 @@ export class ChatAgentService {
 
   constructor(
     private readonly llmService: LLMService,
-    private readonly atomizationService: AtomizationService,
-    private readonly refinementService: IntentRefinementService,
-    private readonly atomsService: AtomsService,
+    private readonly toolRegistry: ToolRegistryService,
   ) {
     // Cleanup old sessions periodically
     setInterval(() => this.cleanupSessions(), 5 * 60 * 1000);
@@ -193,51 +94,132 @@ export class ChatAgentService {
     this.logger.log(`Chat request in session ${session.id}: ${request.message.slice(0, 50)}...`);
 
     try {
+      // Get all available tools from registry
+      const availableTools = this.toolRegistry.getAllTools();
+      const toolNames = availableTools.map((t) => t.name);
+
       // Build messages for LLM
-      const messages = [{ role: 'system' as const, content: SYSTEM_PROMPT }, ...session.messages];
+      const messages = [
+        { role: 'system' as const, content: getSystemPrompt(toolNames) },
+        ...session.messages,
+      ];
 
       // Call LLM with tools
       const response = await this.llmService.invoke({
         messages,
+        tools: availableTools,
         taskType: AgentTaskType.CHAT,
         agentName: 'chat-agent',
         purpose: 'conversational-interface',
         temperature: 0.7,
       });
 
-      // Parse response for tool calls
-      const { text, toolCalls } = this.parseResponse(response.content);
+      // Get tool calls from response (if any)
+      const toolCalls: ToolCallDto[] = (response.toolCalls || []).map((tc) => ({
+        id: tc.id,
+        name: tc.name,
+        arguments: tc.arguments,
+      }));
+      const text = response.content;
 
       // Execute tool calls if any
       const toolResults: ToolResultDto[] = [];
       let finalText = text;
+      let needsFollowUp = false;
 
       if (toolCalls.length > 0) {
+        // Execute all tool calls
         for (const toolCall of toolCalls) {
           const result = await this.executeTool(toolCall);
           toolResults.push(result);
         }
 
-        // If we had tool calls, generate a follow-up response
-        if (toolResults.length > 0) {
-          const followUpMessages = [
-            ...messages,
-            { role: 'assistant' as const, content: response.content },
+        // Build follow-up messages with tool results
+        const followUpMessages: LLMRequest['messages'] = [
+          ...messages,
+          {
+            role: 'assistant' as const,
+            content: text || '',
+            toolCalls: toolCalls.map((tc) => ({
+              id: tc.id,
+              name: tc.name,
+              arguments: tc.arguments,
+            })),
+          },
+        ];
+
+        // Add tool result messages
+        for (const result of toolResults) {
+          followUpMessages.push({
+            role: 'tool' as const,
+            content: result.success
+              ? JSON.stringify(result.result)
+              : `Error: ${typeof result.result === 'string' ? result.result : JSON.stringify(result.result)}`,
+            toolCallId: result.toolCallId,
+          });
+        }
+
+        // Generate follow-up response with tool results
+        const followUpResponse = await this.llmService.invoke({
+          messages: followUpMessages,
+          tools: availableTools,
+          taskType: AgentTaskType.CHAT,
+          agentName: 'chat-agent',
+          purpose: 'tool-result-summary',
+          temperature: 0.7,
+        });
+
+        finalText = followUpResponse.content;
+        needsFollowUp = true;
+
+        // Handle additional tool calls in follow-up if needed
+        if (followUpResponse.toolCalls && followUpResponse.toolCalls.length > 0) {
+          // Recursively handle tool calls (limit recursion depth)
+          const additionalToolCalls = followUpResponse.toolCalls.map((tc) => ({
+            id: tc.id,
+            name: tc.name,
+            arguments: tc.arguments,
+          }));
+
+          for (const toolCall of additionalToolCalls) {
+            const result = await this.executeTool(toolCall);
+            toolResults.push(result);
+          }
+
+          // One more follow-up for nested tool calls
+          const nestedMessages: LLMRequest['messages'] = [
+            ...followUpMessages,
             {
-              role: 'user' as const,
-              content: `Tool results:\n${toolResults.map((r) => `${r.name}: ${r.success ? JSON.stringify(r.result) : 'Failed - ' + r.result}`).join('\n')}\n\nPlease summarize the results for the user.`,
+              role: 'assistant' as const,
+              content: followUpResponse.content,
+              toolCalls: additionalToolCalls.map((tc) => ({
+                id: tc.id,
+                name: tc.name,
+                arguments: tc.arguments,
+              })),
             },
           ];
 
-          const followUpResponse = await this.llmService.invoke({
-            messages: followUpMessages,
+          for (const result of toolResults.slice(toolCalls.length)) {
+            nestedMessages.push({
+              role: 'tool' as const,
+              content: result.success
+                ? JSON.stringify(result.result)
+                : `Error: ${typeof result.result === 'string' ? result.result : JSON.stringify(result.result)}`,
+              toolCallId: result.toolCallId,
+            });
+          }
+
+          const finalResponse = await this.llmService.invoke({
+            messages: nestedMessages,
+            tools: availableTools,
             taskType: AgentTaskType.CHAT,
             agentName: 'chat-agent',
-            purpose: 'tool-result-summary',
+            purpose: 'final-summary',
             temperature: 0.7,
           });
 
-          finalText = followUpResponse.content;
+          finalText = finalResponse.content;
         }
       }
 
@@ -326,98 +308,13 @@ export class ChatAgentService {
   }
 
   /**
-   * Parse LLM response for tool calls
-   */
-  private parseResponse(content: string): {
-    text: string;
-    toolCalls: ToolCallDto[];
-  } {
-    const toolCalls: ToolCallDto[] = [];
-
-    // Look for tool call patterns in the response
-    // This is a simple implementation - in production, use proper function calling
-    const toolCallPattern = /\[TOOL:(\w+)\]\s*({[^}]+})/g;
-    let match;
-    let cleanedText = content;
-
-    while ((match = toolCallPattern.exec(content)) !== null) {
-      const [fullMatch, toolName, argsJson] = match;
-      try {
-        const args = JSON.parse(argsJson);
-        toolCalls.push({
-          id: uuidv4(),
-          name: toolName,
-          arguments: args,
-        });
-        cleanedText = cleanedText.replace(fullMatch, '');
-      } catch (e) {
-        this.logger.warn(`Failed to parse tool call: ${fullMatch}`);
-      }
-    }
-
-    return {
-      text: cleanedText.trim(),
-      toolCalls,
-    };
-  }
-
-  /**
-   * Execute a tool call
+   * Execute a tool call using the tool registry
    */
   private async executeTool(toolCall: ToolCallDto): Promise<ToolResultDto> {
     this.logger.log(`Executing tool: ${toolCall.name}`);
 
     try {
-      let result: unknown;
-
-      switch (toolCall.name) {
-        case 'analyze_intent':
-          result = await this.atomizationService.atomize({
-            intentDescription: toolCall.arguments.intent as string,
-          });
-          break;
-
-        case 'search_atoms':
-          result = await this.atomsService.findAll({
-            search: toolCall.arguments.query as string,
-            category: toolCall.arguments.category as any,
-            status: toolCall.arguments.status as any,
-            limit: 5,
-          });
-          break;
-
-        case 'get_atom': {
-          const atomId = toolCall.arguments.atomId as string;
-          // Try by atomId first, then by UUID
-          const atoms = await this.atomsService.findAll({
-            search: atomId,
-            limit: 1,
-          });
-          result = atoms.items.length > 0 ? atoms.items[0] : null;
-          break;
-        }
-
-        case 'refine_atom':
-          result = await this.refinementService.suggestRefinements(
-            toolCall.arguments.atomId as string,
-          );
-          break;
-
-        case 'create_atom': {
-          const tags = toolCall.arguments.tags
-            ? (toolCall.arguments.tags as string).split(',').map((t) => t.trim())
-            : [];
-          result = await this.atomsService.create({
-            description: toolCall.arguments.description as string,
-            category: toolCall.arguments.category as any,
-            tags,
-          });
-          break;
-        }
-
-        default:
-          throw new Error(`Unknown tool: ${toolCall.name}`);
-      }
+      const result = await this.toolRegistry.executeTool(toolCall.name, toolCall.arguments);
 
       return {
         toolCallId: toolCall.id,

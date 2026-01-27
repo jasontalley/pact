@@ -33,6 +33,11 @@ export abstract class BaseLLMProvider implements LLMProvider {
   private latencyHistory: number[] = [];
   private readonly maxLatencyHistory = 100;
 
+  // Availability cache to avoid excessive checks
+  private availabilityCachedAt: Date | null = null;
+  private availabilityCacheValue: boolean = false;
+  protected readonly availabilityCacheTtlMs = 5 * 60 * 1000; // 5 minutes default
+
   abstract readonly name: LLMProviderType;
   abstract readonly displayName: string;
   abstract readonly supportedModels: string[];
@@ -86,19 +91,44 @@ export abstract class BaseLLMProvider implements LLMProvider {
   }
 
   /**
-   * Check if provider is available
+   * Check if provider is available (with caching)
+   *
+   * Caches availability status to avoid excessive API calls during
+   * health monitoring (every 60s) and routing decisions.
    */
   async isAvailable(): Promise<boolean> {
+    // Return cached value if still valid
+    if (this.availabilityCachedAt) {
+      const cacheAge = Date.now() - this.availabilityCachedAt.getTime();
+      if (cacheAge < this.availabilityCacheTtlMs) {
+        return this.availabilityCacheValue;
+      }
+    }
+
     try {
       const available = await this.checkAvailability();
       this.healthStatus.available = available;
+      // Update cache
+      this.availabilityCachedAt = new Date();
+      this.availabilityCacheValue = available;
       return available;
     } catch (error) {
       this.healthStatus.available = false;
       this.healthStatus.lastError = error.message;
       this.healthStatus.lastErrorAt = new Date();
+      // Cache the failure too
+      this.availabilityCachedAt = new Date();
+      this.availabilityCacheValue = false;
       return false;
     }
+  }
+
+  /**
+   * Force refresh availability status (bypasses cache)
+   */
+  async refreshAvailability(): Promise<boolean> {
+    this.availabilityCachedAt = null;
+    return this.isAvailable();
   }
 
   /**
@@ -116,6 +146,10 @@ export abstract class BaseLLMProvider implements LLMProvider {
     this.healthStatus.lastSuccessAt = new Date();
     this.healthStatus.lastError = undefined;
     this.healthStatus.lastErrorAt = undefined;
+
+    // Update availability cache - successful invocation proves availability
+    this.availabilityCachedAt = new Date();
+    this.availabilityCacheValue = true;
 
     // Update rolling latency average
     this.latencyHistory.push(latencyMs);

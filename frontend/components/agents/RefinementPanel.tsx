@@ -173,18 +173,19 @@ export function RefinementPanel({ atomId, open, onOpenChange }: RefinementPanelP
       onSuccess: (result) => {
         // Map the response to our suggestion format
         const newSuggestions: typeof suggestions = [];
-        if (result.clarifications) {
-          result.clarifications.forEach((s: string) =>
+        if (result.clarifyingQuestions) {
+          result.clarifyingQuestions.forEach((s: string) =>
             newSuggestions.push({ text: s, type: 'clarification' })
           );
         }
-        if (result.decompositions) {
-          result.decompositions.forEach((s: string) =>
+        if (result.decompositionSuggestions) {
+          result.decompositionSuggestions.forEach((s: string) =>
             newSuggestions.push({ text: s, type: 'decomposition' })
           );
         }
-        if (result.precisions) {
-          result.precisions.forEach((s: string) =>
+        // Precisions are derived from atomicity suggestions
+        if (result.atomicity?.suggestions) {
+          result.atomicity.suggestions.forEach((s: string) =>
             newSuggestions.push({ text: s, type: 'precision' })
           );
         }

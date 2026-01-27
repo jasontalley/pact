@@ -151,6 +151,6 @@ export const validatorsApi = {
     const response = await apiClient.get<PaginatedResponse<Validator>>('/validators', {
       params: { atomId },
     });
-    return response.data.items;
+    return response.data.data;
   },
 };

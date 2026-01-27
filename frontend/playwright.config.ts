@@ -4,13 +4,9 @@ import { fileURLToPath } from 'url';
 
 // Resolve paths relative to this config file's location
 // This config is in frontend/, so we go up one level to get project root
-const __filename = typeof __filename !== 'undefined' 
-  ? __filename 
-  : fileURLToPath(import.meta.url);
-const __dirname = typeof __dirname !== 'undefined'
-  ? __dirname
-  : path.dirname(__filename);
-const projectRoot = path.resolve(__dirname, '..');
+const currentFilename = fileURLToPath(import.meta.url);
+const currentDirname = path.dirname(currentFilename);
+const projectRoot = path.resolve(currentDirname, '..');
 
 /**
  * Playwright E2E test configuration for Pact frontend

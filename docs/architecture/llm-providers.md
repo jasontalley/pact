@@ -122,9 +122,9 @@ OPENAI_MODEL=gpt-5-nano  # Default
 ### Anthropic Provider
 
 **Models**:
-- `claude-sonnet-4-5-20250514` - Best for complex agents and coding ($3/$15)
-- `claude-opus-4-5-20250514` - Maximum intelligence ($5/$25)
-- `claude-haiku-4-5-20250514` - Fast, real-time ($1/$5)
+- `claude-sonnet-4-5-20250929` - Best for complex agents and coding ($3/$15)
+- `claude-opus-4-5-20250929` - Maximum intelligence ($5/$25)
+- `claude-haiku-4-5-20250929` - Fast, real-time ($1/$5)
 
 **Features**:
 - Native tool use

@@ -5,6 +5,8 @@ import { useLayoutStore } from '@/stores/layout';
 import { useRefinementWizardStore } from '@/stores/refinement-wizard';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
+import { AgentButton } from '@/components/agents/AgentPanel';
+import { AgentChatButton } from '@/components/agents/AgentChat';
 import { Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -83,6 +85,12 @@ export function AppLayout({ children, showSidebar = true, fullHeight = false }: 
         <main className={cn('flex-1 overflow-auto', fullHeight && 'h-full')}>
           {children}
         </main>
+      </div>
+
+      {/* Floating Action Buttons */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3">
+        <AgentChatButton />
+        <AgentButton />
       </div>
     </div>
   );

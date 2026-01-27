@@ -61,10 +61,10 @@ Phase 3.5 is an interlude between Phase 3 (Commitment Boundary) and Phase 4 (Evi
 
 | Model | Input/MTok | Output/MTok | Best For |
 | ------- | ------------ | ------------- | ---------- |
-| `claude-sonnet-4-5-20250514` | $3 | $15 | **Best for complex agents, coding, tool orchestration** |
-| `claude-opus-4-5-20250514` | $5 | $25 | Maximum intelligence, specialized complex tasks |
+| `claude-sonnet-4-5-20250929` | $3 | $15 | **Best for complex agents, coding, tool orchestration** |
+| `claude-opus-4-5-20250929` | $5 | $25 | Maximum intelligence, specialized complex tasks |
 | `claude-opus-4-1-20250414` | $15 | $75 | Highly complex codebase refactoring |
-| `claude-haiku-4-5-20250514` | $1 | $5 | Real-time, high-volume, cost-sensitive |
+| `claude-haiku-4-5-20250929` | $1 | $5 | Real-time, high-volume, cost-sensitive |
 | `claude-haiku-3-5-20241022` | $0.80 | $4 | Legacy, slightly cheaper |
 
 **Key Insight**: Per Anthropic docs, *Sonnet 4.5* is recommended for "complex agents and coding" over Opus.
@@ -147,9 +147,9 @@ Phase 3.5 is an interlude between Phase 3 (Commitment Boundary) and Phase 4 (Evi
 - [x] Install `@langchain/anthropic` (maintains LangSmith tracing)
 - [x] Implement `LLMProvider` interface
 - [x] Support models:
-  - `claude-sonnet-4-5-20250514` - agents, coding, tool orchestration
-  - `claude-opus-4-5-20250514` - maximum intelligence
-  - `claude-haiku-4-5-20250514` - fast, cost-effective
+  - `claude-sonnet-4-5-20250929` - agents, coding, tool orchestration
+  - `claude-opus-4-5-20250929` - maximum intelligence
+  - `claude-haiku-4-5-20250929` - fast, cost-effective
 - [x] Handle Anthropic's message format (system as separate param)
 - [x] Support tool use via Anthropic's native tool format
 - [x] Add cost tracking with prompt caching awareness

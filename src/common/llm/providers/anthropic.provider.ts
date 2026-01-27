@@ -34,12 +34,15 @@ export interface AnthropicProviderConfig extends ProviderConfig {
 /**
  * Claude model capabilities
  *
- * Model IDs use the dated format (e.g., claude-sonnet-4-5-20250514)
- * but we also support short aliases (e.g., claude-sonnet-4-5).
+ * Use undated aliases (e.g., claude-sonnet-4-5) - Anthropic's API automatically
+ * resolves these to the latest dated version. This means we don't need to update
+ * the code when new model versions are released.
+ *
+ * Dated versions are kept for explicit version pinning when needed.
  */
 const CLAUDE_MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
-  // Claude 4.5 family
-  'claude-sonnet-4-5-20250514': {
+  // Claude 4.5 family - use undated aliases (API resolves to latest)
+  'claude-sonnet-4-5': {
     contextWindow: 200000,
     supportsVision: true,
     supportsFunctionCalling: true,
@@ -50,7 +53,7 @@ const CLAUDE_MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     maxOutputTokens: 8192,
     description: 'Best for complex agents and coding tasks (recommended)',
   },
-  'claude-opus-4-5-20250514': {
+  'claude-opus-4-5': {
     contextWindow: 200000,
     supportsVision: true,
     supportsFunctionCalling: true,
@@ -61,7 +64,7 @@ const CLAUDE_MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     maxOutputTokens: 8192,
     description: 'Most capable Claude model for demanding tasks',
   },
-  'claude-haiku-4-5-20250514': {
+  'claude-haiku-4-5': {
     contextWindow: 200000,
     supportsVision: true,
     supportsFunctionCalling: true,
@@ -72,41 +75,7 @@ const CLAUDE_MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     maxOutputTokens: 8192,
     description: 'Fast and cost-effective for simpler tasks',
   },
-  // Aliases for convenience (map to dated versions)
-  'claude-sonnet-4-5': {
-    contextWindow: 200000,
-    supportsVision: true,
-    supportsFunctionCalling: true,
-    supportsStreaming: true,
-    supportsReasoningEffort: false,
-    costPerInputToken: 0.000003,
-    costPerOutputToken: 0.000015,
-    maxOutputTokens: 8192,
-    description: 'Best for complex agents and coding tasks (recommended)',
-  },
-  'claude-opus-4-5': {
-    contextWindow: 200000,
-    supportsVision: true,
-    supportsFunctionCalling: true,
-    supportsStreaming: true,
-    supportsReasoningEffort: false,
-    costPerInputToken: 0.000015,
-    costPerOutputToken: 0.000075,
-    maxOutputTokens: 8192,
-    description: 'Most capable Claude model for demanding tasks',
-  },
-  'claude-haiku-4-5': {
-    contextWindow: 200000,
-    supportsVision: true,
-    supportsFunctionCalling: true,
-    supportsStreaming: true,
-    supportsReasoningEffort: false,
-    costPerInputToken: 0.000001,
-    costPerOutputToken: 0.000005,
-    maxOutputTokens: 8192,
-    description: 'Fast and cost-effective for simpler tasks',
-  },
-  // Legacy models (for compatibility)
+  // Legacy models (for compatibility) - these require dated versions
   'claude-3-sonnet-20240229': {
     contextWindow: 200000,
     supportsVision: true,
@@ -129,15 +98,6 @@ const CLAUDE_MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     maxOutputTokens: 4096,
     description: 'Legacy Claude 3 Haiku',
   },
-};
-
-/**
- * Map short aliases to dated model IDs
- */
-const MODEL_ALIASES: Record<string, string> = {
-  'claude-sonnet-4-5': 'claude-sonnet-4-5-20250514',
-  'claude-opus-4-5': 'claude-opus-4-5-20250514',
-  'claude-haiku-4-5': 'claude-haiku-4-5-20250514',
 };
 
 /**
@@ -187,6 +147,9 @@ export class AnthropicProvider extends BaseLLMProvider {
 
   /**
    * Check if Anthropic API is available
+   *
+   * Uses the lightweight /v1/models endpoint instead of making an actual
+   * LLM call to avoid consuming tokens and reduce latency.
    */
   protected async checkAvailability(): Promise<boolean> {
     const apiKey = this.anthropicConfig.apiKey || process.env.ANTHROPIC_API_KEY;
@@ -195,16 +158,24 @@ export class AnthropicProvider extends BaseLLMProvider {
     }
 
     try {
-      // Create a minimal test client
-      const testClient = new ChatAnthropic({
-        modelName: this.resolveModelName(this.defaultModel),
-        anthropicApiKey: apiKey,
-        maxTokens: 5,
+      // Use the /v1/models endpoint - no tokens consumed, fast response
+      const response = await fetch('https://api.anthropic.com/v1/models', {
+        method: 'GET',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        signal: AbortSignal.timeout(5000),
       });
 
-      // Make a minimal test call
-      await testClient.invoke([new HumanMessage('Hi')]);
-      return true;
+      if (!response.ok) {
+        this.logger.warn(`Anthropic availability check failed: HTTP ${response.status}`);
+        return false;
+      }
+
+      // Verify we can parse the response and it has models
+      const data = await response.json();
+      return Array.isArray(data.data) && data.data.length > 0;
     } catch (error) {
       this.logger.warn(`Anthropic availability check failed: ${error.message}`);
       return false;
@@ -212,10 +183,12 @@ export class AnthropicProvider extends BaseLLMProvider {
   }
 
   /**
-   * Resolve model aliases to actual model names
+   * Resolve model name - Anthropic's API accepts undated aliases like
+   * 'claude-sonnet-4-5' and automatically resolves them to the latest version.
+   * No manual mapping required.
    */
   private resolveModelName(model: string): string {
-    return MODEL_ALIASES[model] || model;
+    return model;
   }
 
   /**

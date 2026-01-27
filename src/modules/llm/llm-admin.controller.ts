@@ -289,6 +289,14 @@ export class LLMAdminController {
         };
       }
 
+      // Get configured default model from database
+      const config = await this.configRepository.findOne({
+        where: { isActive: true },
+      });
+      const storedConfig = config?.providerConfigs?.[request.provider];
+      const configuredModel =
+        storedConfig?.defaultModel || provider.defaultModel || provider.supportedModels[0];
+
       const isAvailable = await provider.isAvailable();
       const latencyMs = Date.now() - startTime;
 
@@ -305,7 +313,7 @@ export class LLMAdminController {
         provider: request.provider,
         success: true,
         latencyMs,
-        modelTested: provider.supportedModels[0] || 'default',
+        modelTested: configuredModel,
       };
     } catch (error) {
       return {
@@ -379,14 +387,14 @@ export class LLMAdminController {
       {
         taskType: AgentTaskType.ATOMIZATION,
         preferredProvider: 'anthropic' as LLMProviderType,
-        preferredModel: 'claude-sonnet-4-5-20250514',
+        preferredModel: 'claude-sonnet-4-5-20250929',
         fallbackProvider: 'openai' as LLMProviderType,
         fallbackModel: 'gpt-5-mini',
       },
       {
         taskType: AgentTaskType.REFINEMENT,
         preferredProvider: 'anthropic' as LLMProviderType,
-        preferredModel: 'claude-haiku-4-5-20250514',
+        preferredModel: 'claude-haiku-4-5-20250929',
         fallbackProvider: 'openai' as LLMProviderType,
         fallbackModel: 'gpt-5-nano',
       },
@@ -395,19 +403,19 @@ export class LLMAdminController {
         preferredProvider: 'ollama' as LLMProviderType,
         preferredModel: 'llama3.2',
         fallbackProvider: 'anthropic' as LLMProviderType,
-        fallbackModel: 'claude-haiku-4-5-20250514',
+        fallbackModel: 'claude-haiku-4-5-20250929',
       },
       {
         taskType: AgentTaskType.ANALYSIS,
         preferredProvider: 'anthropic' as LLMProviderType,
-        preferredModel: 'claude-sonnet-4-5-20250514',
+        preferredModel: 'claude-sonnet-4-5-20250929',
         fallbackProvider: 'openai' as LLMProviderType,
         fallbackModel: 'gpt-5.2',
       },
       {
         taskType: AgentTaskType.CHAT,
         preferredProvider: 'anthropic' as LLMProviderType,
-        preferredModel: 'claude-haiku-4-5-20250514',
+        preferredModel: 'claude-haiku-4-5-20250929',
         fallbackProvider: 'openai' as LLMProviderType,
         fallbackModel: 'gpt-5-nano',
       },
@@ -462,7 +470,7 @@ export class LLMAdminController {
       case 'openai':
         return 'gpt-5-nano';
       case 'anthropic':
-        return 'claude-haiku-4-5-20250514';
+        return 'claude-haiku-4-5-20250929';
       case 'ollama':
         return 'llama3.2';
       default:

@@ -100,9 +100,11 @@ export const llmAdminApi = {
   updateProviderConfig: async (
     request: UpdateProviderConfigRequest
   ): Promise<LLMConfig> => {
+    // Extract provider from request for URL, send rest as body
+    const { provider, ...configUpdate } = request;
     const response = await apiClient.patch<LLMConfig>(
-      `/admin/llm/providers/${request.provider}`,
-      request
+      `/admin/llm/providers/${provider}`,
+      configUpdate
     );
     return response.data;
   },

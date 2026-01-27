@@ -108,7 +108,13 @@ export class LLMConfiguration {
   @Column({ type: 'jsonb', name: 'model_preferences', nullable: true, default: '[]' })
   modelPreferences: ModelPreference[];
 
-  @Column({ type: 'varchar', length: 20, name: 'default_budget_mode', nullable: true, default: 'normal' })
+  @Column({
+    type: 'varchar',
+    length: 20,
+    name: 'default_budget_mode',
+    nullable: true,
+    default: 'normal',
+  })
   defaultBudgetMode: BudgetMode;
 
   @Column({ type: 'boolean', name: 'prefer_local_models', nullable: true, default: false })

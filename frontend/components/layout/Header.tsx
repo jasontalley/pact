@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Network, List, Plus, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Network, List, Plus, Menu, X, Settings } from 'lucide-react';
 
 interface NavItem {
   href: string;
@@ -16,6 +16,7 @@ const navItems: NavItem[] = [
   { href: '/', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" /> },
   { href: '/canvas', label: 'Canvas', icon: <Network className="h-4 w-4" /> },
   { href: '/atoms', label: 'Atoms', icon: <List className="h-4 w-4" /> },
+  { href: '/settings/llm', label: 'Settings', icon: <Settings className="h-4 w-4" /> },
 ];
 
 interface HeaderProps {
@@ -53,21 +54,26 @@ export function Header({ onCreateAtom }: HeaderProps) {
 
           {/* Desktop navigation */}
           <nav className="hidden md:flex items-center gap-1">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors',
-                  pathname === item.href
-                    ? 'bg-accent text-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
-                )}
-              >
-                {item.icon}
-                {item.label}
-              </Link>
-            ))}
+            {navItems.map((item) => {
+              const isActive = item.href === '/'
+                ? pathname === '/'
+                : pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+                    isActive
+                      ? 'bg-accent text-foreground'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                  )}
+                >
+                  {item.icon}
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
         </div>
 
@@ -122,22 +128,27 @@ export function Header({ onCreateAtom }: HeaderProps) {
           )}
         >
           <div className="p-4 space-y-2">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium transition-colors',
-                  pathname === item.href
-                    ? 'bg-accent text-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
-                )}
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                {item.icon}
-                {item.label}
-              </Link>
-            ))}
+            {navItems.map((item) => {
+              const isActive = item.href === '/'
+                ? pathname === '/'
+                : pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    'flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium transition-colors',
+                    isActive
+                      ? 'bg-accent text-foreground'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                  )}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {item.icon}
+                  {item.label}
+                </Link>
+              );
+            })}
 
             {/* Mobile: New Atom button in menu */}
             {onCreateAtom && (

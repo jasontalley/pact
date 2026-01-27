@@ -10,15 +10,11 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { ProviderStatus } from './ProviderStatus';
+import { AtomizationWizard } from './AtomizationWizard';
+import { RefinementPanel } from './RefinementPanel';
+import { BrownfieldWizard } from './BrownfieldWizard';
 
 /**
  * Agent type definitions
@@ -243,24 +239,45 @@ export function AgentPanel({
         </CollapsibleContent>
       </Collapsible>
 
-      {/* Agent Dialog - placeholder for now */}
-      <Dialog open={!!selectedAgent} onOpenChange={handleDialogClose}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {selectedAgent?.icon}
-              {selectedAgent?.name}
-            </DialogTitle>
-            <DialogDescription>{selectedAgent?.description}</DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            {/* Agent-specific UI will be rendered here */}
-            <p className="text-sm text-muted-foreground">
-              Agent UI for "{selectedAgent?.id}" will be implemented in a dedicated component.
-            </p>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Agent-specific Wizards */}
+      <AtomizationWizard
+        open={selectedAgent?.id === 'atomization'}
+        onOpenChange={(open) => !open && handleDialogClose()}
+      />
+
+      <RefinementPanel
+        atomId={null}
+        open={selectedAgent?.id === 'refinement'}
+        onOpenChange={(open) => !open && handleDialogClose()}
+      />
+
+      <BrownfieldWizard
+        open={selectedAgent?.id === 'brownfield'}
+        onOpenChange={(open) => !open && handleDialogClose()}
+      />
+
+      {/* Translation Agent - placeholder for now (minimal UI needed) */}
+      {selectedAgent?.id === 'translation' && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={handleDialogClose}>
+          <Card className="max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                {selectedAgent.icon}
+                {selectedAgent.name}
+              </CardTitle>
+              <CardDescription>{selectedAgent.description}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                Validator translation is available through the Validators page. Navigate to a validator to translate between formats.
+              </p>
+              <Button variant="outline" onClick={handleDialogClose}>
+                Close
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
