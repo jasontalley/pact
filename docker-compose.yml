@@ -24,7 +24,7 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     container_name: pact-app
-    command: npm run start:dev
+    command: sh -c "npm run migration:run && npm run start:dev"
     ports:
       - "3000:3000"
     volumes:
@@ -51,7 +51,7 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     container_name: pact-test
-    command: npm run test:watch
+    command: sh -c "npm run migration:run && npm run test:watch"
     volumes:
       - .:/app
       - /app/node_modules
