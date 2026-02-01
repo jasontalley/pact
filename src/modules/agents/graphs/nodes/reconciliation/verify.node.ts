@@ -454,7 +454,8 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
       const needsReview = inputRequireReview || qualityFailCondition;
 
       // If human review needed and interrupt is enabled, pause for review
-      if (needsReview && useInterrupt) {
+      // Skip interrupt if there are no atoms to review
+      if (needsReview && useInterrupt && inferredAtoms.length > 0) {
         config.logger?.log(
           `[VerifyNode] Interrupting for human review (requireReview=${inputRequireReview}, ` +
             `forceInterruptOnQualityFail=${inputForceInterruptOnQualityFail}, failCount=${failCount})`,

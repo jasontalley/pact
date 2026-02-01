@@ -28,6 +28,29 @@ interface FilterOptions {
 }
 
 /**
+ * Check if a file path matches a path pattern (supports both prefix and glob)
+ *
+ * @param filePath - The file path to check
+ * @param pattern - The pattern (can be a prefix like "src/modules" or a glob like "src/**")
+ * @returns true if the file matches
+ */
+function matchesPathPattern(filePath: string, pattern: string): boolean {
+  const normalizedFile = filePath.replaceAll('\\', '/');
+  const normalizedPattern = pattern.replaceAll('\\', '/');
+
+  // If pattern contains glob characters, use minimatch
+  if (normalizedPattern.includes('*') || normalizedPattern.includes('?')) {
+    return minimatch(normalizedFile, normalizedPattern, { matchBase: false });
+  }
+
+  // Otherwise, treat as a directory prefix
+  return (
+    normalizedFile.startsWith(normalizedPattern) ||
+    normalizedFile.startsWith(normalizedPattern + '/')
+  );
+}
+
+/**
  * Check if a file path matches the filter criteria
  *
  * @param filePath - The file path to check (relative to root)
@@ -35,29 +58,15 @@ interface FilterOptions {
  * @returns true if the file should be included
  */
 function shouldIncludeFile(filePath: string, filters: FilterOptions): boolean {
-  const normalizedFile = filePath.replaceAll('\\', '/');
-
-  // Check includePaths - file must be under one of these paths
+  // Check includePaths - file must match one of these paths/patterns
   if (filters.includePaths && filters.includePaths.length > 0) {
-    const matches = filters.includePaths.some((includePath) => {
-      const normalizedInclude = includePath.replaceAll('\\', '/');
-      return (
-        normalizedFile.startsWith(normalizedInclude) ||
-        normalizedFile.startsWith(normalizedInclude + '/')
-      );
-    });
+    const matches = filters.includePaths.some((pattern) => matchesPathPattern(filePath, pattern));
     if (!matches) return false;
   }
 
-  // Check excludePaths - file must NOT be under any of these paths
+  // Check excludePaths - file must NOT match any of these paths/patterns
   if (filters.excludePaths && filters.excludePaths.length > 0) {
-    const excluded = filters.excludePaths.some((excludePath) => {
-      const normalizedExclude = excludePath.replaceAll('\\', '/');
-      return (
-        normalizedFile.startsWith(normalizedExclude) ||
-        normalizedFile.startsWith(normalizedExclude + '/')
-      );
-    });
+    const excluded = filters.excludePaths.some((pattern) => matchesPathPattern(filePath, pattern));
     if (excluded) return false;
   }
 

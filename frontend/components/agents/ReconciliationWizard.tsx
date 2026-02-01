@@ -714,9 +714,9 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
 
                   {/* Include Paths */}
                   <div className="space-y-2">
-                    <Label>Include Paths (glob patterns)</Label>
+                    <Label>Include Paths</Label>
                     <Textarea
-                      placeholder="e.g., src/**/*.spec.ts&#10;test/**/*.test.ts"
+                      placeholder="e.g., src/modules/auth&#10;src/modules/users/**&#10;src/**/*.spec.ts"
                       value={config.options?.includePaths?.join('\n') || ''}
                       onChange={(e) => {
                         const paths = e.target.value
@@ -735,15 +735,16 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
                       className="font-mono text-sm"
                     />
                     <p className="text-xs text-muted-foreground">
-                      One pattern per line. Only analyze tests matching these patterns.
+                      One path per line. Supports directory prefixes (src/modules) or glob patterns
+                      (src/**/*.spec.ts). Only analyze tests under these paths.
                     </p>
                   </div>
 
                   {/* Exclude Paths */}
                   <div className="space-y-2">
-                    <Label>Exclude Paths (glob patterns)</Label>
+                    <Label>Exclude Paths</Label>
                     <Textarea
-                      placeholder="e.g., **/node_modules/**&#10;**/*.e2e-spec.ts"
+                      placeholder="e.g., node_modules&#10;test/e2e/**&#10;**/*.e2e-spec.ts"
                       value={config.options?.excludePaths?.join('\n') || ''}
                       onChange={(e) => {
                         const paths = e.target.value
@@ -762,7 +763,8 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
                       className="font-mono text-sm"
                     />
                     <p className="text-xs text-muted-foreground">
-                      One pattern per line. Skip tests matching these patterns.
+                      One path per line. Supports directory prefixes or glob patterns. Skip tests
+                      under these paths.
                     </p>
                   </div>
                 </CollapsibleContent>
