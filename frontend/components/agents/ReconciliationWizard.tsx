@@ -34,6 +34,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useStartReconciliation,
@@ -679,6 +686,87 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
                   </Label>
                 </div>
               </div>
+
+              {/* Advanced Options - Path Filtering */}
+              <Collapsible className="space-y-2">
+                <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium hover:text-primary transition-colors [&[data-state=open]>svg]:rotate-180">
+                  <ChevronDown className="h-4 w-4 transition-transform duration-200" />
+                  Advanced Options (Path Filtering)
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-4 pt-2">
+                  {/* Root Directory */}
+                  <div className="space-y-2">
+                    <Label>Root Directory (optional)</Label>
+                    <Input
+                      placeholder="e.g., src/modules/auth"
+                      value={config.rootDirectory || ''}
+                      onChange={(e) =>
+                        setConfig({
+                          ...config,
+                          rootDirectory: e.target.value || undefined,
+                        })
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Subdirectory to analyze. Leave empty for entire repository.
+                    </p>
+                  </div>
+
+                  {/* Include Paths */}
+                  <div className="space-y-2">
+                    <Label>Include Paths (glob patterns)</Label>
+                    <Textarea
+                      placeholder="e.g., src/**/*.spec.ts&#10;test/**/*.test.ts"
+                      value={config.options?.includePaths?.join('\n') || ''}
+                      onChange={(e) => {
+                        const paths = e.target.value
+                          .split('\n')
+                          .map((p) => p.trim())
+                          .filter((p) => p.length > 0);
+                        setConfig({
+                          ...config,
+                          options: {
+                            ...config.options,
+                            includePaths: paths.length > 0 ? paths : undefined,
+                          },
+                        });
+                      }}
+                      rows={3}
+                      className="font-mono text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      One pattern per line. Only analyze tests matching these patterns.
+                    </p>
+                  </div>
+
+                  {/* Exclude Paths */}
+                  <div className="space-y-2">
+                    <Label>Exclude Paths (glob patterns)</Label>
+                    <Textarea
+                      placeholder="e.g., **/node_modules/**&#10;**/*.e2e-spec.ts"
+                      value={config.options?.excludePaths?.join('\n') || ''}
+                      onChange={(e) => {
+                        const paths = e.target.value
+                          .split('\n')
+                          .map((p) => p.trim())
+                          .filter((p) => p.length > 0);
+                        setConfig({
+                          ...config,
+                          options: {
+                            ...config.options,
+                            excludePaths: paths.length > 0 ? paths : undefined,
+                          },
+                        });
+                      }}
+                      rows={3}
+                      className="font-mono text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      One pattern per line. Skip tests matching these patterns.
+                    </p>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
 
               {/* Warnings */}
               {!canStart && (
