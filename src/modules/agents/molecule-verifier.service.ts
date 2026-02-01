@@ -109,7 +109,12 @@ export class MoleculeVerifierService {
     const moleculeAtoms = atoms.filter((a) => molecule.atomTempIds.includes(a.tempId));
 
     // Evaluate completeness: Does this molecule cover a coherent feature?
-    const completenessScore = this.evaluateCompleteness(molecule, moleculeAtoms, minAtomsForCoherence, issues);
+    const completenessScore = this.evaluateCompleteness(
+      molecule,
+      moleculeAtoms,
+      minAtomsForCoherence,
+      issues,
+    );
 
     // Evaluate atom-molecule fit: Does each atom belong in this molecule?
     const fitScore = this.evaluateAtomFit(molecule, moleculeAtoms, issues);
@@ -250,7 +255,10 @@ export class MoleculeVerifierService {
 
     // Check: Description mentions atoms' concepts
     const atomConcepts = moleculeAtoms.flatMap((a) =>
-      a.description.toLowerCase().split(/\s+/).filter((w) => w.length > 4),
+      a.description
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((w) => w.length > 4),
     );
     const descriptionWords = molecule.description.toLowerCase().split(/\s+/);
     const conceptOverlap = atomConcepts.filter((c) => descriptionWords.includes(c)).length;
@@ -363,7 +371,9 @@ export class MoleculeVerifierService {
     const feedback: string[] = [];
 
     if (completenessScore < 60) {
-      feedback.push('Consider improving molecule description to better summarize the grouped behaviors');
+      feedback.push(
+        'Consider improving molecule description to better summarize the grouped behaviors',
+      );
     }
 
     if (fitScore < 60) {
@@ -393,10 +403,7 @@ export class MoleculeVerifierService {
    * Degrade a molecule to an unnamed cluster.
    * Per INV-R004: failures degrade to unnamed cluster, NOT rejection.
    */
-  private degradeToUnnamedCluster(
-    molecule: InferredMolecule,
-    issues: string[],
-  ): InferredMolecule {
+  private degradeToUnnamedCluster(molecule: InferredMolecule, issues: string[]): InferredMolecule {
     return {
       ...molecule,
       name: 'Unnamed Cluster',

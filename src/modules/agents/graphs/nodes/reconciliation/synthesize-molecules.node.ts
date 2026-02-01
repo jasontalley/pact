@@ -270,8 +270,18 @@ function clusterByDomainConcept(atoms: InferredAtom[]): Map<string, InferredAtom
  * Uses word overlap (Jaccard similarity) as a simple approximation
  */
 function computeTextSimilarity(text1: string, text2: string): number {
-  const words1 = new Set(text1.toLowerCase().split(/\s+/).filter((w) => w.length > 2));
-  const words2 = new Set(text2.toLowerCase().split(/\s+/).filter((w) => w.length > 2));
+  const words1 = new Set(
+    text1
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 2),
+  );
+  const words2 = new Set(
+    text2
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 2),
+  );
 
   if (words1.size === 0 && words2.size === 0) return 1;
   if (words1.size === 0 || words2.size === 0) return 0;
@@ -286,11 +296,7 @@ function computeTextSimilarity(text1: string, text2: string): number {
  * Get text representation of an atom for similarity computation
  */
 function getAtomText(atom: InferredAtom): string {
-  return [
-    atom.description,
-    ...(atom.observableOutcomes || []),
-    atom.category,
-  ].join(' ');
+  return [atom.description, ...(atom.observableOutcomes || []), atom.category].join(' ');
 }
 
 /**
@@ -388,9 +394,7 @@ function clusterAtomsDirect(
       break;
   }
 
-  logger?.log(
-    `[SynthesizeMoleculesNode] Created ${clusters.size} clusters`,
-  );
+  logger?.log(`[SynthesizeMoleculesNode] Created ${clusters.size} clusters`);
 
   // Step 2: Create molecules from clusters
   const inferredMolecules: InferredMolecule[] = [];
@@ -469,14 +473,11 @@ export function createSynthesizeMoleculesNode(options: SynthesizeMoleculesNodeOp
             source_file: a.sourceTest.filePath,
           }));
 
-          const toolResult = await config.toolRegistry.executeTool(
-            'cluster_atoms_for_molecules',
-            {
-              atoms: JSON.stringify(atomsForTool),
-              clustering_method: clusteringMethod,
-              min_atoms_per_cluster: String(minAtomsPerMolecule),
-            },
-          ) as ClusteredMoleculeResult[];
+          const toolResult = (await config.toolRegistry.executeTool('cluster_atoms_for_molecules', {
+            atoms: JSON.stringify(atomsForTool),
+            clustering_method: clusteringMethod,
+            min_atoms_per_cluster: String(minAtomsPerMolecule),
+          })) as ClusteredMoleculeResult[];
 
           // Convert tool result to InferredMolecule format
           inferredMolecules = toolResult.map((result) => ({
@@ -492,7 +493,8 @@ export function createSynthesizeMoleculesNode(options: SynthesizeMoleculesNodeOp
             `[SynthesizeMoleculesNode] Tool synthesized ${inferredMolecules.length} molecules`,
           );
         } catch (toolError) {
-          const toolErrorMessage = toolError instanceof Error ? toolError.message : String(toolError);
+          const toolErrorMessage =
+            toolError instanceof Error ? toolError.message : String(toolError);
           config.logger?.warn(
             `[SynthesizeMoleculesNode] Tool execution failed, falling back to direct implementation: ${toolErrorMessage}`,
           );

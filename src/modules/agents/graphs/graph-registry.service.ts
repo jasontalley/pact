@@ -80,17 +80,11 @@ export class GraphRegistryService implements OnModuleInit {
       CHAT_EXPLORATION_GRAPH_CONFIG,
     } = await import('./graphs/chat-exploration.graph');
 
-    const {
-      createCoverageFastGraph,
-      COVERAGE_FAST_GRAPH_NAME,
-      COVERAGE_FAST_GRAPH_CONFIG,
-    } = await import('./graphs/coverage-fast.graph');
+    const { createCoverageFastGraph, COVERAGE_FAST_GRAPH_NAME, COVERAGE_FAST_GRAPH_CONFIG } =
+      await import('./graphs/coverage-fast.graph');
 
-    const {
-      createReconciliationGraph,
-      RECONCILIATION_GRAPH_NAME,
-      RECONCILIATION_GRAPH_CONFIG,
-    } = await import('./graphs/reconciliation.graph');
+    const { createReconciliationGraph, RECONCILIATION_GRAPH_NAME, RECONCILIATION_GRAPH_CONFIG } =
+      await import('./graphs/reconciliation.graph');
 
     // Register chat exploration graph
     const chatGraph = createChatExplorationGraph(this.nodeConfig);

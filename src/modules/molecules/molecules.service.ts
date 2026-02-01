@@ -50,9 +50,7 @@ export class MoleculesService {
         where: { id: dto.parentMoleculeId },
       });
       if (!parent) {
-        throw new NotFoundException(
-          `Parent molecule with ID "${dto.parentMoleculeId}" not found`,
-        );
+        throw new NotFoundException(`Parent molecule with ID "${dto.parentMoleculeId}" not found`);
       }
 
       // Check hierarchy depth (trigger will also check, but nice to give clear error)
@@ -66,9 +64,7 @@ export class MoleculesService {
 
     // Validate custom lens label
     if (dto.lensType === 'custom' && !dto.lensLabel) {
-      throw new BadRequestException(
-        'Custom label is required when lens type is "custom"',
-      );
+      throw new BadRequestException('Custom label is required when lens type is "custom"');
     }
 
     // Generate molecule ID
@@ -173,9 +169,7 @@ export class MoleculesService {
     // Validate custom lens label
     const newLensType = dto.lensType ?? molecule.lensType;
     if (newLensType === 'custom' && !dto.lensLabel && !molecule.lensLabel) {
-      throw new BadRequestException(
-        'Custom label is required when lens type is "custom"',
-      );
+      throw new BadRequestException('Custom label is required when lens type is "custom"');
     }
 
     // Apply updates
@@ -228,9 +222,7 @@ export class MoleculesService {
     });
 
     if (existing && !existing.removedAt) {
-      throw new ConflictException(
-        `Atom "${dto.atomId}" is already in molecule "${moleculeId}"`,
-      );
+      throw new ConflictException(`Atom "${dto.atomId}" is already in molecule "${moleculeId}"`);
     }
 
     // If atom was previously removed, reactivate it
@@ -288,9 +280,7 @@ export class MoleculesService {
 
     const missingAtoms = atomIds.filter((id) => !existingAtomIds.has(id));
     if (missingAtoms.length > 0) {
-      throw new NotFoundException(
-        `Atoms not found: ${missingAtoms.join(', ')}`,
-      );
+      throw new NotFoundException(`Atoms not found: ${missingAtoms.join(', ')}`);
     }
 
     // Get current max order
@@ -336,9 +326,7 @@ export class MoleculesService {
     });
 
     if (!junction) {
-      throw new NotFoundException(
-        `Atom "${atomId}" not found in molecule "${moleculeId}"`,
-      );
+      throw new NotFoundException(`Atom "${atomId}" not found in molecule "${moleculeId}"`);
     }
 
     if (junction.removedAt) {
@@ -373,10 +361,7 @@ export class MoleculesService {
   /**
    * Batch update atom properties in a molecule
    */
-  async batchUpdateAtoms(
-    moleculeId: string,
-    dto: BatchUpdateAtomsDto,
-  ): Promise<void> {
+  async batchUpdateAtoms(moleculeId: string, dto: BatchUpdateAtomsDto): Promise<void> {
     // Verify molecule exists
     await this.findOne(moleculeId);
 
@@ -398,11 +383,7 @@ export class MoleculesService {
    * Get atoms in a molecule with optional transitive closure
    */
   async getAtoms(moleculeId: string, options: GetAtomsQueryDto = {}): Promise<Atom[]> {
-    const {
-      includeChildMolecules = false,
-      recursive = true,
-      activeOnly = true,
-    } = options;
+    const { includeChildMolecules = false, recursive = true, activeOnly = true } = options;
 
     let moleculeIds = [moleculeId];
 
@@ -512,9 +493,10 @@ export class MoleculesService {
       .map((a) => Number(a.qualityScore));
 
     const aggregateQuality: QualityScoreDto = {
-      average: qualityScores.length > 0
-        ? qualityScores.reduce((a, b) => a + b, 0) / qualityScores.length
-        : 0,
+      average:
+        qualityScores.length > 0
+          ? qualityScores.reduce((a, b) => a + b, 0) / qualityScores.length
+          : 0,
       min: qualityScores.length > 0 ? Math.min(...qualityScores) : null,
       max: qualityScores.length > 0 ? Math.max(...qualityScores) : null,
     };
@@ -526,8 +508,7 @@ export class MoleculesService {
     });
 
     const atomsWithValidators = new Set(validators.map((v) => v.atomId));
-    const validatorCoverage =
-      atomCount > 0 ? (atomsWithValidators.size / atomCount) * 100 : 0;
+    const validatorCoverage = atomCount > 0 ? (atomsWithValidators.size / atomCount) * 100 : 0;
 
     // For verification health, we'd need actual execution results
     // For now, assume all active validators are passing (placeholder)

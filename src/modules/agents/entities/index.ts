@@ -16,10 +16,7 @@ export type {
 } from './reconciliation-run.entity';
 
 export { AtomRecommendation } from './atom-recommendation.entity';
-export type {
-  AtomRecommendationStatus,
-  ObservableOutcomeData,
-} from './atom-recommendation.entity';
+export type { AtomRecommendationStatus, ObservableOutcomeData } from './atom-recommendation.entity';
 
 export { MoleculeRecommendation } from './molecule-recommendation.entity';
 export type { MoleculeRecommendationStatus } from './molecule-recommendation.entity';

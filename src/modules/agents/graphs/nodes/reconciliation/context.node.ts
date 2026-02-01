@@ -111,10 +111,7 @@ function getTestKey(test: OrphanTestInfo): string {
 /**
  * Build simple documentation index by scanning docs directory
  */
-function buildDocumentationIndex(
-  rootDirectory: string,
-  maxChunks: number,
-): DocChunk[] {
+function buildDocumentationIndex(rootDirectory: string, maxChunks: number): DocChunk[] {
   const chunks: DocChunk[] = [];
   const docsDir = path.join(rootDirectory, 'docs');
 
@@ -195,30 +192,41 @@ function extractKeywords(content: string): string[] {
 /**
  * Fallback test analysis when ContextBuilderService is not available
  */
-function createFallbackAnalysis(
-  test: OrphanTestInfo,
-  rootDirectory: string,
-): TestAnalysis {
+function createFallbackAnalysis(test: OrphanTestInfo, rootDirectory: string): TestAnalysis {
   // Extract basic info from test code
   const testCode = test.testCode || '';
 
   // Extract assertions
   const assertionMatches = testCode.match(/expect\([^)]+\)\.[^;]+/g) || [];
-  const assertions = assertionMatches.slice(0, 5).map((a) =>
-    a.replace(/expect\([^)]+\)\./, '').substring(0, 100),
-  );
+  const assertions = assertionMatches
+    .slice(0, 5)
+    .map((a) => a.replace(/expect\([^)]+\)\./, '').substring(0, 100));
 
   // Extract domain concepts from test name and assertions
   const domainPatterns = [
-    'user', 'auth', 'login', 'session', 'token',
-    'payment', 'order', 'cart', 'checkout',
-    'create', 'update', 'delete', 'get', 'list',
-    'validate', 'error', 'success', 'fail',
+    'user',
+    'auth',
+    'login',
+    'session',
+    'token',
+    'payment',
+    'order',
+    'cart',
+    'checkout',
+    'create',
+    'update',
+    'delete',
+    'get',
+    'list',
+    'validate',
+    'error',
+    'success',
+    'fail',
   ];
 
   const testNameLower = test.testName.toLowerCase();
-  const domainConcepts = domainPatterns.filter((p) =>
-    testNameLower.includes(p) || testCode.toLowerCase().includes(p),
+  const domainConcepts = domainPatterns.filter(
+    (p) => testNameLower.includes(p) || testCode.toLowerCase().includes(p),
   );
 
   return {
@@ -262,10 +270,11 @@ export function createContextNode(options: ContextNodeOptions = {}) {
         ? sortTestsByTopologicalOrder(rawOrphanTests, repoStructure)
         : rawOrphanTests;
 
-      const hasTopoOrder = repoStructure?.topologicalOrder && repoStructure.topologicalOrder.length > 0;
+      const hasTopoOrder =
+        repoStructure?.topologicalOrder && repoStructure.topologicalOrder.length > 0;
       config.logger?.log(
         `[ContextNode] Building context for ${orphanTests.length} orphan tests ` +
-        `(useTool=${useTool}, topologicalOrder=${hasTopoOrder && useTopologicalOrder})`,
+          `(useTool=${useTool}, topologicalOrder=${hasTopoOrder && useTopologicalOrder})`,
       );
 
       // Build documentation index if requested
@@ -293,15 +302,19 @@ export function createContextNode(options: ContextNodeOptions = {}) {
           // Try tool-based analysis first
           if (hasTestAnalysisTool) {
             try {
-              const toolResult = await config.toolRegistry.executeTool(
-                'get_test_analysis',
-                {
-                  test_file_path: test.filePath,
-                  test_name: test.testName,
-                  test_line_number: test.lineNumber,
-                  root_directory: rootDirectory,
-                },
-              ) as { testId: string; summary: string; domainConcepts: string[]; relatedCode?: string[]; relatedDocs?: string[]; rawContext?: string };
+              const toolResult = (await config.toolRegistry.executeTool('get_test_analysis', {
+                test_file_path: test.filePath,
+                test_name: test.testName,
+                test_line_number: test.lineNumber,
+                root_directory: rootDirectory,
+              })) as {
+                testId: string;
+                summary: string;
+                domainConcepts: string[];
+                relatedCode?: string[];
+                relatedDocs?: string[];
+                rawContext?: string;
+              };
 
               analysis = {
                 testId: testKey,
@@ -312,7 +325,8 @@ export function createContextNode(options: ContextNodeOptions = {}) {
                 rawContext: toolResult.rawContext,
               };
             } catch (toolError) {
-              const toolErrorMessage = toolError instanceof Error ? toolError.message : String(toolError);
+              const toolErrorMessage =
+                toolError instanceof Error ? toolError.message : String(toolError);
               config.logger?.warn(
                 `[ContextNode] Tool failed for ${testKey}, falling back: ${toolErrorMessage}`,
               );
@@ -326,7 +340,12 @@ export function createContextNode(options: ContextNodeOptions = {}) {
             }
           } else if (contextBuilderService) {
             // Use real ContextBuilderService if available
-            analysis = await analyzeWithService(test, testKey, rootDirectory, contextBuilderService);
+            analysis = await analyzeWithService(
+              test,
+              testKey,
+              rootDirectory,
+              contextBuilderService,
+            );
           } else {
             // Use fallback analysis
             analysis = createFallbackAnalysis(test, rootDirectory);
@@ -343,9 +362,7 @@ export function createContextNode(options: ContextNodeOptions = {}) {
           }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
-          config.logger?.warn(
-            `[ContextNode] Failed to analyze ${testKey}: ${errorMessage}`,
-          );
+          config.logger?.warn(`[ContextNode] Failed to analyze ${testKey}: ${errorMessage}`);
 
           // Add minimal analysis even on error
           contextPerTest.set(testKey, {
@@ -358,9 +375,7 @@ export function createContextNode(options: ContextNodeOptions = {}) {
         }
       }
 
-      config.logger?.log(
-        `[ContextNode] Context built for ${contextPerTest.size} tests`,
-      );
+      config.logger?.log(`[ContextNode] Context built for ${contextPerTest.size} tests`);
 
       return {
         contextPerTest,
@@ -391,9 +406,7 @@ async function analyzeWithService(
     testId: testKey,
     summary: serviceAnalysis.expectedBehavior || `Test: ${test.testName}`,
     domainConcepts: serviceAnalysis.domainConcepts,
-    relatedCode: serviceAnalysis.relatedSourceFiles?.map((f) =>
-      path.relative(rootDirectory, f),
-    ),
+    relatedCode: serviceAnalysis.relatedSourceFiles?.map((f) => path.relative(rootDirectory, f)),
     relatedDocs: serviceAnalysis.documentationSnippets,
     rawContext: serviceAnalysis.isolatedTestCode,
   };

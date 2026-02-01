@@ -13,7 +13,9 @@ import { NodeConfig } from '../types';
 /**
  * Create a minimal state for testing
  */
-function createMockState(overrides: Partial<ReconciliationGraphStateType> = {}): ReconciliationGraphStateType {
+function createMockState(
+  overrides: Partial<ReconciliationGraphStateType> = {},
+): ReconciliationGraphStateType {
   return {
     rootDirectory: '/test',
     input: {

@@ -50,18 +50,12 @@ export const LENS_TYPE_LABELS: Record<LensType, string> = {
 export const LENS_TYPE_DESCRIPTIONS: Record<LensType, string> = {
   user_story:
     'A specific user need or requirement, typically written as "As a [user], I want [goal] so that [benefit]"',
-  feature:
-    'A distinct piece of functionality that delivers value to users',
-  journey:
-    'A sequence of interactions a user takes to accomplish a goal',
-  epic:
-    'A large body of work that can be broken down into smaller pieces',
-  release:
-    'A collection of features or changes planned for a specific version',
-  capability:
-    'A high-level ability or competency the system provides',
-  custom:
-    'A custom grouping type with your own label',
+  feature: 'A distinct piece of functionality that delivers value to users',
+  journey: 'A sequence of interactions a user takes to accomplish a goal',
+  epic: 'A large body of work that can be broken down into smaller pieces',
+  release: 'A collection of features or changes planned for a specific version',
+  capability: 'A high-level ability or competency the system provides',
+  custom: 'A custom grouping type with your own label',
 };
 
 /**

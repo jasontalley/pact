@@ -650,10 +650,7 @@ describe('ChatAgentService', () => {
       await graphEnabledService.chat({ message: 'List all atoms' });
 
       // Should use standard graph directly
-      expect(mockGraphRegistry.invoke).toHaveBeenCalledWith(
-        'chat-exploration',
-        expect.any(Object),
-      );
+      expect(mockGraphRegistry.invoke).toHaveBeenCalledWith('chat-exploration', expect.any(Object));
     });
   });
 });

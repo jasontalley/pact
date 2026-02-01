@@ -27,10 +27,7 @@ import {
   ReconciliationGraphState,
   ReconciliationGraphStateType,
 } from '../types/reconciliation-state';
-import {
-  createStructureNode,
-  StructureNodeOptions,
-} from '../nodes/reconciliation/structure.node';
+import { createStructureNode, StructureNodeOptions } from '../nodes/reconciliation/structure.node';
 import {
   createDiscoverFullscanNode,
   DiscoverFullscanNodeOptions,
@@ -39,10 +36,7 @@ import {
   createDiscoverDeltaNode,
   DiscoverDeltaNodeOptions,
 } from '../nodes/reconciliation/discover-delta.node';
-import {
-  createContextNode,
-  ContextNodeOptions,
-} from '../nodes/reconciliation/context.node';
+import { createContextNode, ContextNodeOptions } from '../nodes/reconciliation/context.node';
 import {
   createInferAtomsNode,
   InferAtomsNodeOptions,
@@ -51,14 +45,8 @@ import {
   createSynthesizeMoleculesNode,
   SynthesizeMoleculesNodeOptions,
 } from '../nodes/reconciliation/synthesize-molecules.node';
-import {
-  createVerifyNode,
-  VerifyNodeOptions,
-} from '../nodes/reconciliation/verify.node';
-import {
-  createPersistNode,
-  PersistNodeOptions,
-} from '../nodes/reconciliation/persist.node';
+import { createVerifyNode, VerifyNodeOptions } from '../nodes/reconciliation/verify.node';
+import { createPersistNode, PersistNodeOptions } from '../nodes/reconciliation/persist.node';
 import {
   createInterimPersistNode,
   InterimPersistNodeOptions,
@@ -118,7 +106,9 @@ function wrapWithErrorHandling(
   config: NodeConfig,
   isCritical = false,
 ): (state: ReconciliationGraphStateType) => Promise<Partial<ReconciliationGraphStateType>> {
-  return async (state: ReconciliationGraphStateType): Promise<Partial<ReconciliationGraphStateType>> => {
+  return async (
+    state: ReconciliationGraphStateType,
+  ): Promise<Partial<ReconciliationGraphStateType>> => {
     try {
       return await nodeFunc(state);
     } catch (error) {
@@ -137,7 +127,9 @@ function wrapWithErrorHandling(
       }
 
       // For non-critical nodes, store error and continue
-      config.logger?.warn(`[${nodeName}] Non-critical error, continuing to persist partial results`);
+      config.logger?.warn(
+        `[${nodeName}] Non-critical error, continuing to persist partial results`,
+      );
 
       // Format error string with timestamp and details
       const timestamp = new Date().toISOString();
@@ -188,12 +180,18 @@ export function createReconciliationGraph(
 ) {
   // Create base nodes with defaults or overrides
   const structureNodeBase = createStructureNode(options.nodeOptions?.structure)(config);
-  const discoverFullscanNodeBase = createDiscoverFullscanNode(options.nodeOptions?.discoverFullscan)(config);
+  const discoverFullscanNodeBase = createDiscoverFullscanNode(
+    options.nodeOptions?.discoverFullscan,
+  )(config);
   const discoverDeltaNodeBase = createDiscoverDeltaNode(options.nodeOptions?.discoverDelta)(config);
   const contextNodeBase = createContextNode(options.nodeOptions?.context)(config);
   const inferAtomsNodeBase = createInferAtomsNode(options.nodeOptions?.inferAtoms)(config);
-  const synthesizeMoleculesNodeBase = createSynthesizeMoleculesNode(options.nodeOptions?.synthesizeMolecules)(config);
-  const interimPersistNodeBase = createInterimPersistNode(options.nodeOptions?.interimPersist)(config);
+  const synthesizeMoleculesNodeBase = createSynthesizeMoleculesNode(
+    options.nodeOptions?.synthesizeMolecules,
+  )(config);
+  const interimPersistNodeBase = createInterimPersistNode(options.nodeOptions?.interimPersist)(
+    config,
+  );
   const verifyNodeBase = createVerifyNode(options.nodeOptions?.verify)(config);
   const persistNodeBase = createPersistNode(options.nodeOptions?.persist)(config);
 
@@ -201,29 +199,53 @@ export function createReconciliationGraph(
   // Critical nodes (structure, discover) will stop graph on error
   // Non-critical nodes will store error and continue to persist
   const structureNode = wrapWithErrorHandling(
-    RECONCILIATION_NODES.STRUCTURE, structureNodeBase, config, true,
+    RECONCILIATION_NODES.STRUCTURE,
+    structureNodeBase,
+    config,
+    true,
   );
   const discoverFullscanNode = wrapWithErrorHandling(
-    RECONCILIATION_NODES.DISCOVER_FULLSCAN, discoverFullscanNodeBase, config, true,
+    RECONCILIATION_NODES.DISCOVER_FULLSCAN,
+    discoverFullscanNodeBase,
+    config,
+    true,
   );
   const discoverDeltaNode = wrapWithErrorHandling(
-    RECONCILIATION_NODES.DISCOVER_DELTA, discoverDeltaNodeBase, config, true,
+    RECONCILIATION_NODES.DISCOVER_DELTA,
+    discoverDeltaNodeBase,
+    config,
+    true,
   );
   const contextNode = wrapWithErrorHandling(
-    RECONCILIATION_NODES.CONTEXT, contextNodeBase, config, false,
+    RECONCILIATION_NODES.CONTEXT,
+    contextNodeBase,
+    config,
+    false,
   );
   const inferAtomsNode = wrapWithErrorHandling(
-    RECONCILIATION_NODES.INFER_ATOMS, inferAtomsNodeBase, config, false,
+    RECONCILIATION_NODES.INFER_ATOMS,
+    inferAtomsNodeBase,
+    config,
+    false,
   );
   const synthesizeMoleculesNode = wrapWithErrorHandling(
-    RECONCILIATION_NODES.SYNTHESIZE_MOLECULES, synthesizeMoleculesNodeBase, config, false,
+    RECONCILIATION_NODES.SYNTHESIZE_MOLECULES,
+    synthesizeMoleculesNodeBase,
+    config,
+    false,
   );
   // Interim persist is non-critical - we can continue without it
   const interimPersistNode = wrapWithErrorHandling(
-    RECONCILIATION_NODES.INTERIM_PERSIST, interimPersistNodeBase, config, false,
+    RECONCILIATION_NODES.INTERIM_PERSIST,
+    interimPersistNodeBase,
+    config,
+    false,
   );
   const verifyNode = wrapWithErrorHandling(
-    RECONCILIATION_NODES.VERIFY, verifyNodeBase, config, false,
+    RECONCILIATION_NODES.VERIFY,
+    verifyNodeBase,
+    config,
+    false,
   );
   // Persist node is not wrapped - it must always try to save what we have
   const persistNode = persistNodeBase;
@@ -246,11 +268,10 @@ export function createReconciliationGraph(
     .addEdge(START, RECONCILIATION_NODES.STRUCTURE)
 
     // structure -> [discover_fullscan | discover_delta] (conditional)
-    .addConditionalEdges(
-      RECONCILIATION_NODES.STRUCTURE,
-      discoverRouter,
-      [RECONCILIATION_NODES.DISCOVER_FULLSCAN, RECONCILIATION_NODES.DISCOVER_DELTA],
-    )
+    .addConditionalEdges(RECONCILIATION_NODES.STRUCTURE, discoverRouter, [
+      RECONCILIATION_NODES.DISCOVER_FULLSCAN,
+      RECONCILIATION_NODES.DISCOVER_DELTA,
+    ])
 
     // discover_fullscan -> context
     .addEdge(RECONCILIATION_NODES.DISCOVER_FULLSCAN, RECONCILIATION_NODES.CONTEXT)

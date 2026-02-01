@@ -183,10 +183,7 @@ async function extractCoverageMetrics(
 /**
  * Format coverage metrics for human consumption
  */
-function formatCoverageResponse(
-  metrics: Record<string, unknown>,
-  source: string,
-): string {
+function formatCoverageResponse(metrics: Record<string, unknown>, source: string): string {
   const lines: string[] = ['## Test Coverage Summary', ''];
 
   // Extract common coverage metrics

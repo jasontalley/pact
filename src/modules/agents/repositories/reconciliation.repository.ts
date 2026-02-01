@@ -15,7 +15,11 @@ import {
   MoleculeRecommendationStatus,
 } from '../entities/molecule-recommendation.entity';
 import { TestRecord, TestRecordStatus } from '../entities/test-record.entity';
-import { InferredAtom, InferredMolecule, OrphanTestInfo } from '../graphs/types/reconciliation-state';
+import {
+  InferredAtom,
+  InferredMolecule,
+  OrphanTestInfo,
+} from '../graphs/types/reconciliation-state';
 
 /**
  * Repository for reconciliation agent persistence operations.

@@ -14,10 +14,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { NodeConfig } from '../types';
-import {
-  ReconciliationGraphStateType,
-  RepoStructure,
-} from '../../types/reconciliation-state';
+import { ReconciliationGraphStateType, RepoStructure } from '../../types/reconciliation-state';
 import { RepoStructureResult } from '../../../tools/reconciliation-tools.service';
 
 /**
@@ -87,11 +84,7 @@ function shouldExclude(filePath: string, excludePatterns: string[]): boolean {
 /**
  * Walk directory recursively and collect files
  */
-function walkDirectory(
-  rootDir: string,
-  excludePatterns: string[],
-  maxFiles: number,
-): string[] {
+function walkDirectory(rootDir: string, excludePatterns: string[], maxFiles: number): string[] {
   const files: string[] = [];
 
   function walk(dir: string): void {
@@ -165,15 +158,12 @@ export function createStructureNode(options: StructureNodeOptions = {}) {
         try {
           config.logger?.log('[StructureNode] Using get_repo_structure tool');
 
-          const result = await config.toolRegistry.executeTool(
-            'get_repo_structure',
-            {
-              root_directory: rootDirectory,
-              include_dependencies: inputIncludeDeps,
-              max_files: maxFiles,
-              exclude_patterns: excludePatterns.join(','),
-            },
-          ) as RepoStructureResult;
+          const result = (await config.toolRegistry.executeTool('get_repo_structure', {
+            root_directory: rootDirectory,
+            include_dependencies: inputIncludeDeps,
+            max_files: maxFiles,
+            exclude_patterns: excludePatterns.join(','),
+          })) as RepoStructureResult;
 
           const repoStructure: RepoStructure = {
             files: result.files,
@@ -184,13 +174,13 @@ export function createStructureNode(options: StructureNodeOptions = {}) {
 
           config.logger?.log(
             `[StructureNode] Tool found ${result.totalFiles} files: ` +
-            `${result.sourceFiles.length} source, ${result.testFiles.length} test`,
+              `${result.sourceFiles.length} source, ${result.testFiles.length} test`,
           );
 
           if (result.dependencyEdges) {
             config.logger?.log(
               `[StructureNode] Dependency analysis: ${result.dependencyEdges.length} edges, ` +
-              `cycles: ${result.hasCycles || false}`,
+                `cycles: ${result.hasCycles || false}`,
             );
           }
 

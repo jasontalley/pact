@@ -228,8 +228,12 @@ describe('Commitments (e2e)', () => {
         .patch(`/atoms/${atomA.body.id}`)
         .send({
           qualityScore: 85,
-          observableOutcomes: [{ description: 'Email format validated', measurementCriteria: 'Format check' }],
-          falsifiabilityCriteria: [{ condition: 'Invalid email accepted', expectedBehavior: 'Rejected' }],
+          observableOutcomes: [
+            { description: 'Email format validated', measurementCriteria: 'Format check' },
+          ],
+          falsifiabilityCriteria: [
+            { condition: 'Invalid email accepted', expectedBehavior: 'Rejected' },
+          ],
         });
 
       const atomB = await request(app.getHttpServer()).post('/atoms').send({
@@ -242,8 +246,12 @@ describe('Commitments (e2e)', () => {
         .patch(`/atoms/${atomB.body.id}`)
         .send({
           qualityScore: 85,
-          observableOutcomes: [{ description: 'Token included in email', measurementCriteria: 'Email content check' }],
-          falsifiabilityCriteria: [{ condition: 'No token in email', expectedBehavior: 'Alert triggered' }],
+          observableOutcomes: [
+            { description: 'Token included in email', measurementCriteria: 'Email content check' },
+          ],
+          falsifiabilityCriteria: [
+            { condition: 'No token in email', expectedBehavior: 'Alert triggered' },
+          ],
         });
 
       const response = await request(app.getHttpServer())
@@ -312,8 +320,12 @@ describe('Commitments (e2e)', () => {
         .patch(`/atoms/${atomResponse.body.id}`)
         .send({
           qualityScore: 85,
-          observableOutcomes: [{ description: 'Errors handled gracefully', measurementCriteria: 'User feedback' }],
-          falsifiabilityCriteria: [{ condition: 'Unhandled error', expectedBehavior: 'Graceful degradation' }],
+          observableOutcomes: [
+            { description: 'Errors handled gracefully', measurementCriteria: 'User feedback' },
+          ],
+          falsifiabilityCriteria: [
+            { condition: 'Unhandled error', expectedBehavior: 'Graceful degradation' },
+          ],
         });
 
       const response = await request(app.getHttpServer())
@@ -417,8 +429,12 @@ describe('Commitments (e2e)', () => {
         .patch(`/atoms/${atomResponse.body.id}`)
         .send({
           qualityScore: 85,
-          observableOutcomes: [{ description: 'Avatar displays', measurementCriteria: 'Load time < 1s' }],
-          falsifiabilityCriteria: [{ condition: 'Avatar load > 1s', expectedBehavior: 'Alert triggered' }],
+          observableOutcomes: [
+            { description: 'Avatar displays', measurementCriteria: 'Load time < 1s' },
+          ],
+          falsifiabilityCriteria: [
+            { condition: 'Avatar load > 1s', expectedBehavior: 'Alert triggered' },
+          ],
         });
 
       const commitmentResponse = await request(app.getHttpServer())
@@ -440,8 +456,12 @@ describe('Commitments (e2e)', () => {
         .patch(`/atoms/${newAtomResponse.body.id}`)
         .send({
           qualityScore: 85,
-          observableOutcomes: [{ description: 'Avatar lazy loads', measurementCriteria: 'Load time < 500ms' }],
-          falsifiabilityCriteria: [{ condition: 'Avatar load > 500ms', expectedBehavior: 'Alert triggered' }],
+          observableOutcomes: [
+            { description: 'Avatar lazy loads', measurementCriteria: 'Load time < 500ms' },
+          ],
+          falsifiabilityCriteria: [
+            { condition: 'Avatar load > 500ms', expectedBehavior: 'Alert triggered' },
+          ],
         });
       newAtomForSupersession = newAtomResponse.body.id;
     });
@@ -480,7 +500,9 @@ describe('Commitments (e2e)', () => {
         .patch(`/atoms/${atomResponse.body.id}`)
         .send({
           qualityScore: 85,
-          observableOutcomes: [{ description: 'Placeholder tested', measurementCriteria: 'Check complete' }],
+          observableOutcomes: [
+            { description: 'Placeholder tested', measurementCriteria: 'Check complete' },
+          ],
           falsifiabilityCriteria: [{ condition: 'Test fails', expectedBehavior: 'Error reported' }],
         });
 
@@ -509,8 +531,12 @@ describe('Commitments (e2e)', () => {
         .patch(`/atoms/${atom1.body.id}`)
         .send({
           qualityScore: 85,
-          observableOutcomes: [{ description: 'Response within 500ms', measurementCriteria: 'Load test results' }],
-          falsifiabilityCriteria: [{ condition: 'Response > 500ms', expectedBehavior: 'Performance alert' }],
+          observableOutcomes: [
+            { description: 'Response within 500ms', measurementCriteria: 'Load test results' },
+          ],
+          falsifiabilityCriteria: [
+            { condition: 'Response > 500ms', expectedBehavior: 'Performance alert' },
+          ],
         });
 
       const commitment1 = await request(app.getHttpServer())
@@ -530,8 +556,12 @@ describe('Commitments (e2e)', () => {
         .patch(`/atoms/${atom2.body.id}`)
         .send({
           qualityScore: 85,
-          observableOutcomes: [{ description: 'Response within 300ms', measurementCriteria: 'Cached load test' }],
-          falsifiabilityCriteria: [{ condition: 'Response > 300ms', expectedBehavior: 'Cache miss alert' }],
+          observableOutcomes: [
+            { description: 'Response within 300ms', measurementCriteria: 'Cached load test' },
+          ],
+          falsifiabilityCriteria: [
+            { condition: 'Response > 300ms', expectedBehavior: 'Cache miss alert' },
+          ],
         });
 
       const commitment2 = await request(app.getHttpServer())

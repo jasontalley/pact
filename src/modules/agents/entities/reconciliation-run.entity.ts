@@ -20,11 +20,7 @@ export type ReconciliationMode = 'full-scan' | 'delta';
 /**
  * Status of a reconciliation run
  */
-export type ReconciliationRunStatus =
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'pending_review';
+export type ReconciliationRunStatus = 'running' | 'completed' | 'failed' | 'pending_review';
 
 /**
  * Summary of reconciliation results

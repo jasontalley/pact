@@ -69,10 +69,14 @@ export async function getGitRepoInfo(directory: string): Promise<GitRepoInfo> {
     const { stdout: headCommit } = await execAsync('git rev-parse HEAD', { cwd: directory });
 
     // Get current branch
-    const { stdout: branch } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: directory });
+    const { stdout: branch } = await execAsync('git rev-parse --abbrev-ref HEAD', {
+      cwd: directory,
+    });
 
     // Get repo root
-    const { stdout: repoRoot } = await execAsync('git rev-parse --show-toplevel', { cwd: directory });
+    const { stdout: repoRoot } = await execAsync('git rev-parse --show-toplevel', {
+      cwd: directory,
+    });
 
     return {
       isGitRepo: true,
@@ -145,10 +149,9 @@ export async function getChangedFiles(
     }
 
     // Get changed files using git diff
-    const { stdout } = await execAsync(
-      `git diff --name-only ${baseCommit}..${resolvedHead}`,
-      { cwd: directory },
-    );
+    const { stdout } = await execAsync(`git diff --name-only ${baseCommit}..${resolvedHead}`, {
+      cwd: directory,
+    });
 
     const changedFiles = stdout
       .trim()
@@ -256,10 +259,7 @@ export async function getFileAtCommit(
   commitHash: string,
 ): Promise<string | null> {
   try {
-    const { stdout } = await execAsync(
-      `git show ${commitHash}:${filePath}`,
-      { cwd: directory },
-    );
+    const { stdout } = await execAsync(`git show ${commitHash}:${filePath}`, { cwd: directory });
     return stdout;
   } catch {
     return null;
@@ -282,10 +282,9 @@ export async function getFileDiff(
   headCommit: string = 'HEAD',
 ): Promise<string | null> {
   try {
-    const { stdout } = await execAsync(
-      `git diff ${baseCommit}..${headCommit} -- ${filePath}`,
-      { cwd: directory },
-    );
+    const { stdout } = await execAsync(`git diff ${baseCommit}..${headCommit} -- ${filePath}`, {
+      cwd: directory,
+    });
     return stdout.trim() || null;
   } catch {
     return null;
@@ -312,7 +311,10 @@ export async function getChangedLineNumbers(
     );
 
     const lineNumbers: number[] = [];
-    const lines = stdout.trim().split('\n').filter((l) => l.length > 0);
+    const lines = stdout
+      .trim()
+      .split('\n')
+      .filter((l) => l.length > 0);
 
     for (const line of lines) {
       const match = line.match(/\+(\d+)/);

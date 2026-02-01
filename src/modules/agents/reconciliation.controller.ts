@@ -7,18 +7,19 @@
  * @see docs/implementation-checklist-phase5.md Section 4.4
  */
 
-import {
-  Controller,
-  Post,
-  Get,
-  Body,
-  Param,
-  HttpCode,
-  HttpStatus,
-  Logger,
-} from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, HttpCode, HttpStatus, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam } from '@nestjs/swagger';
-import { IsOptional, IsString, IsIn, IsBoolean, IsNumber, ValidateNested, Min, Max, IsArray } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsIn,
+  IsBoolean,
+  IsNumber,
+  ValidateNested,
+  Min,
+  Max,
+  IsArray,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import {
   ReconciliationService,
@@ -310,7 +311,8 @@ export class ReconciliationController {
   @Get('runs/:runId/metrics')
   @ApiOperation({
     summary: 'Get quality metrics',
-    description: 'Get quality metrics for a reconciliation run including atom confidence, category distribution, and pass/fail counts.',
+    description:
+      'Get quality metrics for a reconciliation run including atom confidence, category distribution, and pass/fail counts.',
   })
   @ApiParam({ name: 'runId', description: 'The run ID' })
   @ApiResponse({
@@ -493,7 +495,8 @@ export class ReconciliationController {
   @Get('recoverable')
   @ApiOperation({
     summary: 'List recoverable runs',
-    description: 'List runs that were interrupted or failed but have partial results that can be recovered.',
+    description:
+      'List runs that were interrupted or failed but have partial results that can be recovered.',
   })
   @ApiResponse({
     status: 200,
@@ -511,7 +514,8 @@ export class ReconciliationController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Recover partial results',
-    description: 'Mark a failed/interrupted run as recovered and make its partial results available for review.',
+    description:
+      'Mark a failed/interrupted run as recovered and make its partial results available for review.',
   })
   @ApiParam({ name: 'runId', description: 'The run ID to recover' })
   @ApiResponse({

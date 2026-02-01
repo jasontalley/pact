@@ -223,10 +223,9 @@ export class MoleculesRepository {
 
     // Full-text search on name and description
     if (filters.search) {
-      qb.andWhere(
-        '(molecule.name ILIKE :search OR molecule.description ILIKE :search)',
-        { search: `%${filters.search}%` },
-      );
+      qb.andWhere('(molecule.name ILIKE :search OR molecule.description ILIKE :search)', {
+        search: `%${filters.search}%`,
+      });
     }
   }
 
@@ -419,10 +418,7 @@ export class MoleculesRepository {
       .createQueryBuilder('molecule')
       .select('molecule.moleculeId')
       .where("molecule.moleculeId LIKE 'M-%'")
-      .orderBy(
-        'CAST(SUBSTRING(molecule.moleculeId FROM 3) AS INTEGER)',
-        'DESC',
-      )
+      .orderBy('CAST(SUBSTRING(molecule.moleculeId FROM 3) AS INTEGER)', 'DESC')
       .limit(1)
       .getOne();
 

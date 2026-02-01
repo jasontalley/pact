@@ -26,7 +26,8 @@ export class MoleculeSearchDto {
   @IsArray()
   @IsEnum(['user_story', 'feature', 'journey', 'epic', 'release', 'capability', 'custom'], {
     each: true,
-    message: 'Each lens type must be one of: user_story, feature, journey, epic, release, capability, custom',
+    message:
+      'Each lens type must be one of: user_story, feature, journey, epic, release, capability, custom',
   })
   @IsOptional()
   @Transform(({ value }) => (Array.isArray(value) ? value : [value]))

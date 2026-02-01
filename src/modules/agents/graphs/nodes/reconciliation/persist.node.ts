@@ -27,10 +27,7 @@ import {
   createMoleculeOp,
   attachTestToAtomOp,
 } from '../../types/reconciliation-patch';
-import {
-  ReconciliationResult,
-  ReconciliationStatus,
-} from '../../types/reconciliation-result';
+import { ReconciliationResult, ReconciliationStatus } from '../../types/reconciliation-result';
 import { ReconciliationRepository } from '../../../repositories/reconciliation.repository';
 import { getCurrentCommitHash } from '../../../utils/git-utils';
 
@@ -178,7 +175,9 @@ export function createPersistNode(options: PersistNodeOptions = {}) {
       // Build patch ops
       const atomOps = buildAtomOps(inferredAtoms, qualityThreshold);
       const validAtomTempIds = new Set(
-        atomOps.filter((op) => op.type === 'createAtom').map((op) => (op as { tempId: string }).tempId),
+        atomOps
+          .filter((op) => op.type === 'createAtom')
+          .map((op) => (op as { tempId: string }).tempId),
       );
 
       const moleculeOps = buildMoleculeOps(inferredMolecules, validAtomTempIds);
@@ -246,9 +245,7 @@ export function createPersistNode(options: PersistNodeOptions = {}) {
               llmCalls: state.llmCallCount || 0,
             });
 
-            config.logger?.log(
-              `[PersistNode] Updated run ${runId} status to ${status}`,
-            );
+            config.logger?.log(`[PersistNode] Updated run ${runId} status to ${status}`);
           } else {
             // No interim run - create full records (fallback path)
             config.logger?.log('[PersistNode] No interim run, creating full records');
@@ -346,7 +343,16 @@ export function createPersistNode(options: PersistNodeOptions = {}) {
           commitHash: currentCommitHash,
           baselineCommitHash: state.input?.deltaBaseline?.commitHash,
           reviewRequired: state.pendingHumanReview || false,
-          phasesCompleted: ['structure', 'discover', 'context', 'infer', 'synthesize', 'interim_persist', 'verify', 'persist'],
+          phasesCompleted: [
+            'structure',
+            'discover',
+            'context',
+            'infer',
+            'synthesize',
+            'interim_persist',
+            'verify',
+            'persist',
+          ],
         },
         errors: state.errors || [],
       };
@@ -354,8 +360,8 @@ export function createPersistNode(options: PersistNodeOptions = {}) {
       config.logger?.log(`[PersistNode] Reconciliation complete: ${runId}`);
       config.logger?.log(
         `[PersistNode] Summary: ${result.summary.totalOrphanTests} orphan tests -> ` +
-        `${result.summary.inferredAtomsCount} atoms (${qualityPassCount} pass, ${qualityFailCount} fail) -> ` +
-        `${result.summary.inferredMoleculesCount} molecules`,
+          `${result.summary.inferredAtomsCount} atoms (${qualityPassCount} pass, ${qualityFailCount} fail) -> ` +
+          `${result.summary.inferredMoleculesCount} molecules`,
       );
       config.logger?.log(
         `[PersistNode] Duration: ${duration}ms, LLM calls: ${result.metadata.llmCalls}`,

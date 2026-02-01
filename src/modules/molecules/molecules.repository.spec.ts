@@ -200,10 +200,9 @@ describe('MoleculesRepository', () => {
 
       await repository.search({ lensType: ['feature'] as LensType[] });
 
-      expect(qb.andWhere).toHaveBeenCalledWith(
-        'molecule.lensType IN (:...lensTypes)',
-        { lensTypes: ['feature'] },
-      );
+      expect(qb.andWhere).toHaveBeenCalledWith('molecule.lensType IN (:...lensTypes)', {
+        lensTypes: ['feature'],
+      });
     });
 
     it('should apply owner filter', async () => {
@@ -315,10 +314,7 @@ describe('MoleculesRepository', () => {
 
   describe('getOrphanAtomIds', () => {
     it('should return orphan atom IDs', async () => {
-      mockMoleculeRepository.manager.query.mockResolvedValue([
-        { id: 'atom-1' },
-        { id: 'atom-2' },
-      ]);
+      mockMoleculeRepository.manager.query.mockResolvedValue([{ id: 'atom-1' }, { id: 'atom-2' }]);
 
       const result = await repository.getOrphanAtomIds();
 

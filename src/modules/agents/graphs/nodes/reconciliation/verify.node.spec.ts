@@ -34,7 +34,9 @@ function createMockAtom(overrides: Partial<InferredAtom> = {}): InferredAtom {
 /**
  * Create a minimal state for testing
  */
-function createMockState(overrides: Partial<ReconciliationGraphStateType> = {}): ReconciliationGraphStateType {
+function createMockState(
+  overrides: Partial<ReconciliationGraphStateType> = {},
+): ReconciliationGraphStateType {
   return {
     rootDirectory: '/test',
     input: {
@@ -281,10 +283,7 @@ describe('VerifyNode', () => {
     });
 
     it('should include correct interrupt payload when interrupting', async () => {
-      const atoms = [
-        createMockAtom({ tempId: 'atom-1' }),
-        createMockAtom({ tempId: 'atom-2' }),
-      ];
+      const atoms = [createMockAtom({ tempId: 'atom-1' }), createMockAtom({ tempId: 'atom-2' })];
 
       const state = createMockState({
         inferredAtoms: atoms,
@@ -321,7 +320,10 @@ describe('VerifyNode', () => {
         // NodeInterrupt stores interrupts in an array format
         // The message is JSON array: [{ value: "...", when: "during" }]
         const interruptError = error as NodeInterrupt;
-        const interrupts = JSON.parse(interruptError.message) as Array<{ value: string; when: string }>;
+        const interrupts = JSON.parse(interruptError.message) as Array<{
+          value: string;
+          when: string;
+        }>;
         expect(interrupts).toHaveLength(1);
 
         const payload: InterruptPayload = JSON.parse(interrupts[0].value);
@@ -416,7 +418,9 @@ describe('VerifyNode', () => {
       await node(state);
 
       // Atom with 0.7 confidence should have higher score due to confidence check passing
-      expect(atomWithGoodConfidence.qualityScore).toBeGreaterThan(atomWithBadConfidence.qualityScore!);
+      expect(atomWithGoodConfidence.qualityScore).toBeGreaterThan(
+        atomWithBadConfidence.qualityScore!,
+      );
     });
   });
 

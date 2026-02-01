@@ -10,10 +10,18 @@ import { BaseMessage } from '@langchain/core/messages';
 
 // Forward declaration for deduplication - actual implementation in utils/finding-compactor.ts
 // to avoid circular dependency, we inline the evidence level logic here
-function getEvidenceLevel(finding: { computedFacts?: Record<string, unknown>; parseMetadata?: { parseSuccess?: boolean }; relevance?: string }): number {
+function getEvidenceLevel(finding: {
+  computedFacts?: Record<string, unknown>;
+  parseMetadata?: { parseSuccess?: boolean };
+  relevance?: string;
+}): number {
   if (finding.computedFacts && Object.keys(finding.computedFacts).length > 0) return 4;
   if (finding.parseMetadata?.parseSuccess) return 3;
-  if (finding.relevance === 'Directory listing' || finding.relevance === 'Directory listing (discovery phase)') return 1;
+  if (
+    finding.relevance === 'Directory listing' ||
+    finding.relevance === 'Directory listing (discovery phase)'
+  )
+    return 1;
   return 2;
 }
 

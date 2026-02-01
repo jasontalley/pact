@@ -158,8 +158,7 @@ export const RECONCILIATION_TOOLS: ToolDefinition[] = [
         },
         doc_patterns: {
           type: 'string',
-          description:
-            'Comma-separated glob patterns for documentation files (default: "**/*.md")',
+          description: 'Comma-separated glob patterns for documentation files (default: "**/*.md")',
         },
         max_snippets: {
           type: 'string',

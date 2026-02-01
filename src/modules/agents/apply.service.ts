@@ -206,9 +206,7 @@ export class ApplyService {
             .filter((id): id is string => id !== undefined);
 
           if (atomIds.length === 0) {
-            this.logger.warn(
-              `Skipping molecule ${moleculeRec.id} - no valid atom IDs found`,
-            );
+            this.logger.warn(`Skipping molecule ${moleculeRec.id} - no valid atom IDs found`);
             continue;
           }
 
@@ -256,7 +254,9 @@ export class ApplyService {
 
       // Commit transaction
       await queryRunner.commitTransaction();
-      this.logger.log(`Transaction committed: ${atomsCreated} atoms, ${moleculesCreated} molecules`);
+      this.logger.log(
+        `Transaction committed: ${atomsCreated} atoms, ${moleculesCreated} molecules`,
+      );
     } catch (error) {
       // INV-R003: Rollback on any error
       await queryRunner.rollbackTransaction();
@@ -294,7 +294,7 @@ export class ApplyService {
           const errorMessage = error instanceof Error ? error.message : String(error);
           this.logger.warn(
             `Failed to inject annotation in ${mod.filePath}: ${errorMessage}. ` +
-            `DB changes are preserved per INV-R003.`,
+              `DB changes are preserved per INV-R003.`,
           );
 
           operations.push({
@@ -315,7 +315,7 @@ export class ApplyService {
 
     this.logger.log(
       `Apply complete: ${status} - ${atomsCreated} atoms, ${moleculesCreated} molecules, ` +
-      `${annotationsInjected} annotations`,
+        `${annotationsInjected} annotations`,
     );
 
     return {

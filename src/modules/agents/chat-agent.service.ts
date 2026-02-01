@@ -315,12 +315,12 @@ export class ChatAgentService {
     this.logger.log(`Using coverage fast-path for session ${session.id}`);
 
     try {
-      const result = await this.graphRegistry.invoke<
-        { input: string },
-        CoverageFastStateType
-      >('coverage-fast', {
-        input: request.message,
-      });
+      const result = await this.graphRegistry.invoke<{ input: string }, CoverageFastStateType>(
+        'coverage-fast',
+        {
+          input: request.message,
+        },
+      );
 
       // Check if fast-path found actual coverage data
       // If not, fall back to standard graph for more thorough exploration
@@ -523,13 +523,17 @@ export class ChatAgentService {
     }
 
     // Check for quality threshold
-    const qualityMatch = message.match(/quality\s*(?:threshold|score)?\s*(?:of|at|above)?\s*(\d+)/i);
+    const qualityMatch = message.match(
+      /quality\s*(?:threshold|score)?\s*(?:of|at|above)?\s*(\d+)/i,
+    );
     if (qualityMatch) {
       options.qualityThreshold = parseInt(qualityMatch[1], 10);
     }
 
     // Check for directory path
-    const dirMatch = message.match(/(?:in|at|from)\s+(?:directory|path|folder)?\s*['""]?([./\w-]+)['""]?/i);
+    const dirMatch = message.match(
+      /(?:in|at|from)\s+(?:directory|path|folder)?\s*['""]?([./\w-]+)['""]?/i,
+    );
     if (dirMatch && dirMatch[1] !== 'delta') {
       options.rootDirectory = dirMatch[1];
     }

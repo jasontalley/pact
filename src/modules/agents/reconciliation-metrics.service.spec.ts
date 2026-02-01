@@ -141,7 +141,9 @@ describe('ReconciliationService - Metrics', () => {
     it('should calculate correct average atom confidence', async () => {
       mockRepository.findRunByRunId.mockResolvedValue(mockRun as any);
       mockRepository.findAtomRecommendationsByRun.mockResolvedValue(mockAtomRecommendations as any);
-      mockRepository.findMoleculeRecommendationsByRun.mockResolvedValue(mockMoleculeRecommendations as any);
+      mockRepository.findMoleculeRecommendationsByRun.mockResolvedValue(
+        mockMoleculeRecommendations as any,
+      );
 
       const metrics = await service.getMetrics('REC-abc123');
 
@@ -152,7 +154,9 @@ describe('ReconciliationService - Metrics', () => {
     it('should calculate correct average atom quality score', async () => {
       mockRepository.findRunByRunId.mockResolvedValue(mockRun as any);
       mockRepository.findAtomRecommendationsByRun.mockResolvedValue(mockAtomRecommendations as any);
-      mockRepository.findMoleculeRecommendationsByRun.mockResolvedValue(mockMoleculeRecommendations as any);
+      mockRepository.findMoleculeRecommendationsByRun.mockResolvedValue(
+        mockMoleculeRecommendations as any,
+      );
 
       const metrics = await service.getMetrics('REC-abc123');
 
@@ -163,7 +167,9 @@ describe('ReconciliationService - Metrics', () => {
     it('should calculate correct average molecule confidence', async () => {
       mockRepository.findRunByRunId.mockResolvedValue(mockRun as any);
       mockRepository.findAtomRecommendationsByRun.mockResolvedValue(mockAtomRecommendations as any);
-      mockRepository.findMoleculeRecommendationsByRun.mockResolvedValue(mockMoleculeRecommendations as any);
+      mockRepository.findMoleculeRecommendationsByRun.mockResolvedValue(
+        mockMoleculeRecommendations as any,
+      );
 
       const metrics = await service.getMetrics('REC-abc123');
 
@@ -174,7 +180,9 @@ describe('ReconciliationService - Metrics', () => {
     it('should calculate correct atoms passing/failing threshold', async () => {
       mockRepository.findRunByRunId.mockResolvedValue(mockRun as any);
       mockRepository.findAtomRecommendationsByRun.mockResolvedValue(mockAtomRecommendations as any);
-      mockRepository.findMoleculeRecommendationsByRun.mockResolvedValue(mockMoleculeRecommendations as any);
+      mockRepository.findMoleculeRecommendationsByRun.mockResolvedValue(
+        mockMoleculeRecommendations as any,
+      );
 
       const metrics = await service.getMetrics('REC-abc123', 80);
 
@@ -187,7 +195,9 @@ describe('ReconciliationService - Metrics', () => {
     it('should calculate correct category distribution', async () => {
       mockRepository.findRunByRunId.mockResolvedValue(mockRun as any);
       mockRepository.findAtomRecommendationsByRun.mockResolvedValue(mockAtomRecommendations as any);
-      mockRepository.findMoleculeRecommendationsByRun.mockResolvedValue(mockMoleculeRecommendations as any);
+      mockRepository.findMoleculeRecommendationsByRun.mockResolvedValue(
+        mockMoleculeRecommendations as any,
+      );
 
       const metrics = await service.getMetrics('REC-abc123');
 
@@ -201,7 +211,9 @@ describe('ReconciliationService - Metrics', () => {
     it('should calculate correct status distributions', async () => {
       mockRepository.findRunByRunId.mockResolvedValue(mockRun as any);
       mockRepository.findAtomRecommendationsByRun.mockResolvedValue(mockAtomRecommendations as any);
-      mockRepository.findMoleculeRecommendationsByRun.mockResolvedValue(mockMoleculeRecommendations as any);
+      mockRepository.findMoleculeRecommendationsByRun.mockResolvedValue(
+        mockMoleculeRecommendations as any,
+      );
 
       const metrics = await service.getMetrics('REC-abc123');
 
@@ -220,7 +232,9 @@ describe('ReconciliationService - Metrics', () => {
     it('should return correct totals', async () => {
       mockRepository.findRunByRunId.mockResolvedValue(mockRun as any);
       mockRepository.findAtomRecommendationsByRun.mockResolvedValue(mockAtomRecommendations as any);
-      mockRepository.findMoleculeRecommendationsByRun.mockResolvedValue(mockMoleculeRecommendations as any);
+      mockRepository.findMoleculeRecommendationsByRun.mockResolvedValue(
+        mockMoleculeRecommendations as any,
+      );
 
       const metrics = await service.getMetrics('REC-abc123');
 
@@ -253,7 +267,9 @@ describe('ReconciliationService - Metrics', () => {
     it('should use default quality threshold of 80', async () => {
       mockRepository.findRunByRunId.mockResolvedValue(mockRun as any);
       mockRepository.findAtomRecommendationsByRun.mockResolvedValue(mockAtomRecommendations as any);
-      mockRepository.findMoleculeRecommendationsByRun.mockResolvedValue(mockMoleculeRecommendations as any);
+      mockRepository.findMoleculeRecommendationsByRun.mockResolvedValue(
+        mockMoleculeRecommendations as any,
+      );
 
       const metrics = await service.getMetrics('REC-abc123');
 
@@ -263,7 +279,9 @@ describe('ReconciliationService - Metrics', () => {
     it('should respect custom quality threshold', async () => {
       mockRepository.findRunByRunId.mockResolvedValue(mockRun as any);
       mockRepository.findAtomRecommendationsByRun.mockResolvedValue(mockAtomRecommendations as any);
-      mockRepository.findMoleculeRecommendationsByRun.mockResolvedValue(mockMoleculeRecommendations as any);
+      mockRepository.findMoleculeRecommendationsByRun.mockResolvedValue(
+        mockMoleculeRecommendations as any,
+      );
 
       // With threshold 60, atoms with scores 90, 70, 95, 55 -> 3 pass (90, 70, 95)
       const metrics = await service.getMetrics('REC-abc123', 60);

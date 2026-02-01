@@ -330,11 +330,7 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
         );
 
         // Process human decisions
-        const decisions = processHumanReviewInput(
-          inferredAtoms,
-          humanReviewInput,
-          inputThreshold,
-        );
+        const decisions = processHumanReviewInput(inferredAtoms, humanReviewInput, inputThreshold);
 
         const approvedCount = decisions.filter((d) => d === 'approved').length;
         const rejectedCount = decisions.filter((d) => d === 'rejected').length;
@@ -370,24 +366,22 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
         // Try tool-based validation first
         if (hasValidateTool) {
           try {
-            const toolResult = await config.toolRegistry.executeTool(
-              'validate_atom_quality',
-              {
-                atom_temp_id: atom.tempId,
-                atom_description: atom.description,
-                observable_outcomes: atom.observableOutcomes?.join(',') || '',
-                category: atom.category || '',
-                reasoning: atom.reasoning || '',
-                confidence: String(atom.confidence || 0),
-                quality_threshold: String(inputThreshold),
-              },
-            ) as ValidateAtomToolResult;
+            const toolResult = (await config.toolRegistry.executeTool('validate_atom_quality', {
+              atom_temp_id: atom.tempId,
+              atom_description: atom.description,
+              observable_outcomes: atom.observableOutcomes?.join(',') || '',
+              category: atom.category || '',
+              reasoning: atom.reasoning || '',
+              confidence: String(atom.confidence || 0),
+              quality_threshold: String(inputThreshold),
+            })) as ValidateAtomToolResult;
 
             score = toolResult.quality_score;
             issues = toolResult.validation_issues || [];
             passes = toolResult.passes_threshold;
           } catch (toolError) {
-            const toolErrorMessage = toolError instanceof Error ? toolError.message : String(toolError);
+            const toolErrorMessage =
+              toolError instanceof Error ? toolError.message : String(toolError);
             config.logger?.warn(
               `[VerifyNode] Tool failed for ${atom.tempId}, falling back: ${toolErrorMessage}`,
             );
@@ -427,16 +421,14 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
         }
       }
 
-      config.logger?.log(
-        `[VerifyNode] Quality results: ${passCount} pass, ${failCount} fail`,
-      );
+      config.logger?.log(`[VerifyNode] Quality results: ${passCount} pass, ${failCount} fail`);
 
       // Warn if quality failure rate is high (but don't interrupt unless requested)
       const failureRate = inferredAtoms.length > 0 ? failCount / inferredAtoms.length : 0;
       if (failureRate > 0.5) {
         config.logger?.warn(
           `[VerifyNode] High quality failure rate: ${(failureRate * 100).toFixed(1)}% ` +
-          `(${failCount}/${inferredAtoms.length}). Consider reviewing the inference prompts or lowering the quality threshold.`,
+            `(${failCount}/${inferredAtoms.length}). Consider reviewing the inference prompts or lowering the quality threshold.`,
         );
       }
 
@@ -465,7 +457,7 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
       if (needsReview && useInterrupt) {
         config.logger?.log(
           `[VerifyNode] Interrupting for human review (requireReview=${inputRequireReview}, ` +
-          `forceInterruptOnQualityFail=${inputForceInterruptOnQualityFail}, failCount=${failCount})`,
+            `forceInterruptOnQualityFail=${inputForceInterruptOnQualityFail}, failCount=${failCount})`,
         );
 
         // Build interrupt payload with all data needed for review
@@ -502,9 +494,7 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
       }
 
       if (needsReview) {
-        config.logger?.log(
-          `[VerifyNode] Flagging for human review (interrupt disabled)`,
-        );
+        config.logger?.log(`[VerifyNode] Flagging for human review (interrupt disabled)`);
       }
 
       return {

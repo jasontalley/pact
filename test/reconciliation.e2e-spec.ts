@@ -456,9 +456,14 @@ describe('Reconciliation API (e2e)', () => {
 
         expect(statusResponse.body.runId).toBe(runId);
         // Status could be any valid state
-        expect(['running', 'completed', 'failed', 'pending_review', 'waiting_for_review', null]).toContain(
-          statusResponse.body.status,
-        );
+        expect([
+          'running',
+          'completed',
+          'failed',
+          'pending_review',
+          'waiting_for_review',
+          null,
+        ]).toContain(statusResponse.body.status);
       }
     }, 120000); // Very long timeout for LLM processing
 
@@ -493,8 +498,9 @@ describe('Reconciliation API (e2e)', () => {
         const run = recoverableResponse.body[0];
 
         // Get recommendations
-        const recsResponse = await request(app.getHttpServer())
-          .get(`/agents/reconciliation/runs/${run.runId}/recommendations`);
+        const recsResponse = await request(app.getHttpServer()).get(
+          `/agents/reconciliation/runs/${run.runId}/recommendations`,
+        );
 
         if (recsResponse.status === 200) {
           expect(recsResponse.body).toHaveProperty('atoms');

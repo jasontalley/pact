@@ -108,9 +108,7 @@ describe('Molecules CRUD (e2e)', () => {
       expect(response.body.tags).toContain('phase-1');
 
       // Clean up
-      await request(app.getHttpServer())
-        .delete(`/molecules/${response.body.id}`)
-        .expect(204);
+      await request(app.getHttpServer()).delete(`/molecules/${response.body.id}`).expect(204);
     });
 
     it('should create a molecule with custom lens type and label', async () => {
@@ -127,9 +125,7 @@ describe('Molecules CRUD (e2e)', () => {
       expect(response.body.lensLabel).toBe('Sprint Goal');
 
       // Clean up
-      await request(app.getHttpServer())
-        .delete(`/molecules/${response.body.id}`)
-        .expect(204);
+      await request(app.getHttpServer()).delete(`/molecules/${response.body.id}`).expect(204);
     });
 
     it('should reject custom lens type without label', async () => {
@@ -200,16 +196,12 @@ describe('Molecules CRUD (e2e)', () => {
 
   describe('GET /molecules/lens-types', () => {
     it('should return all lens types with metadata', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/molecules/lens-types')
-        .expect(200);
+      const response = await request(app.getHttpServer()).get('/molecules/lens-types').expect(200);
 
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBe(7);
 
-      const userStory = response.body.find(
-        (lt: { type: string }) => lt.type === 'user_story',
-      );
+      const userStory = response.body.find((lt: { type: string }) => lt.type === 'user_story');
       expect(userStory).toBeDefined();
       expect(userStory.label).toBe('User Story');
       expect(userStory.description).toBeDefined();
@@ -401,9 +393,7 @@ describe('Molecules CRUD (e2e)', () => {
         .expect(200);
 
       expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.some((m: { id: string }) => m.id === childMoleculeId)).toBe(
-        true,
-      );
+      expect(response.body.some((m: { id: string }) => m.id === childMoleculeId)).toBe(true);
     });
 
     it('should get ancestors of a molecule', async () => {
@@ -455,9 +445,7 @@ describe('Molecules CRUD (e2e)', () => {
 
   describe('GET /molecules/statistics', () => {
     it('should return aggregate statistics', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/molecules/statistics')
-        .expect(200);
+      const response = await request(app.getHttpServer()).get('/molecules/statistics').expect(200);
 
       expect(response.body).toHaveProperty('totalMolecules');
       expect(response.body).toHaveProperty('byLensType');
@@ -499,14 +487,10 @@ describe('Molecules CRUD (e2e)', () => {
       const moleculeToDelete = createResponse.body.id;
 
       // Delete it
-      await request(app.getHttpServer())
-        .delete(`/molecules/${moleculeToDelete}`)
-        .expect(204);
+      await request(app.getHttpServer()).delete(`/molecules/${moleculeToDelete}`).expect(204);
 
       // Verify it's gone
-      await request(app.getHttpServer())
-        .get(`/molecules/${moleculeToDelete}`)
-        .expect(404);
+      await request(app.getHttpServer()).get(`/molecules/${moleculeToDelete}`).expect(404);
     });
   });
 

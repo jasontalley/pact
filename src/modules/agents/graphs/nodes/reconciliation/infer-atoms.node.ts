@@ -217,10 +217,7 @@ Respond with JSON only (no markdown, no explanation):
 /**
  * Parse LLM response with fallback handling
  */
-function parseInferenceResponse(
-  response: string,
-  testName: string,
-): InferenceResponse | null {
+function parseInferenceResponse(response: string, testName: string): InferenceResponse | null {
   try {
     // Try to extract JSON from response
     const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -253,10 +250,7 @@ function parseInferenceResponse(
 /**
  * Create a fallback atom when LLM inference fails
  */
-function createFallbackAtom(
-  test: OrphanTestInfo,
-  context: TestAnalysis | undefined,
-): InferredAtom {
+function createFallbackAtom(test: OrphanTestInfo, context: TestAnalysis | undefined): InferredAtom {
   return {
     tempId: `temp-${uuidv4()}`,
     description: `Behavior verified by test: ${test.testName}`,
@@ -314,8 +308,9 @@ async function inferAtomWithLLM(
 ): Promise<InferredAtom | null> {
   const testKey = `${test.filePath}:${test.testName}`;
 
-  const prompt = customPrompt
-    || getInferencePrompt(
+  const prompt =
+    customPrompt ||
+    getInferencePrompt(
       test.testName,
       test.testCode || '',
       context || {
@@ -378,13 +373,14 @@ export function createInferAtomsNode(options: InferAtomsNodeOptions = {}) {
       const repoStructure = state.repoStructure;
 
       // Check if dependency context is available
-      const hasDependencyInfo = useDependencyContext &&
+      const hasDependencyInfo =
+        useDependencyContext &&
         repoStructure?.dependencyEdges &&
         repoStructure.dependencyEdges.length > 0;
 
       config.logger?.log(
         `[InferAtomsNode] Inferring atoms for ${orphanTests.length} tests ` +
-        `(useTool=${useTool}, dependencyContext=${hasDependencyInfo})`,
+          `(useTool=${useTool}, dependencyContext=${hasDependencyInfo})`,
       );
 
       // Check if tool is available
@@ -404,28 +400,23 @@ export function createInferAtomsNode(options: InferAtomsNodeOptions = {}) {
           const context = contextPerTest.get(testKey);
 
           // Build dependency context for this test (Phase 3.4)
-          const depContext = hasDependencyInfo
-            ? buildDependencyContext(test, repoStructure)
-            : null;
+          const depContext = hasDependencyInfo ? buildDependencyContext(test, repoStructure) : null;
 
           try {
             // Try tool-based inference first
             if (hasInferTool) {
               try {
-                const toolResult = await config.toolRegistry.executeTool(
-                  'infer_atom_from_test',
-                  {
-                    test_file_path: test.filePath,
-                    test_name: test.testName,
-                    test_line_number: test.lineNumber,
-                    test_code: test.testCode || '',
-                    context_summary: context?.summary || '',
-                    domain_concepts: context?.domainConcepts?.join(',') || '',
-                    // Include dependency info if available
-                    is_foundational: depContext?.isFoundational || false,
-                    dependent_count: depContext?.dependentCount || 0,
-                  },
-                ) as InferAtomToolResult;
+                const toolResult = (await config.toolRegistry.executeTool('infer_atom_from_test', {
+                  test_file_path: test.filePath,
+                  test_name: test.testName,
+                  test_line_number: test.lineNumber,
+                  test_code: test.testCode || '',
+                  context_summary: context?.summary || '',
+                  domain_concepts: context?.domainConcepts?.join(',') || '',
+                  // Include dependency info if available
+                  is_foundational: depContext?.isFoundational || false,
+                  dependent_count: depContext?.dependentCount || 0,
+                })) as InferAtomToolResult;
 
                 llmCallCount++;
 
@@ -462,7 +453,8 @@ export function createInferAtomsNode(options: InferAtomsNodeOptions = {}) {
                   return null;
                 }
               } catch (toolError) {
-                const toolErrorMessage = toolError instanceof Error ? toolError.message : String(toolError);
+                const toolErrorMessage =
+                  toolError instanceof Error ? toolError.message : String(toolError);
                 config.logger?.warn(
                   `[InferAtomsNode] Tool failed for ${testKey}, falling back to LLM: ${toolErrorMessage}`,
                 );

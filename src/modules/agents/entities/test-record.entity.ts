@@ -17,11 +17,7 @@ import type { AtomRecommendation } from './atom-recommendation.entity';
  * - Tests with 'accepted' or 'rejected' status are "closed"
  * - Closed tests are excluded from future delta reconciliation
  */
-export type TestRecordStatus =
-  | 'pending'
-  | 'accepted'
-  | 'rejected'
-  | 'skipped';
+export type TestRecordStatus = 'pending' | 'accepted' | 'rejected' | 'skipped';
 
 /**
  * TestRecord entity tracks each test analyzed during reconciliation.

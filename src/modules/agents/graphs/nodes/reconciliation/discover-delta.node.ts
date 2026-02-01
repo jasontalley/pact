@@ -83,9 +83,7 @@ export function createDiscoverDeltaNode(options: DiscoverDeltaNodeOptions = {}) 
       const baseline = state.input?.deltaBaseline;
       const inputMaxTests = state.input?.options?.maxTests || maxTests;
 
-      config.logger?.log(
-        `[DiscoverDeltaNode] Discovering delta orphan tests (useTool=${useTool})`,
-      );
+      config.logger?.log(`[DiscoverDeltaNode] Discovering delta orphan tests (useTool=${useTool})`);
       config.logger?.log(
         `[DiscoverDeltaNode] Baseline: commit=${baseline?.commitHash}, runId=${baseline?.runId}`,
       );
@@ -95,9 +93,7 @@ export function createDiscoverDeltaNode(options: DiscoverDeltaNodeOptions = {}) 
       const hasBaseline = baseline?.commitHash || baseline?.runId;
 
       if (!hasBaseline) {
-        config.logger?.warn(
-          '[DiscoverDeltaNode] No baseline provided, falling back to fullscan',
-        );
+        config.logger?.warn('[DiscoverDeltaNode] No baseline provided, falling back to fullscan');
         return fullscanNode(config)(state);
       }
 
@@ -106,15 +102,12 @@ export function createDiscoverDeltaNode(options: DiscoverDeltaNodeOptions = {}) 
         try {
           config.logger?.log('[DiscoverDeltaNode] Using discover_orphans_delta tool');
 
-          const result = await config.toolRegistry.executeTool(
-            'discover_orphans_delta',
-            {
-              root_directory: rootDirectory,
-              baseline_commit: baseline.commitHash,
-              baseline_run_id: baseline.runId,
-              max_orphans: inputMaxTests,
-            },
-          ) as DeltaDiscoveryResult;
+          const result = (await config.toolRegistry.executeTool('discover_orphans_delta', {
+            root_directory: rootDirectory,
+            baseline_commit: baseline.commitHash,
+            baseline_run_id: baseline.runId,
+            max_orphans: inputMaxTests,
+          })) as DeltaDiscoveryResult;
 
           // Check if delta fell back to fullscan
           if (result.deltaSummary.fallbackToFullscan) {
@@ -135,11 +128,7 @@ export function createDiscoverDeltaNode(options: DiscoverDeltaNodeOptions = {}) 
           // INV-R002: Delta Closure Stopping Rule
           // Exclude tests that have terminal status (accepted/rejected) from prior runs
           if (enforceClosureRule) {
-            orphanTests = await excludeClosedTests(
-              orphanTests,
-              rootDirectory,
-              config,
-            );
+            orphanTests = await excludeClosedTests(orphanTests, rootDirectory, config);
           }
 
           // INV-R001: Handle changed atom-linked tests
@@ -149,7 +138,7 @@ export function createDiscoverDeltaNode(options: DiscoverDeltaNodeOptions = {}) 
           if (changedAtomLinkedTests.length > 0) {
             config.logger?.warn(
               `[DiscoverDeltaNode] Found ${changedAtomLinkedTests.length} changed atom-linked tests. ` +
-              'Per INV-R001, these will NOT be processed for new atoms.',
+                'Per INV-R001, these will NOT be processed for new atoms.',
             );
 
             // Log each one for audit trail
@@ -162,7 +151,7 @@ export function createDiscoverDeltaNode(options: DiscoverDeltaNodeOptions = {}) 
 
           config.logger?.log(
             `[DiscoverDeltaNode] Delta discovery complete: ${orphanTests.length} orphans, ` +
-            `${changedAtomLinkedTests.length} atom-linked (excluded from inference)`,
+              `${changedAtomLinkedTests.length} atom-linked (excluded from inference)`,
           );
 
           return {

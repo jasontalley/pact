@@ -148,9 +148,7 @@ describe('ChatAgentController', () => {
       chatAgentService.getSession.mockReturnValue(undefined);
 
       // Attempting to export non-existent session should throw NotFoundException
-      expect(() => controller.exportSession('non-existent', 'markdown')).toThrow(
-        NotFoundException,
-      );
+      expect(() => controller.exportSession('non-existent', 'markdown')).toThrow(NotFoundException);
     });
   });
 });

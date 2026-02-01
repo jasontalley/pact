@@ -32,7 +32,8 @@ export class CreateMoleculeDto {
   @ApiPropertyOptional({
     description: 'Detailed description (markdown-enabled)',
     maxLength: 5000,
-    example: 'This user story covers the complete authentication flow including login, logout, and session management.',
+    example:
+      'This user story covers the complete authentication flow including login, logout, and session management.',
   })
   @IsString()
   @IsOptional()
@@ -48,7 +49,8 @@ export class CreateMoleculeDto {
   @IsString()
   @IsNotEmpty()
   @IsEnum(['user_story', 'feature', 'journey', 'epic', 'release', 'capability', 'custom'], {
-    message: 'Lens type must be one of: user_story, feature, journey, epic, release, capability, custom',
+    message:
+      'Lens type must be one of: user_story, feature, journey, epic, release, capability, custom',
   })
   lensType: LensType;
 
@@ -90,9 +92,12 @@ export class CreateMoleculeDto {
 export const LENS_TYPE_METADATA = Object.entries(LENS_TYPE_DESCRIPTIONS).map(
   ([type, description]) => ({
     type: type as LensType,
-    label: type === 'user_story' ? 'User Story' :
-           type === 'journey' ? 'User Journey' :
-           type.charAt(0).toUpperCase() + type.slice(1),
+    label:
+      type === 'user_story'
+        ? 'User Story'
+        : type === 'journey'
+          ? 'User Journey'
+          : type.charAt(0).toUpperCase() + type.slice(1),
     description,
-  })
+  }),
 );

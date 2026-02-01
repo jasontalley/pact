@@ -236,7 +236,15 @@ export class MoleculeStatisticsDto {
 
   @ApiProperty({
     description: 'Count by lens type',
-    example: { user_story: 15, feature: 10, journey: 5, epic: 8, release: 2, capability: 2, custom: 0 },
+    example: {
+      user_story: 15,
+      feature: 10,
+      journey: 5,
+      epic: 8,
+      release: 2,
+      capability: 2,
+      custom: 0,
+    },
   })
   byLensType: Record<LensType, number>;
 

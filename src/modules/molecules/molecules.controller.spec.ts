@@ -163,7 +163,11 @@ describe('MoleculesController', () => {
     it('should return available lens types', () => {
       const lensTypes: LensTypeInfoDto[] = [
         { type: 'feature' as LensType, label: 'Feature', description: 'Feature description' },
-        { type: 'user_story' as LensType, label: 'User Story', description: 'User story description' },
+        {
+          type: 'user_story' as LensType,
+          label: 'User Story',
+          description: 'User story description',
+        },
       ];
       mockMoleculesService.getLensTypes.mockReturnValue(lensTypes);
 

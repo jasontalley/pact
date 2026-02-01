@@ -8,10 +8,7 @@
  */
 
 import { ReconciliationMode } from './reconciliation-state';
-import {
-  ReconciliationPatch,
-  InvariantViolationFindingOp,
-} from './reconciliation-patch';
+import { ReconciliationPatch, InvariantViolationFindingOp } from './reconciliation-patch';
 
 // ============================================================================
 // Result Status

@@ -54,7 +54,8 @@ describe('MoleculeVerifierService', () => {
     return {
       tempId: `temp-mol-${Math.random().toString(36).substring(7)}`,
       name: 'Authentication Functionality',
-      description: 'Behaviors related to user authentication including login and session management',
+      description:
+        'Behaviors related to user authentication including login and session management',
       atomTempIds,
       confidence: 80,
       reasoning: 'Grouped by module: auth',
@@ -92,10 +93,7 @@ describe('MoleculeVerifierService', () => {
     });
 
     it('should recommend rename for generic names with good fit', () => {
-      const atoms = [
-        createTestAtom({ tempId: 'atom-1' }),
-        createTestAtom({ tempId: 'atom-2' }),
-      ];
+      const atoms = [createTestAtom({ tempId: 'atom-1' }), createTestAtom({ tempId: 'atom-2' })];
       const molecule = createTestMolecule(['atom-1', 'atom-2'], {
         name: 'Unnamed Group',
       });
@@ -168,9 +166,7 @@ describe('MoleculeVerifierService', () => {
      */
     it('should not modify atom confidence during verification', () => {
       const originalConfidence = 85;
-      const atoms = [
-        createTestAtom({ tempId: 'atom-1', confidence: originalConfidence }),
-      ];
+      const atoms = [createTestAtom({ tempId: 'atom-1', confidence: originalConfidence })];
       const molecule = createTestMolecule(['atom-1'], {
         name: 'x',
         description: 'x',
@@ -192,10 +188,7 @@ describe('MoleculeVerifierService', () => {
      * (This is a design constraint - atoms exist independent of molecules)
      */
     it('should preserve all atom temp IDs in degraded molecules', () => {
-      const atoms = [
-        createTestAtom({ tempId: 'atom-1' }),
-        createTestAtom({ tempId: 'atom-2' }),
-      ];
+      const atoms = [createTestAtom({ tempId: 'atom-1' }), createTestAtom({ tempId: 'atom-2' })];
       const molecule = createTestMolecule(['atom-1', 'atom-2'], {
         name: 'Bad',
         description: 'x',
@@ -267,7 +260,8 @@ describe('MoleculeVerifierService', () => {
       ];
       const molecule = createTestMolecule(['atom-1', 'atom-2', 'atom-3'], {
         name: 'User Authentication',
-        description: 'Comprehensive authentication behaviors including login, session, and token management',
+        description:
+          'Comprehensive authentication behaviors including login, session, and token management',
       });
 
       const result = service.verifyMolecule(molecule, atoms);

@@ -128,7 +128,9 @@ export type ReconciliationEvent =
   },
   namespace: '/reconciliation',
 })
-export class ReconciliationGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
+export class ReconciliationGateway
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
@@ -160,7 +162,10 @@ export class ReconciliationGateway implements OnGatewayInit, OnGatewayConnection
    * Subscribe to progress events for a specific run
    */
   @SubscribeMessage('subscribe')
-  handleSubscribe(client: Socket, runId: string): { event: string; data: { subscribed: boolean; runId: string } } {
+  handleSubscribe(
+    client: Socket,
+    runId: string,
+  ): { event: string; data: { subscribed: boolean; runId: string } } {
     if (!this.runSubscriptions.has(runId)) {
       this.runSubscriptions.set(runId, new Set());
     }
@@ -173,7 +178,10 @@ export class ReconciliationGateway implements OnGatewayInit, OnGatewayConnection
    * Unsubscribe from progress events for a specific run
    */
   @SubscribeMessage('unsubscribe')
-  handleUnsubscribe(client: Socket, runId: string): { event: string; data: { unsubscribed: boolean; runId: string } } {
+  handleUnsubscribe(
+    client: Socket,
+    runId: string,
+  ): { event: string; data: { unsubscribed: boolean; runId: string } } {
     const clients = this.runSubscriptions.get(runId);
     if (clients) {
       clients.delete(client.id);
@@ -262,7 +270,12 @@ export class ReconciliationGateway implements OnGatewayInit, OnGatewayConnection
   /**
    * Emit event when reconciliation is interrupted for review
    */
-  emitInterrupted(runId: string, reason: string, pendingAtomCount: number, pendingMoleculeCount: number): void {
+  emitInterrupted(
+    runId: string,
+    reason: string,
+    pendingAtomCount: number,
+    pendingMoleculeCount: number,
+  ): void {
     const event: ReconciliationInterruptedEvent = {
       type: 'reconciliation:interrupted',
       runId,

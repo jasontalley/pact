@@ -14,13 +14,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { minimatch } from 'minimatch';
 import { NodeConfig } from '../types';
-import {
-  ReconciliationGraphStateType,
-  OrphanTestInfo,
-} from '../../types/reconciliation-state';
-import {
-  OrphanDiscoveryResult,
-} from '../../../tools/reconciliation-tools.service';
+import { ReconciliationGraphStateType, OrphanTestInfo } from '../../types/reconciliation-state';
+import { OrphanDiscoveryResult } from '../../../tools/reconciliation-tools.service';
 
 /**
  * Filter options for test discovery
@@ -46,8 +41,10 @@ function shouldIncludeFile(filePath: string, filters: FilterOptions): boolean {
   if (filters.includePaths && filters.includePaths.length > 0) {
     const matches = filters.includePaths.some((includePath) => {
       const normalizedInclude = includePath.replaceAll('\\', '/');
-      return normalizedFile.startsWith(normalizedInclude) ||
-             normalizedFile.startsWith(normalizedInclude + '/');
+      return (
+        normalizedFile.startsWith(normalizedInclude) ||
+        normalizedFile.startsWith(normalizedInclude + '/')
+      );
     });
     if (!matches) return false;
   }
@@ -56,8 +53,10 @@ function shouldIncludeFile(filePath: string, filters: FilterOptions): boolean {
   if (filters.excludePaths && filters.excludePaths.length > 0) {
     const excluded = filters.excludePaths.some((excludePath) => {
       const normalizedExclude = excludePath.replaceAll('\\', '/');
-      return normalizedFile.startsWith(normalizedExclude) ||
-             normalizedFile.startsWith(normalizedExclude + '/');
+      return (
+        normalizedFile.startsWith(normalizedExclude) ||
+        normalizedFile.startsWith(normalizedExclude + '/')
+      );
     });
     if (excluded) return false;
   }
@@ -165,17 +164,12 @@ function parseTestFile(
         const testCode = extractTestCode(lines, i);
 
         // Find related source files
-        const relatedSourceFiles = findRelatedSourceFiles(
-          filePath,
-          content,
-          rootDirectory,
-        );
+        const relatedSourceFiles = findRelatedSourceFiles(filePath, content, rootDirectory);
 
         orphanTests.push({
           filePath,
-          testName: describeStack.length > 0
-            ? `${describeStack.join(' > ')} > ${testName}`
-            : testName,
+          testName:
+            describeStack.length > 0 ? `${describeStack.join(' > ')} > ${testName}` : testName,
           lineNumber,
           testCode,
           relatedSourceFiles,
@@ -242,7 +236,8 @@ function findRelatedSourceFiles(
   }
 
   // Extract imports to find other related files
-  const importRegex = /import\s+(?:(?:\{[^}]+?\}|\*\s+as\s+\w+|\w+)\s+from\s+)?['"`]([^'"`]+)['"`]/g;
+  const importRegex =
+    /import\s+(?:(?:\{[^}]+?\}|\*\s+as\s+\w+|\w+)\s+from\s+)?['"`]([^'"`]+)['"`]/g;
   let match;
 
   while ((match = importRegex.exec(testContent)) !== null) {
@@ -294,19 +289,24 @@ export function createDiscoverFullscanNode(options: DiscoverFullscanNodeOptions 
         excludeFilePatterns: state.input?.options?.excludeFilePatterns,
       };
 
-      const hasFilters = filters.includePaths?.length || filters.excludePaths?.length ||
-                         filters.includeFilePatterns?.length || filters.excludeFilePatterns?.length;
+      const hasFilters =
+        filters.includePaths?.length ||
+        filters.excludePaths?.length ||
+        filters.includeFilePatterns?.length ||
+        filters.excludeFilePatterns?.length;
 
       config.logger?.log(
         `[DiscoverFullscanNode] Discovering orphan tests (useTool=${useTool}, hasFilters=${!!hasFilters})`,
       );
 
       if (hasFilters) {
-        config.logger?.log(`[DiscoverFullscanNode] Filters: ` +
-          `includePaths=${JSON.stringify(filters.includePaths || [])}, ` +
-          `excludePaths=${JSON.stringify(filters.excludePaths || [])}, ` +
-          `includeFilePatterns=${JSON.stringify(filters.includeFilePatterns || [])}, ` +
-          `excludeFilePatterns=${JSON.stringify(filters.excludeFilePatterns || [])}`);
+        config.logger?.log(
+          `[DiscoverFullscanNode] Filters: ` +
+            `includePaths=${JSON.stringify(filters.includePaths || [])}, ` +
+            `excludePaths=${JSON.stringify(filters.excludePaths || [])}, ` +
+            `includeFilePatterns=${JSON.stringify(filters.includeFilePatterns || [])}, ` +
+            `excludeFilePatterns=${JSON.stringify(filters.excludeFilePatterns || [])}`,
+        );
       }
 
       // Try to use the tool if available and enabled (only if no filters - tool doesn't support filters yet)
@@ -314,13 +314,10 @@ export function createDiscoverFullscanNode(options: DiscoverFullscanNodeOptions 
         try {
           config.logger?.log('[DiscoverFullscanNode] Using discover_orphans_fullscan tool');
 
-          const result = await config.toolRegistry.executeTool(
-            'discover_orphans_fullscan',
-            {
-              root_directory: rootDirectory,
-              max_orphans: inputMaxTests,
-            },
-          ) as OrphanDiscoveryResult;
+          const result = (await config.toolRegistry.executeTool('discover_orphans_fullscan', {
+            root_directory: rootDirectory,
+            max_orphans: inputMaxTests,
+          })) as OrphanDiscoveryResult;
 
           config.logger?.log(
             `[DiscoverFullscanNode] Tool found ${result.totalOrphans} orphan tests (returning ${result.orphanTests.length})`,
@@ -384,9 +381,7 @@ export function createDiscoverFullscanNode(options: DiscoverFullscanNodeOptions 
         }
       }
 
-      config.logger?.log(
-        `[DiscoverFullscanNode] Found ${allOrphanTests.length} orphan tests`,
-      );
+      config.logger?.log(`[DiscoverFullscanNode] Found ${allOrphanTests.length} orphan tests`);
 
       // Apply maxTests limit from input options
       const effectiveMaxTests = inputMaxTests

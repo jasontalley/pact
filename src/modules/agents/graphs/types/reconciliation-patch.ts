@@ -225,9 +225,7 @@ export function createMoleculeOp(params: Omit<CreateMoleculeOp, 'type'>): Create
 /**
  * Creates a new AttachTestToAtomOp.
  */
-export function attachTestToAtomOp(
-  params: Omit<AttachTestToAtomOp, 'type'>,
-): AttachTestToAtomOp {
+export function attachTestToAtomOp(params: Omit<AttachTestToAtomOp, 'type'>): AttachTestToAtomOp {
   return { type: 'attachTestToAtom', ...params };
 }
 
@@ -284,9 +282,7 @@ export function isMarkAtomSupersededOp(op: PatchOp): op is MarkAtomSupersededOp 
 /**
  * Type guard to check if an op is an InvariantViolationFindingOp.
  */
-export function isInvariantViolationFindingOp(
-  op: PatchOp,
-): op is InvariantViolationFindingOp {
+export function isInvariantViolationFindingOp(op: PatchOp): op is InvariantViolationFindingOp {
   return op.type === 'invariantViolationFinding';
 }
 
@@ -316,9 +312,7 @@ export function validatePatch(patch: ReconciliationPatch): string[] {
     if (isCreateMoleculeOp(op)) {
       for (const atomTempId of op.atomTempIds) {
         if (!atomTempIds.has(atomTempId)) {
-          errors.push(
-            `Molecule "${op.tempId}" references unknown atom tempId "${atomTempId}"`,
-          );
+          errors.push(`Molecule "${op.tempId}" references unknown atom tempId "${atomTempId}"`);
         }
       }
     } else if (isAttachTestToAtomOp(op)) {

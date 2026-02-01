@@ -152,9 +152,7 @@ describe('MoleculesService', () => {
         lensType: 'custom' as LensType,
       };
 
-      await expect(service.create(dto, 'user-123')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(service.create(dto, 'user-123')).rejects.toThrow(BadRequestException);
     });
 
     it('should throw if parent molecule not found', async () => {
@@ -166,9 +164,7 @@ describe('MoleculesService', () => {
 
       mockBaseRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.create(dto, 'user-123')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.create(dto, 'user-123')).rejects.toThrow(NotFoundException);
     });
 
     it('should throw if hierarchy depth would exceed 10 levels', async () => {
@@ -179,13 +175,11 @@ describe('MoleculesService', () => {
       };
 
       mockBaseRepository.findOne.mockResolvedValue(mockMolecule);
-      moleculesRepository.getAncestorChain = jest.fn().mockResolvedValue(
-        Array(10).fill(mockMolecule),
-      );
+      moleculesRepository.getAncestorChain = jest
+        .fn()
+        .mockResolvedValue(Array(10).fill(mockMolecule));
 
-      await expect(service.create(dto, 'user-123')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(service.create(dto, 'user-123')).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -205,9 +199,7 @@ describe('MoleculesService', () => {
     it('should throw NotFoundException when molecule not found', async () => {
       mockBaseRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.findOne('non-existent')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.findOne('non-existent')).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -456,9 +448,7 @@ describe('MoleculesService', () => {
     it('should throw NotFoundException when molecule not found', async () => {
       mockBaseRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.findByMoleculeId('M-999')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.findByMoleculeId('M-999')).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -478,9 +468,9 @@ describe('MoleculesService', () => {
         .mockResolvedValueOnce(mockMolecule)
         .mockResolvedValueOnce({ id: 'parent-id' }); // parent exists
       moleculesRepository.getDescendantIds = jest.fn().mockResolvedValue([]);
-      moleculesRepository.getAncestorChain = jest.fn().mockResolvedValue(
-        Array(10).fill(mockMolecule),
-      );
+      moleculesRepository.getAncestorChain = jest
+        .fn()
+        .mockResolvedValue(Array(10).fill(mockMolecule));
 
       await expect(
         service.update('molecule-uuid-1', { parentMoleculeId: 'parent-id' }),
@@ -542,10 +532,7 @@ describe('MoleculesService', () => {
   describe('batchAddAtoms', () => {
     it('should add multiple atoms to a molecule', async () => {
       mockBaseRepository.findOne.mockResolvedValue(mockMolecule);
-      atomRepository.find.mockResolvedValue([
-        { id: 'atom-1' },
-        { id: 'atom-2' },
-      ] as Atom[]);
+      atomRepository.find.mockResolvedValue([{ id: 'atom-1' }, { id: 'atom-2' }] as Atom[]);
       mockAtomJunctionRepository.createQueryBuilder.mockReturnValue({
         select: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
@@ -554,7 +541,8 @@ describe('MoleculesService', () => {
       });
 
       // Mock addAtom behavior
-      jest.spyOn(service, 'addAtom')
+      jest
+        .spyOn(service, 'addAtom')
         .mockResolvedValueOnce({ ...mockMoleculeAtom, atomId: 'atom-1' } as MoleculeAtom)
         .mockResolvedValueOnce({ ...mockMoleculeAtom, atomId: 'atom-2' } as MoleculeAtom);
 
@@ -582,10 +570,7 @@ describe('MoleculesService', () => {
 
     it('should skip conflicts when atom already in molecule', async () => {
       mockBaseRepository.findOne.mockResolvedValue(mockMolecule);
-      atomRepository.find.mockResolvedValue([
-        { id: 'atom-1' },
-        { id: 'atom-2' },
-      ] as Atom[]);
+      atomRepository.find.mockResolvedValue([{ id: 'atom-1' }, { id: 'atom-2' }] as Atom[]);
       mockAtomJunctionRepository.createQueryBuilder.mockReturnValue({
         select: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
@@ -593,7 +578,8 @@ describe('MoleculesService', () => {
         getRawOne: jest.fn().mockResolvedValue({ maxOrder: 0 }),
       });
 
-      jest.spyOn(service, 'addAtom')
+      jest
+        .spyOn(service, 'addAtom')
         .mockResolvedValueOnce({ ...mockMoleculeAtom, atomId: 'atom-1' } as MoleculeAtom)
         .mockRejectedValueOnce(new ConflictException('Already in molecule'));
 
@@ -770,9 +756,7 @@ describe('MoleculesService', () => {
     });
 
     it('should handle atoms with superseded status', async () => {
-      const atoms = [
-        { ...mockAtom, id: 'atom-1', status: 'superseded', qualityScore: 90 },
-      ];
+      const atoms = [{ ...mockAtom, id: 'atom-1', status: 'superseded', qualityScore: 90 }];
 
       jest.spyOn(service, 'getAtoms').mockResolvedValue(atoms as Atom[]);
       mockBaseRepository.count.mockResolvedValue(0);

@@ -38,7 +38,12 @@ describe('AgentSafetyGuard', () => {
         sanitizedInput: 'test input',
         allViolations: [],
         overallRiskScore: 0,
-        agentProfile: { id: 'test-agent', name: 'Test Agent', description: 'Test', allowedTools: [] },
+        agentProfile: {
+          id: 'test-agent',
+          name: 'Test Agent',
+          description: 'Test',
+          allowedTools: [],
+        },
         inputValidation: {
           passed: true,
           violations: [],

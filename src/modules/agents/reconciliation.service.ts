@@ -13,7 +13,13 @@
  * @see docs/implementation-checklist-phase5.md Section 4.2 (resume support)
  */
 
-import { Injectable, Logger, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  Optional,
+} from '@nestjs/common';
 import { ReconciliationGateway } from '../../gateways/reconciliation.gateway';
 import { v4 as uuidv4 } from 'uuid';
 import { isGraphInterrupt } from '@langchain/langgraph';
@@ -187,7 +193,7 @@ export class ReconciliationService {
 
       this.logger.log(
         `Reconciliation complete: ${reconciliationResult.runId}, ` +
-        `${reconciliationResult.summary.inferredAtomsCount} atoms inferred`,
+          `${reconciliationResult.summary.inferredAtomsCount} atoms inferred`,
       );
 
       return reconciliationResult;
@@ -334,7 +340,7 @@ export class ReconciliationService {
 
       this.logger.log(
         `Reconciliation complete: ${reconciliationResult.runId}, ` +
-        `${reconciliationResult.summary.inferredAtomsCount} atoms inferred`,
+          `${reconciliationResult.summary.inferredAtomsCount} atoms inferred`,
       );
 
       // Emit WebSocket event: completed
@@ -418,7 +424,9 @@ export class ReconciliationService {
     }
 
     if (trackedRun.status !== 'interrupted') {
-      throw new NotFoundException(`Run ${runId} is not waiting for review (status: ${trackedRun.status})`);
+      throw new NotFoundException(
+        `Run ${runId} is not waiting for review (status: ${trackedRun.status})`,
+      );
     }
 
     if (!trackedRun.interruptPayload) {
@@ -447,12 +455,12 @@ export class ReconciliationService {
     }
 
     if (trackedRun.status !== 'interrupted') {
-      throw new NotFoundException(`Run ${runId} is not waiting for review (status: ${trackedRun.status})`);
+      throw new NotFoundException(
+        `Run ${runId} is not waiting for review (status: ${trackedRun.status})`,
+      );
     }
 
-    this.logger.log(
-      `Resuming run ${runId} with ${review.atomDecisions.length} atom decisions`,
-    );
+    this.logger.log(`Resuming run ${runId} with ${review.atomDecisions.length} atom decisions`);
 
     // Build human review input
     const humanReviewInput: HumanReviewInput = {
@@ -487,9 +495,7 @@ export class ReconciliationService {
       // Update tracked run
       trackedRun.status = 'completed';
 
-      this.logger.log(
-        `Reconciliation resumed and completed: ${reconciliationResult.runId}`,
-      );
+      this.logger.log(`Reconciliation resumed and completed: ${reconciliationResult.runId}`);
 
       return reconciliationResult;
     } catch (error) {
@@ -516,7 +522,12 @@ export class ReconciliationService {
    *
    * @returns Array of active run information
    */
-  listActiveRuns(): Array<{ runId: string; threadId: string; status: TrackedRun['status']; startTime: Date }> {
+  listActiveRuns(): Array<{
+    runId: string;
+    threadId: string;
+    status: TrackedRun['status'];
+    startTime: Date;
+  }> {
     return Array.from(this.activeRuns.values()).map((run) => ({
       runId: run.runId,
       threadId: run.threadId,
@@ -566,7 +577,9 @@ export class ReconciliationService {
    */
   async getMetrics(runId: string, qualityThreshold: number = 80): Promise<ReconciliationMetrics> {
     if (!this.repository) {
-      throw new NotFoundException('Repository not available - metrics require database persistence');
+      throw new NotFoundException(
+        'Repository not available - metrics require database persistence',
+      );
     }
 
     // Find the run
@@ -584,18 +597,23 @@ export class ReconciliationService {
     // Calculate atom metrics
     const atomConfidences = atomRecs.map((a) => a.confidence);
     const atomQualityScores = atomRecs.map((a) => a.qualityScore || a.confidence);
-    const averageAtomConfidence = atomConfidences.length > 0
-      ? Math.round(atomConfidences.reduce((sum, c) => sum + c, 0) / atomConfidences.length)
-      : 0;
-    const averageAtomQualityScore = atomQualityScores.length > 0
-      ? Math.round(atomQualityScores.reduce((sum, s) => sum + s, 0) / atomQualityScores.length)
-      : 0;
+    const averageAtomConfidence =
+      atomConfidences.length > 0
+        ? Math.round(atomConfidences.reduce((sum, c) => sum + c, 0) / atomConfidences.length)
+        : 0;
+    const averageAtomQualityScore =
+      atomQualityScores.length > 0
+        ? Math.round(atomQualityScores.reduce((sum, s) => sum + s, 0) / atomQualityScores.length)
+        : 0;
 
     // Calculate molecule metrics
     const moleculeConfidences = moleculeRecs.map((m) => m.confidence);
-    const averageMoleculeConfidence = moleculeConfidences.length > 0
-      ? Math.round(moleculeConfidences.reduce((sum, c) => sum + c, 0) / moleculeConfidences.length)
-      : 0;
+    const averageMoleculeConfidence =
+      moleculeConfidences.length > 0
+        ? Math.round(
+            moleculeConfidences.reduce((sum, c) => sum + c, 0) / moleculeConfidences.length,
+          )
+        : 0;
 
     // Calculate atoms passing/failing threshold
     const atomsPassingThreshold = atomRecs.filter(
@@ -618,7 +636,8 @@ export class ReconciliationService {
 
     const moleculeStatusDistribution: Record<string, number> = {};
     for (const molecule of moleculeRecs) {
-      moleculeStatusDistribution[molecule.status] = (moleculeStatusDistribution[molecule.status] || 0) + 1;
+      moleculeStatusDistribution[molecule.status] =
+        (moleculeStatusDistribution[molecule.status] || 0) + 1;
     }
 
     this.logger.log(
@@ -822,7 +841,7 @@ export class ReconciliationService {
     if (run.status !== 'running' && run.status !== 'failed') {
       throw new BadRequestException(
         `Run ${runId} has status '${run.status}' and cannot be recovered. ` +
-        `Only 'running' (stale) or 'failed' runs can be recovered.`,
+          `Only 'running' (stale) or 'failed' runs can be recovered.`,
       );
     }
 
@@ -831,9 +850,7 @@ export class ReconciliationService {
     const molecules = await this.repository.findMoleculeRecommendationsByRun(run.id);
 
     if (atoms.length === 0 && molecules.length === 0) {
-      throw new BadRequestException(
-        `Run ${runId} has no partial results to recover.`,
-      );
+      throw new BadRequestException(`Run ${runId} has no partial results to recover.`);
     }
 
     // Update run status to 'pending_review' so results can be reviewed

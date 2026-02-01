@@ -106,9 +106,7 @@ function isCoverageQuestion(input: string): boolean {
 /**
  * Check if findings contain complete coverage metrics
  */
-function hasCompleteCoverageMetrics(
-  findings: BaseExplorationStateType['findings'],
-): boolean {
+function hasCompleteCoverageMetrics(findings: BaseExplorationStateType['findings']): boolean {
   return findings.some(
     (f) =>
       f.computedFacts?.lines !== undefined ||
@@ -130,9 +128,7 @@ function hasAnswerInComputedFacts(
   }
 
   // For other questions, just having computed facts is a good sign
-  return findings.some(
-    (f) => f.computedFacts && Object.keys(f.computedFacts).length > 0,
-  );
+  return findings.some((f) => f.computedFacts && Object.keys(f.computedFacts).length > 0);
 }
 
 /**

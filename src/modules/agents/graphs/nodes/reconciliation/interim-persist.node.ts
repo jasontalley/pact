@@ -105,11 +105,7 @@ export function createInterimPersistNode(options: InterimPersistNodeOptions = {}
         }
 
         // Create molecule recommendations
-        await repository.createMoleculeRecommendations(
-          run.id,
-          inferredMolecules,
-          atomTempIdToUuid,
-        );
+        await repository.createMoleculeRecommendations(run.id, inferredMolecules, atomTempIdToUuid);
 
         // Create test records
         const testKeyToAtomRecId = new Map<string, string>();
@@ -125,7 +121,7 @@ export function createInterimPersistNode(options: InterimPersistNodeOptions = {}
 
         config.logger?.log(
           `[InterimPersistNode] Saved ${atomRecommendations.length} atom recommendations, ` +
-          `ready for verification`,
+            `ready for verification`,
         );
 
         // Return run info for final persist node
