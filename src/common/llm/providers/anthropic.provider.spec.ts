@@ -31,7 +31,7 @@ jest.mock('@langchain/anthropic', () => ({
   })),
 }));
 
-const MockChatAnthropic = ChatAnthropic as jest.Mock;
+const MockChatAnthropic = ChatAnthropic as unknown as jest.Mock;
 
 // Mock fetch for availability checks
 const mockFetch = jest.fn();

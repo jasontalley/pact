@@ -9,8 +9,16 @@
  */
 
 import { ChatOllama } from '@langchain/ollama';
-import { BaseMessage, HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
+import {
+  BaseMessage,
+  HumanMessage,
+  SystemMessage,
+  AIMessage,
+  ToolMessage,
+} from '@langchain/core/messages';
 import { LangChainTracer } from '@langchain/core/tracers/tracer_langchain';
+import { DynamicStructuredTool } from '@langchain/core/tools';
+import { z } from 'zod';
 
 import { BaseLLMProvider } from './base.provider';
 import {
@@ -19,6 +27,8 @@ import {
   ProviderRequest,
   ProviderResponse,
   ModelCapabilities,
+  ToolDefinition,
+  ToolCall,
 } from './types';
 
 /**
@@ -329,13 +339,44 @@ export class OllamaProvider extends BaseLLMProvider {
     // Create client for this request
     const client = new ChatOllama(modelOptions);
 
+    // Convert tools to LangChain format and bind to client
+    // Note: Tool support in Ollama depends on the model - llama3.2, qwen2.5-coder, mistral support tools
+    let boundClient = client;
+    if (request.tools && request.tools.length > 0) {
+      const capabilities = this.getModelCapabilities(model);
+      if (capabilities?.supportsFunctionCalling) {
+        const langchainTools = this.convertToolsToLangChain(request.tools);
+        boundClient = client.bindTools(langchainTools) as ChatOllama;
+      } else {
+        this.logger.warn(`Model ${model} does not support function calling, tools will be ignored`);
+      }
+    }
+
     // Convert messages to LangChain format
     const messages: BaseMessage[] = request.messages.map((msg) => {
       switch (msg.role) {
         case 'system':
           return new SystemMessage(msg.content);
-        case 'assistant':
+        case 'assistant': {
+          // Construct AIMessage with tool_calls in constructor if present
+          if (msg.toolCalls && msg.toolCalls.length > 0) {
+            return new AIMessage({
+              content: msg.content || '',
+              tool_calls: msg.toolCalls.map((tc) => ({
+                id: tc.id,
+                name: tc.name,
+                args: tc.arguments,
+                type: 'tool_call' as const,
+              })),
+            });
+          }
           return new AIMessage(msg.content);
+        }
+        case 'tool':
+          return new ToolMessage({
+            content: msg.content,
+            tool_call_id: msg.toolCallId || '',
+          });
         case 'user':
         default:
           return new HumanMessage(msg.content);
@@ -346,7 +387,7 @@ export class OllamaProvider extends BaseLLMProvider {
     const callbacks = this.tracer ? [this.tracer] : [];
 
     // Invoke the model
-    const response = await client.invoke(messages, {
+    const response = await boundClient.invoke(messages, {
       callbacks,
       runName: request.metadata?.agentName || 'ollama-call',
       metadata: {
@@ -367,12 +408,38 @@ export class OllamaProvider extends BaseLLMProvider {
       }
     }
 
+    // Extract text content - handle both string and array content formats
+    // Some models may return content as array of content blocks when tool_use is involved
+    let outputText: string;
+    if (typeof response.content === 'string') {
+      outputText = response.content;
+    } else if (Array.isArray(response.content)) {
+      // Extract text from content blocks
+      outputText = response.content
+        .filter((block: any) => block.type === 'text')
+        .map((block: any) => block.text)
+        .join('');
+    } else {
+      outputText = '';
+    }
+
     // Ollama doesn't provide detailed token counts in the same way
     // We estimate based on content length
     const inputText = request.messages.map((m) => m.content).join(' ');
-    const outputText = response.content as string;
     const inputTokens = this.getTokenCount(inputText);
     const outputTokens = this.getTokenCount(outputText);
+
+    // Extract tool calls from response
+    const toolCalls: ToolCall[] = [];
+    if ((response as any).tool_calls) {
+      for (const tc of (response as any).tool_calls) {
+        toolCalls.push({
+          id: tc.id,
+          name: tc.name,
+          arguments: tc.args || {},
+        });
+      }
+    }
 
     return {
       content: outputText,
@@ -385,8 +452,60 @@ export class OllamaProvider extends BaseLLMProvider {
       providerUsed: 'ollama',
       latencyMs: 0, // Will be set by base class
       finishReason: 'stop',
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       rawResponse: response,
     };
+  }
+
+  /**
+   * Convert ToolDefinition to LangChain StructuredTool
+   */
+  private convertToolsToLangChain(tools: ToolDefinition[]): any[] {
+    const result: any[] = [];
+
+    for (const tool of tools) {
+      // Convert parameters to Zod schema
+      const zodSchema: Record<string, z.ZodTypeAny> = {};
+      for (const [key, param] of Object.entries(tool.parameters.properties)) {
+        switch (param.type) {
+          case 'string':
+            zodSchema[key] = param.enum
+              ? z.enum(param.enum as [string, ...string[]])
+              : z.string().describe(param.description || '');
+            break;
+          case 'number':
+            zodSchema[key] = z.number().describe(param.description || '');
+            break;
+          case 'boolean':
+            zodSchema[key] = z.boolean().describe(param.description || '');
+            break;
+          case 'array':
+            zodSchema[key] = z.array(z.any()).describe(param.description || '');
+            break;
+          case 'object':
+            zodSchema[key] = z.record(z.any()).describe(param.description || '');
+            break;
+          default:
+            zodSchema[key] = z.any().describe(param.description || '');
+        }
+      }
+
+      const schema = z.object(zodSchema);
+
+      const langchainTool = new DynamicStructuredTool({
+        name: tool.name,
+        description: tool.description,
+        schema: schema as any, // Type assertion to avoid deep type instantiation error
+        func: async () => {
+          // This is a placeholder - actual execution happens in chat-agent service
+          throw new Error('Tool execution should be handled by chat-agent service');
+        },
+      });
+
+      result.push(langchainTool);
+    }
+
+    return result;
   }
 
   /**

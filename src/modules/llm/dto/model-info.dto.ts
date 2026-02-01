@@ -5,6 +5,7 @@
  */
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsString, IsIn, IsBooleanString } from 'class-validator';
 import { LLMProviderType } from '../../../common/llm/providers/types';
 
 export class ModelCapabilitiesDto {
@@ -76,11 +77,18 @@ export class ModelQueryDto {
     description: 'Filter by provider',
     enum: ['openai', 'anthropic', 'ollama'],
   })
+  @IsOptional()
+  @IsString()
+  @IsIn(['openai', 'anthropic', 'ollama'])
   provider?: LLMProviderType;
 
   @ApiPropertyOptional({ description: 'Filter models that support vision' })
+  @IsOptional()
+  @IsBooleanString()
   supportsVision?: boolean;
 
   @ApiPropertyOptional({ description: 'Filter models that support function calling' })
+  @IsOptional()
+  @IsBooleanString()
   supportsFunctionCalling?: boolean;
 }

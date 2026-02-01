@@ -74,7 +74,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --quality)
-      TEST_COMMAND="npm run test:quality"
+      TEST_COMMAND="npm run test:quality:report"
       USE_APP_CONTAINER=true
       CONTAINER_NAME="pact-app"
       shift
@@ -320,9 +320,9 @@ run_all_tests() {
   fi
   echo ""
 
-  # Test quality analyzer
+  # Test quality analyzer (generates HTML report)
   echo -e "${CYAN}--- Test Quality Analyzer ---${NC}"
-  if docker exec -i pact-app npm run test:quality; then
+  if docker exec -i pact-app npm run test:quality:report; then
     echo -e "${GREEN}✓ Test quality checks passed${NC}"
   else
     echo -e "${RED}✗ Test quality checks failed${NC}"

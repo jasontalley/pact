@@ -1,8 +1,8 @@
 # Pact System Documentation
 
-**Version**: 3.5
-**Last Updated**: 2026-01-27
-**Status**: Phase 3.5 Complete, Phase 4 Ready
+**Version**: 3.7
+**Last Updated**: 2026-01-28
+**Status**: Phase 3.5-3.7 Complete, Phase 3.6 Pending
 
 ---
 
@@ -50,6 +50,8 @@ Pact introduces:
 **Phase 2**: Validators & Templates ✅
 **Phase 3**: Commitment Boundary & Invariants ✅
 **Phase 3.5**: Multi-Provider LLM & Agent UI ✅
+**Phase 3.6**: LangGraph ReAct Agent Architecture ⏳
+**Phase 3.7**: Admin Configuration UI ✅
 
 - ✅ Development infrastructure (Docker, NestJS, PostgreSQL)
 - ✅ Atomization Agent with iterative refinement
@@ -69,6 +71,9 @@ Pact introduces:
 - ✅ Agent invocation UI (wizards + chat interface)
 - ✅ LLM configuration and usage dashboard
 - ✅ Cost tracking across all providers
+- ✅ Admin Configuration UI (layered configuration system)
+- ✅ Settings pages for Agent, Resilience, Safety, Observability, Features
+- ✅ Configuration audit logging
 
 ---
 
@@ -153,7 +158,7 @@ Ideas (mutable)
 ### Technology Stack
 
 - **Backend**: NestJS + TypeScript
-- **Database**: PostgreSQL (15 tables: 13 core + 2 LLM tracking)
+- **Database**: PostgreSQL (17 tables: 13 core + 2 LLM tracking + 2 admin config)
 - **Frontend**: React/Next.js with Canvas UI, shadcn/ui, React Query
 - **Infrastructure**: Docker + Docker Compose
 - **AI/Agents**: LangChain, Multi-provider LLM (OpenAI, Anthropic, Ollama), Model Context Protocol (MCP)
@@ -357,6 +362,10 @@ it('processes payment securely using TLS 1.3', () => {
 14. `llm_configurations` - LLM settings
 15. `llm_usage_tracking` - Usage metrics
 
+**Admin Configuration Tables** (2):
+16. `system_configurations` - Layered configuration values
+17. `configuration_audit_log` - Configuration change audit trail
+
 **See**: [docs/schema.md](schema.md) for full schema documentation (v3.0)
 
 ---
@@ -442,6 +451,51 @@ it('processes payment securely using TLS 1.3', () => {
 - Cross-provider fallback (OpenAI → Anthropic → Ollama)
 - Circuit breaker per provider (not global)
 - Admin API for configuration management
+
+**Status**: ✅ Complete
+
+### Phase 3.6: LangGraph ReAct Agent Architecture (Interlude)
+
+**Goal**: Replace manual tool loop with LangGraph-based ReAct agent for intelligent exploration
+
+**Deliverables**:
+
+- [ ] LangGraph state machine with 4 nodes (Plan, Search, Analyze, Synthesize)
+- [ ] Dynamic tool loop (not hardcoded iterations)
+- [ ] Planning phase that generates search strategies
+- [ ] "Enough information" detection to decide when to stop
+- [ ] Generic prompting (works for any data-finding task)
+- [ ] Full LangSmith observability
+
+**Key Benefits**:
+
+- Agent reads actual data files (not just lists directories)
+- Dynamically adapts exploration depth to query complexity
+- Structured state management for debugging
+- Extensible architecture for future agent capabilities
+
+**Status**: ⏳ Pending
+
+### Phase 3.7: Admin Configuration UI (Interlude) ✅
+
+**Goal**: Expose hidden configurations through a unified admin UI with layered defaults
+
+**Deliverables**:
+
+- [x] Layered configuration system (Database → Environment → Code Default)
+- [x] Configuration definitions for 5 domains (Agent, Resilience, Safety, Observability, Features)
+- [x] Admin API endpoints (`/admin/config`)
+- [x] Settings UI with domain tabs and category sections
+- [x] Audit log for configuration changes
+- [x] React Query hooks with optimistic updates
+
+**Key Features**:
+
+- ~45+ configurations exposed through unified UI
+- Source indicators (Database/Environment/Code Default)
+- Reset to default functionality
+- Non-editable safety settings protection
+- Full audit trail with filtering
 
 **Status**: ✅ Complete
 
@@ -734,6 +788,11 @@ Pact uses specialized AI agents to automate key transformations while maintainin
 - [docs/implementation-checklist-phase2.md](implementation-checklist-phase2.md) - Phase 2 status tracking
 - [docs/implementation-checklist-phase3.md](implementation-checklist-phase3.md) - Phase 3 status tracking
 - [docs/implementation-checklist-phase3.5.md](implementation-checklist-phase3.5.md) - Phase 3.5 status tracking (LLM & Agent UI)
+- [docs/implementation-checklist-phase3.6.md](implementation-checklist-phase3.6.md) - Phase 3.6 status tracking (LangGraph ReAct Agent)
+- [docs/implementation-checklist-phase3.7.md](implementation-checklist-phase3.7.md) - Phase 3.7 status tracking (Admin Configuration UI)
+- [docs/implementation-checklist-phase4.md](implementation-checklist-phase4.md) - Phase 4 status tracking (Molecules - Intent Composition)
+- [docs/implementation-checklist-phase5.md](implementation-checklist-phase5.md) - Phase 5 status tracking (Reconciliation Agent)
+- [docs/implementation-checklist-phase6.md](implementation-checklist-phase6.md) - Phase 6 status tracking (Reconciliation Agent Reliability & UX)
 
 ### User Guides
 
@@ -745,6 +804,7 @@ Pact uses specialized AI agents to automate key transformations while maintainin
 - [docs/user-guide/committing-atoms.md](user-guide/committing-atoms.md) - Committing Atoms
 - [docs/user-guide/configuring-invariants.md](user-guide/configuring-invariants.md) - Configuring Invariants
 - [docs/user-guide/supersession.md](user-guide/supersession.md) - Supersession
+- [docs/user-guide/reconciliation-agent.md](user-guide/reconciliation-agent.md) - Reconciliation Agent
 
 ### Architecture
 
@@ -752,6 +812,7 @@ Pact uses specialized AI agents to automate key transformations while maintainin
 - [docs/architecture/validator-translation.md](architecture/validator-translation.md) - Validator Translation Service
 - [docs/architecture/commitment-boundary.md](architecture/commitment-boundary.md) - Commitment Boundary & Invariant Checking
 - [docs/architecture/llm-providers.md](architecture/llm-providers.md) - Multi-Provider LLM Architecture (Phase 3.5)
+- [docs/architecture/reconcilation-agent-architecture-proposal.md](architecture/reconcilation-agent-architecture-proposal.md) - Reconciliation Agent Architecture
 - [docs/schema.md](schema.md) - Database Schema (v3.0)
 - [docs/ui.md](ui.md) - UI Architecture
 - [docs/ux.md](ux.md) - UX Specification

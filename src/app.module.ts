@@ -4,6 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { databaseConfig } from './config/database/database.config';
+import { SafetyModule } from './common/safety';
+import { ConfigurationModule } from './common/configuration';
 import { AtomsModule } from './modules/atoms/atoms.module';
 import { AgentsModule } from './modules/agents/agents.module';
 import { LLMModule } from './modules/llm/llm.module';
@@ -12,7 +14,9 @@ import { ValidatorsModule } from './modules/validators/validators.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { InvariantsModule } from './modules/invariants/invariants.module';
 import { CommitmentsModule } from './modules/commitments/commitments.module';
+import { MoleculesModule } from './modules/molecules/molecules.module';
 import { GatewaysModule } from './gateways/gateways.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -21,6 +25,9 @@ import { GatewaysModule } from './gateways/gateways.module';
       envFilePath: `.env.${process.env.NODE_ENV || 'development'}`,
     }),
     TypeOrmModule.forRoot(databaseConfig()),
+    // Global modules loaded early
+    SafetyModule,
+    ConfigurationModule,
     GatewaysModule,
     LLMModule,
     AtomsModule,
@@ -30,6 +37,8 @@ import { GatewaysModule } from './gateways/gateways.module';
     ProjectsModule,
     InvariantsModule,
     CommitmentsModule,
+    MoleculesModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -20,11 +20,11 @@ describe('Agents and LLM API (e2e)', () => {
 
   beforeAll(async () => {
     app = await setupE2EApp();
-  });
+  }, 30000);
 
   afterAll(async () => {
     await teardownE2EApp();
-  });
+  }, 30000);
 
   // @atom IA-008
   describe('GET /llm/providers - Provider Status', () => {
@@ -348,23 +348,27 @@ describe('Agents and LLM API (e2e)', () => {
       }
     });
 
-    it('should export session as JSON when requested', async () => {
-      // First create a session
-      const chatResponse = await request(app.getHttpServer()).post('/agents/chat').send({
-        message: 'Test message for JSON export',
-      });
+    it(
+      'should export session as JSON when requested',
+      async () => {
+        // First create a session
+        const chatResponse = await request(app.getHttpServer()).post('/agents/chat').send({
+          message: 'Test message for JSON export',
+        });
 
-      if (chatResponse.status === 200 && chatResponse.body.sessionId) {
-        // Then export as JSON
-        const exportResponse = await request(app.getHttpServer())
-          .get(`/agents/chat/sessions/${chatResponse.body.sessionId}/export?format=json`)
-          .expect(200);
+        if (chatResponse.status === 200 && chatResponse.body.sessionId) {
+          // Then export as JSON
+          const exportResponse = await request(app.getHttpServer())
+            .get(`/agents/chat/sessions/${chatResponse.body.sessionId}/export?format=json`)
+            .expect(200);
 
-        expect(exportResponse.body).toHaveProperty('id');
-        expect(exportResponse.body).toHaveProperty('messages');
-        expect(exportResponse.body).toHaveProperty('createdAt');
-      }
-    });
+          expect(exportResponse.body).toHaveProperty('id');
+          expect(exportResponse.body).toHaveProperty('messages');
+          expect(exportResponse.body).toHaveProperty('createdAt');
+        }
+      },
+      30000,
+    );
   });
 
   // @atom IA-008
@@ -381,27 +385,35 @@ describe('Agents and LLM API (e2e)', () => {
       expect([200, 400, 500, 503]).toContain(response.status);
     });
 
-    it('should handle special characters in messages', async () => {
-      const specialMessage = 'Test with "quotes" and <tags> & ampersands\n\t\r';
+    it(
+      'should handle special characters in messages',
+      async () => {
+        const specialMessage = 'Test with "quotes" and <tags> & ampersands\n\t\r';
 
-      const response = await request(app.getHttpServer()).post('/agents/chat').send({
-        message: specialMessage,
-      });
+        const response = await request(app.getHttpServer()).post('/agents/chat').send({
+          message: specialMessage,
+        });
 
-      // Should process without errors
-      expect([200, 500, 503]).toContain(response.status);
-    });
+        // Should process without errors
+        expect([200, 500, 503]).toContain(response.status);
+      },
+      30000,
+    );
 
-    it('should handle unicode characters', async () => {
-      const unicodeMessage = 'Test with émojis 🚀 and 中文 characters';
+    it(
+      'should handle unicode characters',
+      async () => {
+        const unicodeMessage = 'Test with émojis 🚀 and 中文 characters';
 
-      const response = await request(app.getHttpServer()).post('/agents/chat').send({
-        message: unicodeMessage,
-      });
+        const response = await request(app.getHttpServer()).post('/agents/chat').send({
+          message: unicodeMessage,
+        });
 
-      // Should process without errors
-      expect([200, 500, 503]).toContain(response.status);
-    });
+        // Should process without errors
+        expect([200, 500, 503]).toContain(response.status);
+      },
+      30000,
+    );
 
     it('should handle zero tokens in cost estimate', async () => {
       const response = await request(app.getHttpServer())

@@ -1,12 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import * as path from 'path';
 
 // Resolve paths relative to this config file's location
-// This config is in frontend/, so we go up one level to get project root
-const currentFilename = fileURLToPath(import.meta.url);
-const currentDirname = path.dirname(currentFilename);
-const projectRoot = path.resolve(currentDirname, '..');
+// Note: __dirname works here because Playwright's TS loader uses CommonJS
+// In Docker (CI=true), frontend is at /app so test-results go to /app/test-results
+// On host, frontend is in a subdirectory so we go up one level to project root
+const isDocker = process.env.CI === 'true';
+const projectRoot = isDocker ? __dirname : path.resolve(__dirname, '..');
 
 /**
  * Playwright E2E test configuration for Pact frontend

@@ -17,6 +17,8 @@ module.exports = {
     '!bootstrap/**/*', // Bootstrap code not counted in coverage
   ],
   coverageDirectory: './test-results/backend/unit/coverage',
+  // Include json-summary to generate coverage-summary.json for agent consumption
+  coverageReporters: ['json', 'lcov', 'text', 'clover', 'json-summary'],
   testEnvironment: 'node',
   roots: ['<rootDir>/src/', '<rootDir>/test/'],
   transformIgnorePatterns: [

@@ -6,6 +6,7 @@ import { AtomsRepository } from './atoms.repository';
 import { Atom } from './atom.entity';
 import { AgentsModule } from '../agents/agents.module';
 import { ValidatorsModule } from '../validators/validators.module';
+import { MoleculesModule } from '../molecules/molecules.module';
 import { CommittedAtomGuard } from '../../common/guards/committed-atom.guard';
 
 @Module({
@@ -13,6 +14,7 @@ import { CommittedAtomGuard } from '../../common/guards/committed-atom.guard';
     TypeOrmModule.forFeature([Atom]),
     forwardRef(() => AgentsModule),
     forwardRef(() => ValidatorsModule),
+    forwardRef(() => MoleculesModule),
   ],
   controllers: [AtomsController],
   providers: [AtomsService, AtomsRepository, CommittedAtomGuard],

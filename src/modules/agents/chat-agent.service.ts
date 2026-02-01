@@ -9,8 +9,48 @@ import { Injectable, Logger } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { LLMService, LLMRequest } from '../../common/llm/llm.service';
 import { AgentTaskType } from '../../common/llm/providers/types';
+import { AgentSafetyService, SafetyContext } from '../../common/safety';
 import { ChatRequestDto, ChatResponseDto, ToolCallDto, ToolResultDto } from './dto/chat-agent.dto';
 import { ToolRegistryService } from './tools/tool-registry.service';
+import { GraphRegistryService } from './graphs/graph-registry.service';
+import { ReconciliationService } from './reconciliation.service';
+import { ChatExplorationStateType } from './graphs/types/exploration-state';
+import { CoverageFastStateType } from './graphs/graphs/coverage-fast.graph';
+
+/**
+ * Query route types for fast-path routing
+ */
+type QueryRoute = 'fast-coverage' | 'reconciliation' | 'standard';
+
+/**
+ * Coverage question patterns for fast-path routing
+ */
+const COVERAGE_PATTERNS = [
+  /what.*coverage/i,
+  /test.*coverage/i,
+  /code.*coverage/i,
+  /coverage.*percent/i,
+  /how much.*tested/i,
+  /percent.*covered/i,
+  /line.*coverage/i,
+  /branch.*coverage/i,
+  /statement.*coverage/i,
+];
+
+/**
+ * Reconciliation command patterns
+ */
+const RECONCILIATION_PATTERNS = [
+  /reconcile.*repo/i,
+  /reconcile.*repository/i,
+  /reconcile.*codebase/i,
+  /run.*reconciliation/i,
+  /start.*reconciliation/i,
+  /analyze.*tests.*atoms/i,
+  /infer.*atoms.*tests/i,
+  /discover.*atoms/i,
+  /find.*orphan.*tests/i,
+];
 
 /**
  * Chat session for maintaining conversation context
@@ -25,42 +65,37 @@ interface ChatSession {
 
 /**
  * System prompt for the chat agent (dynamically includes available tools)
+ *
+ * This is intentionally minimal. The graph-based agent constructs
+ * task-specific prompts dynamically. This fallback prompt provides
+ * only domain knowledge and tool awareness.
  */
 const getSystemPrompt = (
   availableTools: string[],
-): string => `You are Pact Assistant, a helpful AI that helps users manage intent atoms and validators for the Pact requirement management system.
+): string => `You are Pact Assistant, an AI agent that helps users manage intent atoms and explore the Pact codebase.
 
-Your capabilities:
-- Analyze raw intent descriptions for atomicity (testable, indivisible behaviors)
-- Search, list, and retrieve existing atoms
-- Get statistics and counts about atoms
-- Suggest improvements to atom quality
-- Create, update, commit, and delete atoms
-- Read and explore files in the codebase
-- Search for code patterns and text
-- Help users understand the Pact workflow
+## Available Tools
+${availableTools.join(', ')}
 
-Key concepts:
-- Intent Atoms: Atomic, testable behavioral requirements (e.g., "Users can log in with email and password")
-- Quality Score: 0-100 rating based on specificity, testability, atomicity, independence, and value
-- Commitment: Making an atom immutable (requires quality score >= 80)
-- Supersession: Replacing a committed atom with an updated version
+## Key Pact Concepts
+- **Intent Atoms**: Atomic, testable behavioral requirements (immutable after commitment)
+- **Quality Score**: 0-100 rating based on testability, clarity, and atomicity (80+ required for commitment)
+- **Commitment**: Making an atom permanent and immutable
+- **Supersession**: Replacing a committed atom with a new version (old atom preserved)
+- **Molecules**: Groupings of atoms that represent features or capabilities
 
-Available tools: ${availableTools.join(', ')}
+## Behavior Guidelines
+- Use tools to gather information before answering questions
+- Be concise - prefer summary information over raw data dumps
+- When reading files, extract only the relevant portions
+- If a file is large, read specific sections rather than the entire file
+- Synthesize findings into clear, actionable responses
 
-When users ask you to do something:
-1. Use the appropriate tool(s) to get the information you need
-2. Provide clear, helpful explanations based on tool results
-3. Suggest follow-up actions when relevant
-
-Always use tools when you need data. For example:
-- "How many atoms?" → use count_atoms
-- "Show me atoms about authentication" → use search_atoms with query "authentication"
-- "What's the status of IA-001?" → use get_atom with atomId "IA-001"
-- "Show me the chat-agent.service.ts file" → use read_file with file_path "src/modules/agents/chat-agent.service.ts"
-- "Search for AtomsService" → use grep with pattern "AtomsService"
-
-Be concise but thorough. If you're unsure about something, ask for clarification.`;
+## Exploration Guidelines
+- Directory listings show structure, but files contain data - read relevant files
+- When asked about metrics (coverage, quality, etc.), find and read the actual report files
+- Common data locations: \`test-results/\`, \`coverage/\`, \`*-report.*\` files
+- If you list a directory and see data files, read them to extract actual numbers`;
 
 @Injectable()
 export class ChatAgentService {
@@ -70,10 +105,19 @@ export class ChatAgentService {
   // Session timeout (30 minutes)
   private readonly SESSION_TIMEOUT_MS = 30 * 60 * 1000;
 
+  // Feature flag for graph-based chat (gradual rollout)
+  private readonly useGraphAgent: boolean;
+
   constructor(
     private readonly llmService: LLMService,
     private readonly toolRegistry: ToolRegistryService,
+    private readonly graphRegistry: GraphRegistryService,
+    private readonly safetyService: AgentSafetyService,
+    private readonly reconciliationService: ReconciliationService,
   ) {
+    // Enable graph agent via environment variable
+    this.useGraphAgent = process.env.USE_GRAPH_AGENT === 'true';
+
     // Cleanup old sessions periodically
     setInterval(() => this.cleanupSessions(), 5 * 60 * 1000);
   }
@@ -87,12 +131,421 @@ export class ChatAgentService {
     // Get or create session
     const session = this.getOrCreateSession(request.sessionId, request.context);
 
-    // Add user message to history
-    session.messages.push({ role: 'user', content: request.message });
+    // Create safety context for this request
+    const safetyContext: SafetyContext = this.safetyService.createContext({
+      agentId: 'chat-agent',
+      sessionId: session.id,
+      workspaceRoot: process.cwd(),
+    });
+
+    // Validate input for safety violations
+    const inputValidation = this.safetyService.validateRequest(
+      request.message,
+      [], // Tools will be validated at execution time
+      safetyContext,
+    );
+
+    if (!inputValidation.allowed) {
+      this.logger.warn(
+        `Chat request blocked due to safety violations: ${inputValidation.allViolations.map((v) => v.type).join(', ')}`,
+      );
+      return {
+        sessionId: session.id,
+        message:
+          'I cannot process this request due to safety constraints. Please rephrase your question.',
+        suggestedActions: ['Try a different question', 'Ask for help'],
+      };
+    }
+
+    // Use sanitized input
+    const sanitizedMessage = inputValidation.sanitizedInput || request.message;
+
+    // Add user message to history (sanitized)
+    session.messages.push({ role: 'user', content: sanitizedMessage });
     session.lastActivityAt = new Date();
 
-    this.logger.log(`Chat request in session ${session.id}: ${request.message.slice(0, 50)}...`);
+    this.logger.log(`Chat request in session ${session.id}: ${sanitizedMessage.slice(0, 50)}...`);
 
+    // Process the request
+    let response: ChatResponseDto;
+
+    // Use graph-based agent if enabled
+    if (this.useGraphAgent && this.graphRegistry.hasGraph('chat-exploration')) {
+      // Route to fast-path or standard graph
+      const route = this.routeQuery(sanitizedMessage);
+
+      if (route === 'reconciliation') {
+        this.logger.log('Routing to reconciliation command handler');
+        response = await this.handleReconciliationCommand(
+          { ...request, message: sanitizedMessage },
+          session,
+          startTime,
+        );
+      } else if (route === 'fast-coverage' && this.graphRegistry.hasGraph('coverage-fast')) {
+        this.logger.log('Routing to coverage fast-path');
+        response = await this.chatWithCoverageFastPath(
+          { ...request, message: sanitizedMessage },
+          session,
+          startTime,
+        );
+      } else {
+        response = await this.chatWithGraph(
+          { ...request, message: sanitizedMessage },
+          session,
+          startTime,
+        );
+      }
+    } else {
+      // Use legacy direct tool-calling implementation
+      // Note: Graph agent has smarter exploration (analyze node checks if findings have actual data)
+      if (!this.useGraphAgent) {
+        this.logger.debug(
+          'Using legacy chat path. Set USE_GRAPH_AGENT=true for smarter exploration.',
+        );
+      }
+      response = await this.chatWithDirectTools(
+        { ...request, message: sanitizedMessage },
+        session,
+        startTime,
+      );
+    }
+
+    // Validate output before returning
+    const outputValidation = this.safetyService.validateResponse(response.message, safetyContext);
+
+    // Return sanitized output
+    return {
+      ...response,
+      message: outputValidation.sanitizedOutput,
+    };
+  }
+
+  /**
+   * Process a chat message using the LangGraph-based agent
+   */
+  private async chatWithGraph(
+    request: ChatRequestDto,
+    session: ChatSession,
+    startTime: number,
+  ): Promise<ChatResponseDto> {
+    this.logger.log(`Using graph-based agent for session ${session.id}`);
+
+    try {
+      // Invoke the chat exploration graph
+      const result = await this.graphRegistry.invoke<
+        { input: string; maxIterations: number },
+        ChatExplorationStateType
+      >('chat-exploration', {
+        input: request.message,
+        maxIterations: 5,
+      });
+
+      // Map graph result to response DTO
+      const toolCalls: ToolCallDto[] = result.toolHistory.map((t, i) => ({
+        id: `tool-${i}`,
+        name: t.tool,
+        arguments: t.args,
+      }));
+
+      const toolResults: ToolResultDto[] = result.toolHistory.map((t, i) => ({
+        toolCallId: `tool-${i}`,
+        name: t.tool,
+        result: t.result,
+        success: !t.result.startsWith('Error:'),
+      }));
+
+      const finalMessage = result.output || 'I was unable to find an answer.';
+
+      // Add assistant message to session history
+      session.messages.push({ role: 'assistant', content: finalMessage });
+
+      // Generate suggested actions
+      const suggestedActions = this.generateSuggestedActions(
+        request.message,
+        finalMessage,
+        toolResults,
+      );
+
+      const latencyMs = Date.now() - startTime;
+      this.logger.log(
+        `Graph-based chat response generated in ${latencyMs}ms (${result.iteration} iterations)`,
+      );
+
+      return {
+        sessionId: session.id,
+        message: finalMessage,
+        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+        toolResults: toolResults.length > 0 ? toolResults : undefined,
+        suggestedActions,
+      };
+    } catch (error) {
+      this.logger.error(`Graph-based chat error: ${error.message}`, error.stack);
+
+      // Fall back to direct tool implementation on error
+      this.logger.warn('Falling back to direct tool chat implementation');
+      return this.chatWithDirectTools(request, session, startTime);
+    }
+  }
+
+  /**
+   * Route a query to the appropriate graph based on patterns.
+   * Returns 'fast-coverage' for coverage questions, 'reconciliation' for repo reconciliation, 'standard' otherwise.
+   */
+  private routeQuery(message: string): QueryRoute {
+    // Check for reconciliation command patterns
+    if (RECONCILIATION_PATTERNS.some((p) => p.test(message))) {
+      return 'reconciliation';
+    }
+    // Check for coverage question patterns
+    if (COVERAGE_PATTERNS.some((p) => p.test(message))) {
+      return 'fast-coverage';
+    }
+    return 'standard';
+  }
+
+  /**
+   * Process a coverage question using the fast-path graph.
+   * This bypasses the full ReAct loop for significant token savings.
+   */
+  private async chatWithCoverageFastPath(
+    request: ChatRequestDto,
+    session: ChatSession,
+    startTime: number,
+  ): Promise<ChatResponseDto> {
+    this.logger.log(`Using coverage fast-path for session ${session.id}`);
+
+    try {
+      const result = await this.graphRegistry.invoke<
+        { input: string },
+        CoverageFastStateType
+      >('coverage-fast', {
+        input: request.message,
+      });
+
+      // Check if fast-path found actual coverage data
+      // If not, fall back to standard graph for more thorough exploration
+      const hasData = result.metrics && !result.error;
+
+      if (!hasData) {
+        this.logger.warn(
+          `Coverage fast-path found no data: ${result.error || 'no metrics'}. Falling back to standard graph.`,
+        );
+        return this.chatWithGraph(request, session, startTime);
+      }
+
+      const finalMessage = result.output || 'I was unable to find coverage data.';
+
+      // Add assistant message to session history
+      session.messages.push({ role: 'assistant', content: finalMessage });
+
+      const latencyMs = Date.now() - startTime;
+      this.logger.log(`Coverage fast-path response generated in ${latencyMs}ms`);
+
+      return {
+        sessionId: session.id,
+        message: finalMessage,
+        suggestedActions: ['Ask about specific file coverage', 'Request coverage trends'],
+      };
+    } catch (error) {
+      this.logger.error(`Coverage fast-path error: ${error.message}`, error.stack);
+
+      // Fall back to standard graph on error
+      this.logger.warn('Falling back to standard graph implementation');
+      return this.chatWithGraph(request, session, startTime);
+    }
+  }
+
+  /**
+   * Handle reconciliation commands (reconcile_repo, run reconciliation, etc.)
+   *
+   * This method starts a reconciliation analysis on the repository to:
+   * - Discover orphan tests (tests without @atom annotations)
+   * - Infer potential atoms from test behavior
+   * - Suggest molecule groupings
+   *
+   * @param request - Chat request containing the reconciliation command
+   * @param session - Chat session for context
+   * @param startTime - Request start time for latency tracking
+   */
+  private async handleReconciliationCommand(
+    request: ChatRequestDto,
+    session: ChatSession,
+    startTime: number,
+  ): Promise<ChatResponseDto> {
+    this.logger.log(`Handling reconciliation command for session ${session.id}`);
+
+    try {
+      // Check if reconciliation service is available
+      if (!this.reconciliationService.isAvailable()) {
+        const message =
+          'The reconciliation service is not available. This may be because the required LLM provider is not configured. ' +
+          'Please ensure ANTHROPIC_API_KEY or OPENAI_API_KEY is set.';
+
+        session.messages.push({ role: 'assistant', content: message });
+
+        return {
+          sessionId: session.id,
+          message,
+          suggestedActions: ['Check environment configuration', 'Try a different command'],
+        };
+      }
+
+      // Parse options from the message (optional)
+      const options = this.parseReconciliationOptions(request.message);
+
+      // Start the reconciliation with interrupt support for human review
+      const result = await this.reconciliationService.analyzeWithInterrupt({
+        rootDirectory: options.rootDirectory || process.cwd(),
+        mode: options.mode || 'full-scan',
+        options: {
+          analyzeDocs: options.analyzeDocs ?? true,
+          maxTests: options.maxTests,
+          qualityThreshold: options.qualityThreshold ?? 70,
+          requireReview: true, // Always require review in chat context
+        },
+      });
+
+      // Build response message based on result
+      let message: string;
+      let suggestedActions: string[];
+
+      if (!result.completed && result.pendingReview) {
+        // Analysis interrupted, waiting for human review
+        const pending = result.pendingReview;
+        const atomCount = pending.pendingAtoms?.length || 0;
+        const passCount = pending.summary?.passCount || 0;
+        const failCount = pending.summary?.failCount || 0;
+
+        message =
+          `Reconciliation analysis complete for run **${result.runId}**.\n\n` +
+          `**Status**: Waiting for review\n` +
+          `**Atoms discovered**: ${atomCount}\n` +
+          `**Passing quality threshold**: ${passCount}\n` +
+          `**Failing quality threshold**: ${failCount}\n\n` +
+          `The analysis found ${atomCount} potential atoms from your tests. ` +
+          `Please review and approve/reject the recommendations before they are applied.\n\n` +
+          `Use the API endpoint \`GET /agents/reconciliation/runs/${result.runId}/pending\` to see pending recommendations, ` +
+          `or \`POST /agents/reconciliation/runs/${result.runId}/review\` to submit your decisions.`;
+
+        suggestedActions = [
+          'Show pending recommendations',
+          'Approve all recommendations',
+          'Check run status',
+        ];
+      } else if (result.completed && result.result) {
+        // Analysis completed (no review required or auto-approved)
+        const reconciliationResult = result.result;
+        const summary = reconciliationResult.summary;
+        message =
+          `Reconciliation analysis complete for run **${result.runId}**.\n\n` +
+          `**Status**: ${reconciliationResult.status}\n` +
+          `**Atoms inferred**: ${summary.inferredAtomsCount || 0}\n` +
+          `**Molecules suggested**: ${summary.inferredMoleculesCount || 0}\n` +
+          `**Tests analyzed**: ${summary.totalOrphanTests || 0}\n` +
+          `**Quality passing**: ${summary.qualityPassCount || 0}\n` +
+          `**Quality failing**: ${summary.qualityFailCount || 0}\n\n` +
+          (reconciliationResult.status === 'completed'
+            ? 'All recommendations have been processed successfully.'
+            : 'Some recommendations may require manual review.');
+
+        suggestedActions = [
+          'View created atoms',
+          'Run another reconciliation',
+          'Check quality metrics',
+        ];
+      } else {
+        // Error or unexpected status
+        const errorMessages = result.result?.errors?.join(', ') || 'Unknown error';
+        message =
+          `Reconciliation run **${result.runId}** did not complete as expected.\n\n` +
+          `Errors: ${errorMessages}\n\n` +
+          'Please check the run details for more information.';
+
+        suggestedActions = ['Check run details', 'Try again', 'Report issue'];
+      }
+
+      // Add to session history
+      session.messages.push({ role: 'assistant', content: message });
+
+      const latencyMs = Date.now() - startTime;
+      this.logger.log(`Reconciliation command handled in ${latencyMs}ms`);
+
+      return {
+        sessionId: session.id,
+        message,
+        suggestedActions,
+      };
+    } catch (error) {
+      this.logger.error(`Reconciliation command error: ${error.message}`, error.stack);
+
+      const errorMessage =
+        `I encountered an error while running reconciliation: ${error.message}\n\n` +
+        'This might be due to configuration issues or the LLM service being unavailable. ' +
+        'Please check your environment and try again.';
+
+      session.messages.push({ role: 'assistant', content: errorMessage });
+
+      return {
+        sessionId: session.id,
+        message: errorMessage,
+        suggestedActions: ['Check configuration', 'Try again later', 'Ask for help'],
+      };
+    }
+  }
+
+  /**
+   * Parse reconciliation options from a natural language message.
+   */
+  private parseReconciliationOptions(message: string): {
+    rootDirectory?: string;
+    mode?: 'full-scan' | 'delta';
+    analyzeDocs?: boolean;
+    maxTests?: number;
+    qualityThreshold?: number;
+  } {
+    const options: {
+      rootDirectory?: string;
+      mode?: 'full-scan' | 'delta';
+      analyzeDocs?: boolean;
+      maxTests?: number;
+      qualityThreshold?: number;
+    } = {};
+
+    // Check for delta mode
+    if (/delta|incremental|changes only/i.test(message)) {
+      options.mode = 'delta';
+    }
+
+    // Check for max tests limit
+    const maxTestsMatch = message.match(/max(?:imum)?\s*(\d+)\s*tests?/i);
+    if (maxTestsMatch) {
+      options.maxTests = parseInt(maxTestsMatch[1], 10);
+    }
+
+    // Check for quality threshold
+    const qualityMatch = message.match(/quality\s*(?:threshold|score)?\s*(?:of|at|above)?\s*(\d+)/i);
+    if (qualityMatch) {
+      options.qualityThreshold = parseInt(qualityMatch[1], 10);
+    }
+
+    // Check for directory path
+    const dirMatch = message.match(/(?:in|at|from)\s+(?:directory|path|folder)?\s*['""]?([./\w-]+)['""]?/i);
+    if (dirMatch && dirMatch[1] !== 'delta') {
+      options.rootDirectory = dirMatch[1];
+    }
+
+    return options;
+  }
+
+  /**
+   * Direct tool-calling implementation (original approach)
+   * Used as fallback when graph-based agent is disabled or fails
+   */
+  private async chatWithDirectTools(
+    request: ChatRequestDto,
+    session: ChatSession,
+    startTime: number,
+  ): Promise<ChatResponseDto> {
     try {
       // Get all available tools from registry
       const availableTools = this.toolRegistry.getAllTools();
@@ -125,7 +578,6 @@ export class ChatAgentService {
       // Execute tool calls if any
       const toolResults: ToolResultDto[] = [];
       let finalText = text;
-      let needsFollowUp = false;
 
       if (toolCalls.length > 0) {
         // Execute all tool calls
@@ -170,11 +622,9 @@ export class ChatAgentService {
         });
 
         finalText = followUpResponse.content;
-        needsFollowUp = true;
 
         // Handle additional tool calls in follow-up if needed
         if (followUpResponse.toolCalls && followUpResponse.toolCalls.length > 0) {
-          // Recursively handle tool calls (limit recursion depth)
           const additionalToolCalls = followUpResponse.toolCalls.map((tc) => ({
             id: tc.id,
             name: tc.name,
@@ -210,16 +660,41 @@ export class ChatAgentService {
             });
           }
 
-          const finalResponse = await this.llmService.invoke({
+          // Continue with tools available - let LLM decide if more exploration needed
+          // The LLM should naturally synthesize when it has enough data
+          const continueResponse = await this.llmService.invoke({
             messages: nestedMessages,
             tools: availableTools,
             taskType: AgentTaskType.CHAT,
             agentName: 'chat-agent',
-            purpose: 'final-summary',
+            purpose: 'continue-exploration',
             temperature: 0.7,
           });
 
-          finalText = finalResponse.content;
+          // If LLM wants more tools, we've hit our limit - synthesize
+          if (continueResponse.toolCalls && continueResponse.toolCalls.length > 0) {
+            nestedMessages.push({
+              role: 'assistant' as const,
+              content: continueResponse.content || '',
+            });
+            nestedMessages.push({
+              role: 'user' as const,
+              content: `Based on what you've gathered, please synthesize your findings into a clear answer. If you couldn't find specific data (like exact coverage numbers), acknowledge what's missing and explain how to get it.`,
+            });
+
+            const finalResponse = await this.llmService.invoke({
+              messages: nestedMessages,
+              tools: [],
+              taskType: AgentTaskType.CHAT,
+              agentName: 'chat-agent',
+              purpose: 'final-summary',
+              temperature: 0.7,
+            });
+
+            finalText = finalResponse.content;
+          } else {
+            finalText = continueResponse.content;
+          }
         }
       }
 

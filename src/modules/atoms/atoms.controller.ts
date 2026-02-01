@@ -37,6 +37,8 @@ import {
 import { ValidatorsService } from '../validators/validators.service';
 import { CreateValidatorDto } from '../validators/dto/create-validator.dto';
 import { Validator } from '../validators/validator.entity';
+import { MoleculesService } from '../molecules/molecules.service';
+import { Molecule } from '../molecules/molecule.entity';
 
 @ApiTags('atoms')
 @Controller('atoms')
@@ -48,6 +50,9 @@ export class AtomsController {
     @Optional()
     @Inject(forwardRef(() => ValidatorsService))
     private readonly validatorsService?: ValidatorsService,
+    @Optional()
+    @Inject(forwardRef(() => MoleculesService))
+    private readonly moleculesService?: MoleculesService,
   ) {}
 
   @Post()
@@ -272,6 +277,31 @@ export class AtomsController {
       throw new Error('Validators service is not available');
     }
     return this.validatorsService.getValidationStatus(id);
+  }
+
+  // ========================
+  // Molecule Integration Endpoints
+  // ========================
+
+  @Get(':id/molecules')
+  @ApiOperation({
+    summary: 'Get molecules containing this atom',
+    description: 'Returns all molecules (Views/Lenses) that contain the specified atom.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID of the atom' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of molecules containing the atom',
+    type: [Molecule],
+  })
+  @ApiResponse({ status: 404, description: 'Atom not found' })
+  async getMolecules(@Param('id') id: string): Promise<Molecule[]> {
+    if (!this.moleculesService) {
+      throw new Error('Molecules service is not available');
+    }
+    // Ensure the atom exists first
+    await this.atomsService.findOne(id);
+    return this.moleculesService.getMoleculesForAtom(id);
   }
 
   // ========================

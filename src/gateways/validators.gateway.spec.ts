@@ -48,6 +48,7 @@ describe('ValidatorsGateway', () => {
    * Gateway must be properly instantiated by NestJS DI
    */
   it('should be defined', () => {
+    // Gateway instance should be successfully created by DI
     expect(gateway).toBeDefined();
   });
 
@@ -59,6 +60,7 @@ describe('ValidatorsGateway', () => {
     it('should log on init', () => {
       const logSpy = jest.spyOn(gateway['logger'], 'log');
       gateway.afterInit(mockServer);
+      // Logger should record gateway initialization message
       expect(logSpy).toHaveBeenCalledWith('ValidatorsGateway initialized');
     });
 
@@ -70,6 +72,7 @@ describe('ValidatorsGateway', () => {
       const logSpy = jest.spyOn(gateway['logger'], 'log');
       const mockClient = { id: 'test-client-123' } as any;
       gateway.handleConnection(mockClient);
+      // Logger should record client connection with client ID
       expect(logSpy).toHaveBeenCalledWith('Client connected: test-client-123');
     });
 
@@ -81,6 +84,7 @@ describe('ValidatorsGateway', () => {
       const logSpy = jest.spyOn(gateway['logger'], 'log');
       const mockClient = { id: 'test-client-123' } as any;
       gateway.handleDisconnect(mockClient);
+      // Logger should record client disconnection with client ID
       expect(logSpy).toHaveBeenCalledWith('Client disconnected: test-client-123');
     });
   });
@@ -93,6 +97,7 @@ describe('ValidatorsGateway', () => {
     it('should emit validator:created event with correct payload', () => {
       gateway.emitValidatorCreated(mockValidator as Validator);
 
+      // Server should emit validator:created event with type, data, and atomId
       expect(mockServer.emit).toHaveBeenCalledWith('validator:created', {
         type: 'validator:created',
         data: mockValidator,
@@ -106,6 +111,7 @@ describe('ValidatorsGateway', () => {
      */
     it('should not throw if server is undefined', () => {
       gateway.server = undefined as unknown as Server;
+      // Method should handle undefined server gracefully without throwing
       expect(() => gateway.emitValidatorCreated(mockValidator as Validator)).not.toThrow();
     });
   });
@@ -123,6 +129,7 @@ describe('ValidatorsGateway', () => {
 
       gateway.emitValidatorUpdated(updatedValidator as Validator);
 
+      // Server should emit validator:updated event with validatorId, data, and atomId
       expect(mockServer.emit).toHaveBeenCalledWith('validator:updated', {
         type: 'validator:updated',
         validatorId: updatedValidator.id,
@@ -137,6 +144,7 @@ describe('ValidatorsGateway', () => {
      */
     it('should not throw if server is undefined', () => {
       gateway.server = undefined as unknown as Server;
+      // Method should handle undefined server gracefully without throwing
       expect(() => gateway.emitValidatorUpdated(mockValidator as Validator)).not.toThrow();
     });
   });
@@ -149,6 +157,7 @@ describe('ValidatorsGateway', () => {
     it('should emit validator:activated event with correct payload', () => {
       gateway.emitValidatorActivated(mockValidator as Validator);
 
+      // Server should emit validator:activated event with validatorId and atomId
       expect(mockServer.emit).toHaveBeenCalledWith('validator:activated', {
         type: 'validator:activated',
         validatorId: mockValidator.id,
@@ -162,6 +171,7 @@ describe('ValidatorsGateway', () => {
      */
     it('should not throw if server is undefined', () => {
       gateway.server = undefined as unknown as Server;
+      // Method should handle undefined server gracefully without throwing
       expect(() => gateway.emitValidatorActivated(mockValidator as Validator)).not.toThrow();
     });
   });
@@ -174,6 +184,7 @@ describe('ValidatorsGateway', () => {
     it('should emit validator:deactivated event with correct payload', () => {
       gateway.emitValidatorDeactivated(mockValidator as Validator);
 
+      // Server should emit validator:deactivated event with validatorId and atomId
       expect(mockServer.emit).toHaveBeenCalledWith('validator:deactivated', {
         type: 'validator:deactivated',
         validatorId: mockValidator.id,
@@ -187,6 +198,7 @@ describe('ValidatorsGateway', () => {
      */
     it('should not throw if server is undefined', () => {
       gateway.server = undefined as unknown as Server;
+      // Method should handle undefined server gracefully without throwing
       expect(() => gateway.emitValidatorDeactivated(mockValidator as Validator)).not.toThrow();
     });
   });
@@ -202,6 +214,7 @@ describe('ValidatorsGateway', () => {
 
       gateway.emitValidatorDeleted(validatorId, atomId);
 
+      // Server should emit validator:deleted event with validatorId and atomId
       expect(mockServer.emit).toHaveBeenCalledWith('validator:deleted', {
         type: 'validator:deleted',
         validatorId,
@@ -215,6 +228,7 @@ describe('ValidatorsGateway', () => {
      */
     it('should not throw if server is undefined', () => {
       gateway.server = undefined as unknown as Server;
+      // Method should handle undefined server gracefully without throwing
       expect(() => gateway.emitValidatorDeleted('test-id', 'atom-id')).not.toThrow();
     });
   });
@@ -227,6 +241,7 @@ describe('ValidatorsGateway', () => {
     it('should emit validator:translated event with correct payload', () => {
       gateway.emitValidatorTranslated(mockValidator as Validator, 'natural_language');
 
+      // Server should emit validator:translated event with validatorId, targetFormat, and atomId
       expect(mockServer.emit).toHaveBeenCalledWith('validator:translated', {
         type: 'validator:translated',
         validatorId: mockValidator.id,
@@ -241,6 +256,7 @@ describe('ValidatorsGateway', () => {
      */
     it('should not throw if server is undefined', () => {
       gateway.server = undefined as unknown as Server;
+      // Method should handle undefined server gracefully without throwing
       expect(() =>
         gateway.emitValidatorTranslated(mockValidator as Validator, 'typescript'),
       ).not.toThrow();

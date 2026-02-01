@@ -2,6 +2,13 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
+// In Docker (CI=true), frontend is at /app so test-results go to /app/test-results
+// On host, frontend is in a subdirectory so we go up two levels to project root
+const isDocker = process.env.CI === 'true';
+const coverageDir = isDocker
+  ? './test-results/frontend/unit/coverage'
+  : '../../test-results/frontend/unit/coverage';
+
 export default defineConfig({
   plugins: [react()],
   test: {
@@ -13,7 +20,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
-      reportsDirectory: '../../test-results/frontend/unit/coverage',
+      reportsDirectory: coverageDir,
       include: [
         'app/**/*.{ts,tsx}',
         'components/**/*.{ts,tsx}',

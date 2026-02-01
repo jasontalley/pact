@@ -15,6 +15,53 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AtomQualityService, AtomForValidation } from './atom-quality.service';
 import { LLMService } from '../../common/llm/llm.service';
 
+/**
+ * Helper to create a combined response with all 5 dimensions
+ * This matches the new single-call format used by evaluateAllDimensions
+ */
+function createCombinedResponse(scores: {
+  observable: number;
+  falsifiable: number;
+  implementationAgnostic: number;
+  unambiguousLanguage: number;
+  clearSuccessCriteria: number;
+  observableSuggestions?: string[];
+  falsifiableSuggestions?: string[];
+  implementationAgnosticSuggestions?: string[];
+  unambiguousLanguageSuggestions?: string[];
+  clearSuccessCriteriaSuggestions?: string[];
+}) {
+  return {
+    content: JSON.stringify({
+      observable: {
+        score: scores.observable,
+        feedback: 'Observable feedback',
+        suggestions: scores.observableSuggestions || [],
+      },
+      falsifiable: {
+        score: scores.falsifiable,
+        feedback: 'Falsifiable feedback',
+        suggestions: scores.falsifiableSuggestions || [],
+      },
+      implementationAgnostic: {
+        score: scores.implementationAgnostic,
+        feedback: 'Implementation-agnostic feedback',
+        suggestions: scores.implementationAgnosticSuggestions || [],
+      },
+      unambiguousLanguage: {
+        score: scores.unambiguousLanguage,
+        feedback: 'Unambiguous language feedback',
+        suggestions: scores.unambiguousLanguageSuggestions || [],
+      },
+      clearSuccessCriteria: {
+        score: scores.clearSuccessCriteria,
+        feedback: 'Clear success criteria feedback',
+        suggestions: scores.clearSuccessCriteriaSuggestions || [],
+      },
+    }),
+  };
+}
+
 describe('AtomQualityService', () => {
   let service: AtomQualityService;
 
@@ -57,43 +104,16 @@ describe('AtomQualityService', () => {
         category: 'performance',
       };
 
-      // Mock LLM responses for each dimension
-      mockLLMService.invoke
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            score: 22,
-            feedback: 'Clearly observable with measurable time constraint',
-            suggestions: [],
-          }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            score: 23,
-            feedback: 'Falsifiable with clear 2-second threshold',
-            suggestions: [],
-          }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            score: 18,
-            feedback: 'Implementation-agnostic, focuses on behavior',
-            suggestions: [],
-          }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            score: 14,
-            feedback: 'Clear and unambiguous language',
-            suggestions: [],
-          }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            score: 13,
-            feedback: 'Clear success criteria with time threshold',
-            suggestions: [],
-          }),
-        });
+      // Mock LLM response with all dimensions (single call)
+      mockLLMService.invoke.mockResolvedValueOnce(
+        createCombinedResponse({
+          observable: 22,
+          falsifiable: 23,
+          implementationAgnostic: 18,
+          unambiguousLanguage: 14,
+          clearSuccessCriteria: 13,
+        }),
+      );
 
       const result = await service.validateAtom(atom);
 
@@ -118,13 +138,15 @@ describe('AtomQualityService', () => {
       };
 
       // Mock LLM returning scores above max
-      mockLLMService.invoke.mockResolvedValue({
-        content: JSON.stringify({
-          score: 100, // Way above max
-          feedback: 'Perfect',
-          suggestions: [],
+      mockLLMService.invoke.mockResolvedValueOnce(
+        createCombinedResponse({
+          observable: 100, // Way above max 25
+          falsifiable: 100, // Way above max 25
+          implementationAgnostic: 100, // Way above max 20
+          unambiguousLanguage: 100, // Way above max 15
+          clearSuccessCriteria: 100, // Way above max 15
         }),
-      });
+      );
 
       const result = await service.validateAtom(atom);
 
@@ -148,14 +170,16 @@ describe('AtomQualityService', () => {
         category: 'functional',
       };
 
-      // Mock LLM returning negative score
-      mockLLMService.invoke.mockResolvedValue({
-        content: JSON.stringify({
-          score: -10,
-          feedback: 'Invalid',
-          suggestions: [],
+      // Mock LLM returning negative scores
+      mockLLMService.invoke.mockResolvedValueOnce(
+        createCombinedResponse({
+          observable: -10,
+          falsifiable: -10,
+          implementationAgnostic: -10,
+          unambiguousLanguage: -10,
+          clearSuccessCriteria: -10,
         }),
-      });
+      );
 
       const result = await service.validateAtom(atom);
 
@@ -176,23 +200,16 @@ describe('AtomQualityService', () => {
         category: 'functional',
       };
 
-      // Mock high scores totaling 88
-      mockLLMService.invoke
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 23, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 22, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 18, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 13, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 12, feedback: '', suggestions: [] }),
-        });
+      // Mock high scores totaling 88 (23+22+18+13+12)
+      mockLLMService.invoke.mockResolvedValueOnce(
+        createCombinedResponse({
+          observable: 23,
+          falsifiable: 22,
+          implementationAgnostic: 18,
+          unambiguousLanguage: 13,
+          clearSuccessCriteria: 12,
+        }),
+      );
 
       const result = await service.validateAtom(atom);
 
@@ -210,23 +227,18 @@ describe('AtomQualityService', () => {
         category: 'performance',
       };
 
-      // Mock medium scores totaling 60 (boundary for revise)
-      mockLLMService.invoke
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 15, feedback: '', suggestions: ['Be more specific'] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 14, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 12, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 10, feedback: '', suggestions: ['Define fast'] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 9, feedback: '', suggestions: [] }),
-        });
+      // Mock medium scores totaling 60 (15+14+12+10+9)
+      mockLLMService.invoke.mockResolvedValueOnce(
+        createCombinedResponse({
+          observable: 15,
+          falsifiable: 14,
+          implementationAgnostic: 12,
+          unambiguousLanguage: 10,
+          clearSuccessCriteria: 9,
+          observableSuggestions: ['Be more specific'],
+          unambiguousLanguageSuggestions: ['Define fast'],
+        }),
+      );
 
       const result = await service.validateAtom(atom);
 
@@ -244,23 +256,18 @@ describe('AtomQualityService', () => {
         category: 'functional',
       };
 
-      // Mock low scores totaling 34
-      mockLLMService.invoke
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 8, feedback: '', suggestions: ['Too vague'] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 7, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 10, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 5, feedback: '', suggestions: ['Define "good"'] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 4, feedback: '', suggestions: [] }),
-        });
+      // Mock low scores totaling 34 (8+7+10+5+4)
+      mockLLMService.invoke.mockResolvedValueOnce(
+        createCombinedResponse({
+          observable: 8,
+          falsifiable: 7,
+          implementationAgnostic: 10,
+          unambiguousLanguage: 5,
+          clearSuccessCriteria: 4,
+          observableSuggestions: ['Too vague'],
+          unambiguousLanguageSuggestions: ['Define "good"'],
+        }),
+      );
 
       const result = await service.validateAtom(atom);
 
@@ -278,23 +285,16 @@ describe('AtomQualityService', () => {
         category: 'functional',
       };
 
-      // Mock scores totaling exactly 80 (approve threshold)
-      mockLLMService.invoke
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 20, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 20, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 16, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 12, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 12, feedback: '', suggestions: [] }),
-        });
+      // Mock scores totaling exactly 80 (20+20+16+12+12)
+      mockLLMService.invoke.mockResolvedValueOnce(
+        createCombinedResponse({
+          observable: 20,
+          falsifiable: 20,
+          implementationAgnostic: 16,
+          unambiguousLanguage: 12,
+          clearSuccessCriteria: 12,
+        }),
+      );
 
       const result = await service.validateAtom(atom);
 
@@ -312,23 +312,16 @@ describe('AtomQualityService', () => {
         category: 'functional',
       };
 
-      // Mock scores totaling exactly 60 (revise threshold)
-      mockLLMService.invoke
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 15, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 15, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 12, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 9, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 9, feedback: '', suggestions: [] }),
-        });
+      // Mock scores totaling exactly 60 (15+15+12+9+9)
+      mockLLMService.invoke.mockResolvedValueOnce(
+        createCombinedResponse({
+          observable: 15,
+          falsifiable: 15,
+          implementationAgnostic: 12,
+          unambiguousLanguage: 9,
+          clearSuccessCriteria: 9,
+        }),
+      );
 
       const result = await service.validateAtom(atom);
 
@@ -346,23 +339,16 @@ describe('AtomQualityService', () => {
         category: 'functional',
       };
 
-      // Mock scores totaling 59 (just below revise threshold)
-      mockLLMService.invoke
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 15, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 14, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 12, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 9, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 9, feedback: '', suggestions: [] }),
-        });
+      // Mock scores totaling 59 (15+14+12+9+9)
+      mockLLMService.invoke.mockResolvedValueOnce(
+        createCombinedResponse({
+          observable: 15,
+          falsifiable: 14,
+          implementationAgnostic: 12,
+          unambiguousLanguage: 9,
+          clearSuccessCriteria: 9,
+        }),
+      );
 
       const result = await service.validateAtom(atom);
 
@@ -383,9 +369,16 @@ describe('AtomQualityService', () => {
         category: 'functional',
       };
 
-      mockLLMService.invoke.mockResolvedValue({
-        content: JSON.stringify({ score: 20, feedback: 'Good', suggestions: [] }),
-      });
+      // Mock high scores totaling 100 (max possible)
+      mockLLMService.invoke.mockResolvedValueOnce(
+        createCombinedResponse({
+          observable: 25,
+          falsifiable: 25,
+          implementationAgnostic: 20,
+          unambiguousLanguage: 15,
+          clearSuccessCriteria: 15,
+        }),
+      );
 
       const result = await service.validateAtom(atom);
 
@@ -404,26 +397,17 @@ describe('AtomQualityService', () => {
       };
 
       // Mock scores totaling 65 (in revise range: 60-79)
-      mockLLMService.invoke
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            score: 16,
-            feedback: '',
-            suggestions: ['Add time constraint'],
-          }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 15, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 14, feedback: '', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 10, feedback: '', suggestions: ['Be more specific'] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 10, feedback: '', suggestions: [] }),
-        });
+      mockLLMService.invoke.mockResolvedValueOnce(
+        createCombinedResponse({
+          observable: 16,
+          falsifiable: 15,
+          implementationAgnostic: 14,
+          unambiguousLanguage: 10,
+          clearSuccessCriteria: 10,
+          observableSuggestions: ['Add time constraint'],
+          unambiguousLanguageSuggestions: ['Be more specific'],
+        }),
+      );
 
       const result = await service.validateAtom(atom);
 
@@ -443,22 +427,21 @@ describe('AtomQualityService', () => {
         category: 'functional',
       };
 
-      mockLLMService.invoke
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 10, feedback: '', suggestions: ['Suggestion 1'] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 10, feedback: '', suggestions: ['Suggestion 2'] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 8, feedback: '', suggestions: ['Suggestion 3'] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 6, feedback: '', suggestions: ['Suggestion 4'] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 5, feedback: '', suggestions: ['Suggestion 5'] }),
-        });
+      // Mock low scores with suggestions
+      mockLLMService.invoke.mockResolvedValueOnce(
+        createCombinedResponse({
+          observable: 10,
+          falsifiable: 10,
+          implementationAgnostic: 8,
+          unambiguousLanguage: 6,
+          clearSuccessCriteria: 5,
+          observableSuggestions: ['Suggestion 1'],
+          falsifiableSuggestions: ['Suggestion 2'],
+          implementationAgnosticSuggestions: ['Suggestion 3'],
+          unambiguousLanguageSuggestions: ['Suggestion 4'],
+          clearSuccessCriteriaSuggestions: ['Suggestion 5'],
+        }),
+      );
 
       const result = await service.validateAtom(atom);
 
@@ -476,14 +459,21 @@ describe('AtomQualityService', () => {
         category: 'functional',
       };
 
-      // Mock many suggestions
-      mockLLMService.invoke.mockResolvedValue({
-        content: JSON.stringify({
-          score: 5,
-          feedback: '',
-          suggestions: ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7'],
+      // Mock many suggestions across dimensions
+      mockLLMService.invoke.mockResolvedValueOnce(
+        createCombinedResponse({
+          observable: 5,
+          falsifiable: 5,
+          implementationAgnostic: 5,
+          unambiguousLanguage: 5,
+          clearSuccessCriteria: 5,
+          observableSuggestions: ['S1', 'S2'],
+          falsifiableSuggestions: ['S3', 'S4'],
+          implementationAgnosticSuggestions: ['S5', 'S6'],
+          unambiguousLanguageSuggestions: ['S7'],
+          clearSuccessCriteriaSuggestions: ['S8'],
         }),
-      });
+      );
 
       const result = await service.validateAtom(atom);
 
@@ -499,14 +489,19 @@ describe('AtomQualityService', () => {
         category: 'functional',
       };
 
-      // Mock duplicate suggestions
-      mockLLMService.invoke.mockResolvedValue({
-        content: JSON.stringify({
-          score: 5,
-          feedback: '',
-          suggestions: ['Same suggestion', 'Same suggestion'],
+      // Mock duplicate suggestions across dimensions
+      mockLLMService.invoke.mockResolvedValueOnce(
+        createCombinedResponse({
+          observable: 5,
+          falsifiable: 5,
+          implementationAgnostic: 5,
+          unambiguousLanguage: 5,
+          clearSuccessCriteria: 5,
+          observableSuggestions: ['Same suggestion'],
+          falsifiableSuggestions: ['Same suggestion'],
+          implementationAgnosticSuggestions: ['Same suggestion'],
         }),
-      });
+      );
 
       const result = await service.validateAtom(atom);
 
@@ -626,8 +621,15 @@ describe('AtomQualityService', () => {
         category: 'functional',
       };
 
-      mockLLMService.invoke.mockResolvedValue({
-        content: '{"score": 20, "feedback": "Good", "suggestions": ["Improve"]}',
+      // Mock plain JSON response with all dimensions
+      mockLLMService.invoke.mockResolvedValueOnce({
+        content: JSON.stringify({
+          observable: { score: 20, feedback: 'Good', suggestions: ['Improve'] },
+          falsifiable: { score: 20, feedback: 'OK', suggestions: [] },
+          implementationAgnostic: { score: 16, feedback: 'Fine', suggestions: [] },
+          unambiguousLanguage: { score: 12, feedback: 'Clear', suggestions: [] },
+          clearSuccessCriteria: { score: 10, feedback: 'Defined', suggestions: [] },
+        }),
       });
 
       const result = await service.validateAtom(atom);
@@ -646,8 +648,17 @@ describe('AtomQualityService', () => {
         category: 'functional',
       };
 
-      mockLLMService.invoke.mockResolvedValue({
-        content: '```json\n{"score": 18, "feedback": "OK", "suggestions": []}\n```',
+      // Mock JSON wrapped in markdown code blocks
+      mockLLMService.invoke.mockResolvedValueOnce({
+        content: `\`\`\`json
+{
+  "observable": { "score": 18, "feedback": "OK", "suggestions": [] },
+  "falsifiable": { "score": 18, "feedback": "OK", "suggestions": [] },
+  "implementationAgnostic": { "score": 14, "feedback": "OK", "suggestions": [] },
+  "unambiguousLanguage": { "score": 10, "feedback": "OK", "suggestions": [] },
+  "clearSuccessCriteria": { "score": 10, "feedback": "OK", "suggestions": [] }
+}
+\`\`\``,
       });
 
       const result = await service.validateAtom(atom);
@@ -688,26 +699,16 @@ describe('AtomQualityService', () => {
         category: 'performance',
       };
 
-      mockLLMService.invoke
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 24, feedback: 'Highly observable', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 25, feedback: 'Clearly falsifiable', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            score: 19,
-            feedback: 'Implementation-agnostic',
-            suggestions: [],
-          }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 14, feedback: 'Clear language', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 15, feedback: 'Clear criteria', suggestions: [] }),
-        });
+      // Mock high scores totaling 97 (24+25+19+14+15)
+      mockLLMService.invoke.mockResolvedValueOnce(
+        createCombinedResponse({
+          observable: 24,
+          falsifiable: 25,
+          implementationAgnostic: 19,
+          unambiguousLanguage: 14,
+          clearSuccessCriteria: 15,
+        }),
+      );
 
       const result = await service.validateAtom(atom);
 
@@ -725,38 +726,20 @@ describe('AtomQualityService', () => {
         category: 'functional',
       };
 
-      mockLLMService.invoke
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            score: 8,
-            feedback: 'Hard to observe',
-            suggestions: ['Define responsive'],
-          }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            score: 5,
-            feedback: 'Not falsifiable',
-            suggestions: ['Add thresholds'],
-          }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 14, feedback: 'Mostly agnostic', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            score: 3,
-            feedback: 'Very vague',
-            suggestions: ['Define good'],
-          }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            score: 2,
-            feedback: 'No criteria',
-            suggestions: ['Add acceptance criteria'],
-          }),
-        });
+      // Mock low scores totaling 32 (8+5+14+3+2)
+      mockLLMService.invoke.mockResolvedValueOnce(
+        createCombinedResponse({
+          observable: 8,
+          falsifiable: 5,
+          implementationAgnostic: 14,
+          unambiguousLanguage: 3,
+          clearSuccessCriteria: 2,
+          observableSuggestions: ['Define responsive'],
+          falsifiableSuggestions: ['Add thresholds'],
+          unambiguousLanguageSuggestions: ['Define good'],
+          clearSuccessCriteriaSuggestions: ['Add acceptance criteria'],
+        }),
+      );
 
       const result = await service.validateAtom(atom);
 
@@ -776,34 +759,16 @@ describe('AtomQualityService', () => {
         category: 'security',
       };
 
-      mockLLMService.invoke
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            score: 22,
-            feedback: 'Observable session expiry',
-            suggestions: [],
-          }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            score: 24,
-            feedback: 'Clear failure condition',
-            suggestions: [],
-          }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 18, feedback: 'Behavior-focused', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ score: 14, feedback: 'Specific time', suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            score: 14,
-            feedback: 'Clear 30-minute threshold',
-            suggestions: [],
-          }),
-        });
+      // Mock high scores totaling 92 (22+24+18+14+14)
+      mockLLMService.invoke.mockResolvedValueOnce(
+        createCombinedResponse({
+          observable: 22,
+          falsifiable: 24,
+          implementationAgnostic: 18,
+          unambiguousLanguage: 14,
+          clearSuccessCriteria: 14,
+        }),
+      );
 
       const result = await service.validateAtom(atom);
 

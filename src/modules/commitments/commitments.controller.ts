@@ -7,6 +7,7 @@ import {
   Query,
   ParseUUIDPipe,
   UseGuards,
+  HttpCode,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { CommitmentImmutabilityGuard } from '../../common/guards/commitment-immutability.guard';
@@ -39,6 +40,7 @@ export class CommitmentsController {
   }
 
   @Post('preview')
+  @HttpCode(200)
   @ApiOperation({
     summary: 'Preview a commitment (dry-run)',
     description: 'Runs all checks without creating the commitment. Use to identify issues.',

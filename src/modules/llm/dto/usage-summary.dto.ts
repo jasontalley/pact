@@ -5,6 +5,7 @@
  */
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsIn, IsDateString } from 'class-validator';
 import { LLMProviderType } from '../../../common/llm/providers/types';
 
 export class ProviderUsageDto {
@@ -142,11 +143,17 @@ export class UsageQueryDto {
     enum: ['day', 'week', 'month'],
     default: 'day',
   })
+  @IsOptional()
+  @IsIn(['day', 'week', 'month'])
   period?: 'day' | 'week' | 'month';
 
   @ApiPropertyOptional({ description: 'Start date for custom period' })
+  @IsOptional()
+  @IsDateString()
   startDate?: string;
 
   @ApiPropertyOptional({ description: 'End date for custom period' })
+  @IsOptional()
+  @IsDateString()
   endDate?: string;
 }

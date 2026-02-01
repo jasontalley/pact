@@ -83,6 +83,7 @@ describe('CommitmentsGateway', () => {
    * Gateway must be properly instantiated by NestJS DI
    */
   it('should be defined', () => {
+    // Gateway instance should be successfully created by DI
     expect(gateway).toBeDefined();
   });
 
@@ -94,6 +95,7 @@ describe('CommitmentsGateway', () => {
     it('should log on init', () => {
       const logSpy = jest.spyOn(gateway['logger'], 'log');
       gateway.afterInit(mockServer);
+      // Logger should record gateway initialization message
       expect(logSpy).toHaveBeenCalledWith('CommitmentsGateway initialized');
     });
 
@@ -105,6 +107,7 @@ describe('CommitmentsGateway', () => {
       const logSpy = jest.spyOn(gateway['logger'], 'log');
       const mockClient = { id: 'test-client-123' } as any;
       gateway.handleConnection(mockClient);
+      // Logger should record client connection with client ID
       expect(logSpy).toHaveBeenCalledWith('Client connected: test-client-123');
     });
 
@@ -116,6 +119,7 @@ describe('CommitmentsGateway', () => {
       const logSpy = jest.spyOn(gateway['logger'], 'log');
       const mockClient = { id: 'test-client-123' } as any;
       gateway.handleDisconnect(mockClient);
+      // Logger should record client disconnection with client ID
       expect(logSpy).toHaveBeenCalledWith('Client disconnected: test-client-123');
     });
   });
@@ -133,6 +137,7 @@ describe('CommitmentsGateway', () => {
         'jane.doe@company.com',
       );
 
+      // Server should emit commitment:proposed event with atoms, analysis, confidence, and requestedBy
       expect(mockServer.emit).toHaveBeenCalledWith('commitment:proposed', {
         type: 'commitment:proposed',
         proposedAtoms: mockProposedAtoms,
@@ -148,6 +153,7 @@ describe('CommitmentsGateway', () => {
      */
     it('should not throw if server is undefined', () => {
       gateway.server = undefined as unknown as Server;
+      // Method should handle undefined server gracefully without throwing
       expect(() =>
         gateway.emitCommitmentProposed(mockProposedAtoms, 'Analysis', 0.85, 'user'),
       ).not.toThrow();
@@ -165,6 +171,7 @@ describe('CommitmentsGateway', () => {
 
       gateway.emitCommitmentPreview(atomIds, mockPreview, summary);
 
+      // Server should emit commitment:preview event with atomIds, preview, summary, and canCommit
       expect(mockServer.emit).toHaveBeenCalledWith('commitment:preview', {
         type: 'commitment:preview',
         atomIds,
@@ -189,6 +196,7 @@ describe('CommitmentsGateway', () => {
 
       gateway.emitCommitmentPreview(atomIds, failingPreview, 'Invariant violations detected');
 
+      // Server should emit commitment:preview event with canCommit=false for failing preview
       expect(mockServer.emit).toHaveBeenCalledWith('commitment:preview', {
         type: 'commitment:preview',
         atomIds,
@@ -204,6 +212,7 @@ describe('CommitmentsGateway', () => {
      */
     it('should not throw if server is undefined', () => {
       gateway.server = undefined as unknown as Server;
+      // Method should handle undefined server gracefully without throwing
       expect(() => gateway.emitCommitmentPreview(['atom-1'], mockPreview, 'summary')).not.toThrow();
     });
   });
@@ -216,6 +225,7 @@ describe('CommitmentsGateway', () => {
     it('should emit commitment:created event with correct payload', () => {
       gateway.emitCommitmentCreated(mockCommitment as CommitmentArtifact);
 
+      // Server should emit commitment:created event with commitment data and atom count
       expect(mockServer.emit).toHaveBeenCalledWith('commitment:created', {
         type: 'commitment:created',
         data: mockCommitment,
@@ -229,6 +239,7 @@ describe('CommitmentsGateway', () => {
      */
     it('should not throw if server is undefined', () => {
       gateway.server = undefined as unknown as Server;
+      // Method should handle undefined server gracefully without throwing
       expect(() =>
         gateway.emitCommitmentCreated(mockCommitment as CommitmentArtifact),
       ).not.toThrow();
@@ -246,6 +257,7 @@ describe('CommitmentsGateway', () => {
 
       gateway.emitCommitmentCreated(commitmentWithoutJson);
 
+      // Server should emit with atomCount of 0 when canonicalJson is undefined
       expect(mockServer.emit).toHaveBeenCalledWith('commitment:created', {
         type: 'commitment:created',
         data: commitmentWithoutJson,
@@ -269,6 +281,7 @@ describe('CommitmentsGateway', () => {
 
       gateway.emitCommitmentFailed(atomIds, reason, blockingIssues);
 
+      // Server should emit commitment:failed event with atomIds, reason, and blockingIssues
       expect(mockServer.emit).toHaveBeenCalledWith('commitment:failed', {
         type: 'commitment:failed',
         atomIds,
@@ -283,6 +296,7 @@ describe('CommitmentsGateway', () => {
      */
     it('should not throw if server is undefined', () => {
       gateway.server = undefined as unknown as Server;
+      // Method should handle undefined server gracefully without throwing
       expect(() => gateway.emitCommitmentFailed(['atom-1'], 'Failed', [])).not.toThrow();
     });
   });
@@ -295,6 +309,7 @@ describe('CommitmentsGateway', () => {
     it('should emit commitment:superseded event with correct payload', () => {
       gateway.emitCommitmentSuperseded('COM-001', 'COM-002', 'Updated requirements');
 
+      // Server should emit commitment:superseded event with original and new commitment IDs
       expect(mockServer.emit).toHaveBeenCalledWith('commitment:superseded', {
         type: 'commitment:superseded',
         originalCommitmentId: 'COM-001',
@@ -310,6 +325,7 @@ describe('CommitmentsGateway', () => {
     it('should emit without reason if not provided', () => {
       gateway.emitCommitmentSuperseded('COM-001', 'COM-002');
 
+      // Server should emit with undefined reason when not provided
       expect(mockServer.emit).toHaveBeenCalledWith('commitment:superseded', {
         type: 'commitment:superseded',
         originalCommitmentId: 'COM-001',
@@ -324,6 +340,7 @@ describe('CommitmentsGateway', () => {
      */
     it('should not throw if server is undefined', () => {
       gateway.server = undefined as unknown as Server;
+      // Method should handle undefined server gracefully without throwing
       expect(() => gateway.emitCommitmentSuperseded('COM-001', 'COM-002')).not.toThrow();
     });
   });
@@ -338,6 +355,7 @@ describe('CommitmentsGateway', () => {
 
       gateway.emitInvariantCheckProgress(atomIds, 'INV-004', 50);
 
+      // Server should emit invariant:checking event with atomIds, currentInvariant, and progress
       expect(mockServer.emit).toHaveBeenCalledWith('invariant:checking', {
         type: 'invariant:checking',
         atomIds,
@@ -352,12 +370,14 @@ describe('CommitmentsGateway', () => {
      */
     it('should handle boundary progress values', () => {
       gateway.emitInvariantCheckProgress(['atom-1'], 'INV-001', 0);
+      // Progress of 0 should be correctly reported as the starting point
       expect(mockServer.emit).toHaveBeenCalledWith(
         'invariant:checking',
         expect.objectContaining({ progress: 0 }),
       );
 
       gateway.emitInvariantCheckProgress(['atom-1'], 'INV-009', 100);
+      // Progress of 100 should be correctly reported as completion
       expect(mockServer.emit).toHaveBeenCalledWith(
         'invariant:checking',
         expect.objectContaining({ progress: 100 }),
@@ -370,6 +390,7 @@ describe('CommitmentsGateway', () => {
      */
     it('should not throw if server is undefined', () => {
       gateway.server = undefined as unknown as Server;
+      // Method should handle undefined server gracefully without throwing
       expect(() => gateway.emitInvariantCheckProgress(['atom-1'], 'INV-001', 50)).not.toThrow();
     });
   });

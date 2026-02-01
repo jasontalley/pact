@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Network, List, Plus, Menu, X, Settings } from 'lucide-react';
+import { LayoutDashboard, Network, List, Plus, Menu, X, Settings, Layers, GitCompare } from 'lucide-react';
 
 interface NavItem {
   href: string;
@@ -16,7 +16,9 @@ const navItems: NavItem[] = [
   { href: '/', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" /> },
   { href: '/canvas', label: 'Canvas', icon: <Network className="h-4 w-4" /> },
   { href: '/atoms', label: 'Atoms', icon: <List className="h-4 w-4" /> },
-  { href: '/settings/llm', label: 'Settings', icon: <Settings className="h-4 w-4" /> },
+  { href: '/molecules', label: 'Molecules', icon: <Layers className="h-4 w-4" /> },
+  { href: '/reconciliation', label: 'Reconciliation', icon: <GitCompare className="h-4 w-4" /> },
+  { href: '/settings', label: 'Settings', icon: <Settings className="h-4 w-4" /> },
 ];
 
 interface HeaderProps {

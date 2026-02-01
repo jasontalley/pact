@@ -25,7 +25,7 @@ jest.mock('@langchain/ollama', () => ({
   })),
 }));
 
-const MockChatOllama = ChatOllama as jest.Mock;
+const MockChatOllama = ChatOllama as unknown as jest.Mock;
 
 // Mock fetch for API calls
 const mockFetch = jest.fn();

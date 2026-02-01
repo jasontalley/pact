@@ -118,7 +118,7 @@ export function validate(context: { user: User }): boolean {
         })
         .expect(400);
 
-      expect(response.body.message).toContain('Name must be at least 3 characters');
+      expect(response.body.message).toContain('Name must be at least 3 characters long');
     });
 
     it('should reject validator with content too short', async () => {
@@ -133,7 +133,7 @@ export function validate(context: { user: User }): boolean {
         })
         .expect(400);
 
-      expect(response.body.message).toContain('Content must be at least 10 characters');
+      expect(response.body.message).toContain('Content must be at least 10 characters long');
     });
 
     it('should reject validator with invalid type', async () => {
@@ -189,12 +189,12 @@ export function validate(context: { user: User }): boolean {
     it('should list all validators', async () => {
       const response = await request(app.getHttpServer()).get('/validators').expect(200);
 
-      expect(response.body).toHaveProperty('data');
+      expect(response.body).toHaveProperty('items');
       expect(response.body).toHaveProperty('total');
       expect(response.body).toHaveProperty('page');
       expect(response.body).toHaveProperty('limit');
-      expect(Array.isArray(response.body.data)).toBe(true);
-      expect(response.body.data.length).toBeGreaterThan(0);
+      expect(Array.isArray(response.body.items)).toBe(true);
+      expect(response.body.items.length).toBeGreaterThan(0);
     });
 
     it('should filter validators by atomId', async () => {
@@ -202,8 +202,8 @@ export function validate(context: { user: User }): boolean {
         .get(`/validators?atomId=${testAtomId}`)
         .expect(200);
 
-      expect(response.body.data.length).toBeGreaterThan(0);
-      expect(response.body.data.every((v: any) => v.atomId === testAtomId)).toBe(true);
+      expect(response.body.items.length).toBeGreaterThan(0);
+      expect(response.body.items.every((v: any) => v.atomId === testAtomId)).toBe(true);
     });
 
     it('should filter validators by validatorType', async () => {
@@ -211,7 +211,7 @@ export function validate(context: { user: User }): boolean {
         .get('/validators?validatorType=gherkin')
         .expect(200);
 
-      expect(response.body.data.every((v: any) => v.validatorType === 'gherkin')).toBe(true);
+      expect(response.body.items.every((v: any) => v.validatorType === 'gherkin')).toBe(true);
     });
 
     it('should filter validators by format', async () => {
@@ -219,7 +219,7 @@ export function validate(context: { user: User }): boolean {
         .get('/validators?format=gherkin')
         .expect(200);
 
-      expect(response.body.data.every((v: any) => v.format === 'gherkin')).toBe(true);
+      expect(response.body.items.every((v: any) => v.format === 'gherkin')).toBe(true);
     });
 
     it('should filter validators by isActive', async () => {
@@ -227,7 +227,7 @@ export function validate(context: { user: User }): boolean {
         .get('/validators?isActive=true')
         .expect(200);
 
-      expect(response.body.data.every((v: any) => v.isActive === true)).toBe(true);
+      expect(response.body.items.every((v: any) => v.isActive === true)).toBe(true);
     });
 
     it('should search validators by name', async () => {
@@ -235,7 +235,7 @@ export function validate(context: { user: User }): boolean {
         .get('/validators?search=List Test')
         .expect(200);
 
-      expect(response.body.data.length).toBeGreaterThan(0);
+      expect(response.body.items.length).toBeGreaterThan(0);
     });
 
     it('should paginate validators', async () => {
@@ -243,7 +243,7 @@ export function validate(context: { user: User }): boolean {
         .get('/validators?page=1&limit=2')
         .expect(200);
 
-      expect(response.body.data.length).toBeLessThanOrEqual(2);
+      expect(response.body.items.length).toBeLessThanOrEqual(2);
       expect(response.body.page).toBe(1);
       expect(response.body.limit).toBe(2);
     });
@@ -448,12 +448,17 @@ export function validate(context: { user: User }): boolean {
       validatorId = response.body.id;
     });
 
-    it('should return empty translations for new validator', async () => {
+    it('should return translations with original content for new validator', async () => {
       const response = await request(app.getHttpServer())
         .get(`/validators/${validatorId}/translations`)
         .expect(200);
 
-      expect(response.body).toEqual({});
+      expect(response.body).toHaveProperty('id', validatorId);
+      expect(response.body).toHaveProperty('originalFormat', 'gherkin');
+      expect(response.body).toHaveProperty('translations');
+      // Original content is always included in translations
+      expect(response.body.translations).toHaveProperty('gherkin');
+      expect(response.body.translations.gherkin).toHaveProperty('content');
     });
   });
 

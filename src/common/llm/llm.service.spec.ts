@@ -163,6 +163,46 @@ describe('LLMService', () => {
 
     // Initialize without actually calling onModuleInit (which tries to connect to Redis)
     // The service is already set up with mocks
+    // Manually set the config since we skip onModuleInit
+    (service as any).config = {
+      primaryModel: 'gpt-5-nano',
+      fallbackModels: ['gpt-5-mini', 'llama3.2'],
+      defaultTimeout: 30000,
+      streamingEnabled: true,
+      circuitBreaker: {
+        enabled: true,
+        failureThreshold: 5,
+        recoveryTimeout: 60000,
+      },
+      retry: {
+        enabled: true,
+        maxAttempts: 3,
+        initialDelay: 1000,
+        maxDelay: 10000,
+        backoffMultiplier: 2,
+        retryableErrors: ['timeout', 'rate_limit', 'server_error'],
+      },
+      rateLimit: {
+        enabled: true,
+        requestsPerMinute: 60,
+      },
+      cache: {
+        enabled: false,
+        ttlSeconds: 3600,
+      },
+      budget: {
+        enabled: false,
+        dailyLimit: 10,
+        monthlyLimit: 200,
+        alertThreshold: 80,
+        hardStop: true,
+      },
+      observability: {
+        logLevel: 'info',
+        metricsEnabled: false,
+        tracingEnabled: false,
+      },
+    };
     jest.clearAllMocks();
   });
 
@@ -317,6 +357,16 @@ describe('LLMService', () => {
 
   // @atom IA-008
   describe('error handling', () => {
+    beforeEach(() => {
+      // Disable retries to make error tests faster
+      (service as any).config.retry.enabled = false;
+    });
+
+    afterEach(() => {
+      // Restore retries
+      (service as any).config.retry.enabled = true;
+    });
+
     it('should throw NoProviderAvailableError when provider not found', async () => {
       mockProviderRegistry.getProvider.mockReturnValue(undefined);
 
@@ -363,6 +413,16 @@ describe('LLMService', () => {
 
   // @atom IA-008
   describe('budget enforcement', () => {
+    beforeEach(() => {
+      // Enable budget for these tests
+      (service as any).config.budget.enabled = true;
+    });
+
+    afterEach(() => {
+      // Restore budget disabled state
+      (service as any).config.budget.enabled = false;
+    });
+
     it('should check budget before making request', async () => {
       mockUsageRepository.createQueryBuilder.mockReturnValue({
         select: jest.fn().mockReturnThis(),

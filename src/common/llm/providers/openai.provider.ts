@@ -361,8 +361,23 @@ export class OpenAIProvider extends BaseLLMProvider {
       }
     }
 
+    // Extract text content - handle both string and array content formats
+    // OpenAI can return content as array of content blocks when tool_use is involved
+    let textContent: string;
+    if (typeof response.content === 'string') {
+      textContent = response.content;
+    } else if (Array.isArray(response.content)) {
+      // Extract text from content blocks
+      textContent = response.content
+        .filter((block: any) => block.type === 'text')
+        .map((block: any) => block.text)
+        .join('');
+    } else {
+      textContent = '';
+    }
+
     return {
-      content: response.content as string,
+      content: textContent,
       usage: {
         inputTokens,
         outputTokens,

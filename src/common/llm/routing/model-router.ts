@@ -70,29 +70,31 @@ const DEFAULT_ROUTING_RULES: RoutingRule[] = [
   },
   {
     taskType: AgentTaskType.CLASSIFICATION,
-    preferredProviders: ['openai', 'ollama', 'anthropic'],
-    preferredModels: ['gpt-5-nano', 'llama3.2', 'claude-haiku-4-5'],
+    // Haiku is fastest (~3s), Ollama available as free fallback
+    preferredProviders: ['anthropic', 'ollama', 'openai'],
+    preferredModels: ['claude-haiku-4-5', 'llama3.2', 'gpt-5-nano'],
     requiresFunctionCalling: false,
     maxCostPerRequest: 0.01, // Keep classification very cheap
     fallbackStrategy: 'next_model',
-    description: 'Simple categorization - cheapest option',
+    description: 'Simple categorization - haiku is fast, ollama fallback',
   },
   {
     taskType: AgentTaskType.SUMMARIZATION,
-    preferredProviders: ['openai', 'ollama', 'anthropic'],
-    preferredModels: ['gpt-5-nano', 'llama3.2', 'claude-haiku-4-5'],
+    // Haiku is fastest (~3s), Ollama available as free fallback
+    preferredProviders: ['anthropic', 'ollama', 'openai'],
+    preferredModels: ['claude-haiku-4-5', 'llama3.2', 'gpt-5-nano'],
     requiresFunctionCalling: false,
     maxCostPerRequest: 0.05,
     fallbackStrategy: 'next_model',
-    description: 'High-throughput summarization - cost matters',
+    description: 'High-throughput summarization - haiku is fast, ollama fallback',
   },
   {
     taskType: AgentTaskType.CHAT,
     preferredProviders: ['anthropic', 'openai', 'ollama'],
     preferredModels: ['claude-haiku-4-5', 'gpt-5-nano', 'llama3.2'],
-    requiresFunctionCalling: false,
+    requiresFunctionCalling: true,
     fallbackStrategy: 'next_model',
-    description: 'Conversational - fast responses matter',
+    description: 'Conversational with tool use - requires function calling support',
   },
 ];
 
@@ -298,7 +300,13 @@ export class ModelRouter implements OnModuleInit {
     rule: RoutingRule,
     options: RoutingOptions,
   ): Promise<RoutingDecision> {
-    const fallbacks: Array<{ provider: LLMProviderType; model: string }> = [];
+    // Collect ALL available provider/model combinations for fallback
+    const allOptions: Array<{
+      provider: LLMProviderType;
+      model: string;
+      capabilities: ModelCapabilities;
+      meetsConstraints: boolean;
+    }> = [];
 
     // Try each provider in order of preference
     for (const providerName of rule.preferredProviders) {
@@ -327,26 +335,47 @@ export class ModelRouter implements OnModuleInit {
           continue;
         }
 
-        // Check model constraints
-        if (!this.meetsConstraints(capabilities, rule, options)) {
-          fallbacks.push({ provider: providerName, model: modelName });
-          continue;
-        }
-
-        // Found a suitable option!
-        const estimatedCost = this.estimateCost(capabilities, options);
-
-        return {
+        const meetsConstraints = this.meetsConstraints(capabilities, rule, options);
+        allOptions.push({
           provider: providerName,
           model: modelName,
           capabilities,
-          estimatedCostPer1K:
-            (capabilities.costPerInputToken + capabilities.costPerOutputToken) * 500,
-          reasoningEffort: rule.reasoningEffort,
-          reason: `Best match for ${rule.taskType}`,
-          fallbacks,
-        };
+          meetsConstraints,
+        });
       }
+    }
+
+    // Sort: options meeting constraints first, then by provider preference order
+    const sortedOptions = allOptions.sort((a, b) => {
+      if (a.meetsConstraints && !b.meetsConstraints) return -1;
+      if (!a.meetsConstraints && b.meetsConstraints) return 1;
+      return 0;
+    });
+
+    // Find the best option (first one that meets constraints)
+    const bestOption = sortedOptions.find((opt) => opt.meetsConstraints);
+
+    if (bestOption) {
+      // Build fallbacks from remaining options (different providers for resilience)
+      const fallbacks = sortedOptions
+        .filter((opt) => opt.provider !== bestOption.provider)
+        .map((opt) => ({ provider: opt.provider, model: opt.model }));
+
+      this.logger.debug(
+        `Selected ${bestOption.provider}:${bestOption.model} with ${fallbacks.length} fallbacks`,
+      );
+
+      return {
+        provider: bestOption.provider,
+        model: bestOption.model,
+        capabilities: bestOption.capabilities,
+        estimatedCostPer1K:
+          (bestOption.capabilities.costPerInputToken + bestOption.capabilities.costPerOutputToken) *
+          500,
+        reasoningEffort: rule.reasoningEffort,
+        reason: `Best match for ${rule.taskType}`,
+        fallbacks,
+      };
     }
 
     // No suitable option found - try fallback strategy
@@ -354,21 +383,23 @@ export class ModelRouter implements OnModuleInit {
       throw new Error(`No suitable provider/model found for task type: ${rule.taskType}`);
     }
 
-    // Return first fallback if available
-    if (fallbacks.length > 0) {
-      const fallback = fallbacks[0];
-      const provider = this.providerRegistry.getProvider(fallback.provider)!;
-      const capabilities = provider.getModelCapabilities(fallback.model)!;
+    // Return first fallback if available (even if it doesn't meet all constraints)
+    if (sortedOptions.length > 0) {
+      const fallback = sortedOptions[0];
+      const fallbacks = sortedOptions
+        .slice(1)
+        .map((opt) => ({ provider: opt.provider, model: opt.model }));
 
       return {
         provider: fallback.provider,
         model: fallback.model,
-        capabilities,
+        capabilities: fallback.capabilities,
         estimatedCostPer1K:
-          (capabilities.costPerInputToken + capabilities.costPerOutputToken) * 500,
+          (fallback.capabilities.costPerInputToken + fallback.capabilities.costPerOutputToken) *
+          500,
         reasoningEffort: rule.reasoningEffort,
         reason: `Fallback: constraints relaxed for ${rule.taskType}`,
-        fallbacks: fallbacks.slice(1),
+        fallbacks,
       };
     }
 

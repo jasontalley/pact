@@ -31,7 +31,7 @@ jest.mock('@langchain/openai', () => ({
   })),
 }));
 
-const MockChatOpenAI = ChatOpenAI as jest.Mock;
+const MockChatOpenAI = ChatOpenAI as unknown as jest.Mock;
 
 // Mock fetch for availability checks
 const mockFetch = jest.fn();

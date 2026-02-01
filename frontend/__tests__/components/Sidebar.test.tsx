@@ -14,15 +14,14 @@ vi.mock('next/navigation', () => ({
 }));
 
 // Mock the useTags hook - using tag names that don't conflict with category names
+// data should be an array directly, matching the API return type: { tag: string; count: number }[]
 vi.mock('@/hooks/atoms/use-atoms', () => ({
   useTags: vi.fn(() => ({
-    data: {
-      tags: [
-        { tag: 'authentication', count: 5 },
-        { tag: 'api', count: 3 },
-        { tag: 'login', count: 2 },
-      ],
-    },
+    data: [
+      { tag: 'authentication', count: 5 },
+      { tag: 'api', count: 3 },
+      { tag: 'login', count: 2 },
+    ],
     isLoading: false,
   })),
 }));

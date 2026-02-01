@@ -15,6 +15,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ChatAgentService } from './chat-agent.service';
 import { LLMService } from '../../common/llm/llm.service';
 import { ToolRegistryService } from './tools/tool-registry.service';
+import { GraphRegistryService } from './graphs';
+import { AgentSafetyService } from '../../common/safety';
+import { ReconciliationService } from './reconciliation.service';
 import { ChatRequestDto } from './dto/chat-agent.dto';
 import { ToolDefinition } from '../../common/llm/providers/types';
 
@@ -22,6 +25,9 @@ describe('ChatAgentService', () => {
   let service: ChatAgentService;
   let mockLLMService: jest.Mocked<LLMService>;
   let mockToolRegistry: jest.Mocked<ToolRegistryService>;
+  let mockGraphRegistry: jest.Mocked<GraphRegistryService>;
+  let mockSafetyService: jest.Mocked<AgentSafetyService>;
+  let mockReconciliationService: jest.Mocked<ReconciliationService>;
 
   // Helper to create complete mock LLM response
   const createMockLLMResponse = (
@@ -93,11 +99,71 @@ describe('ChatAgentService', () => {
       getToolsByCategory: jest.fn().mockReturnValue(mockTools),
     } as unknown as jest.Mocked<ToolRegistryService>;
 
+    // Mock GraphRegistryService - returns false for hasGraph so tests use direct tools path
+    mockGraphRegistry = {
+      hasGraph: jest.fn().mockReturnValue(false),
+      getGraph: jest.fn().mockReturnValue(undefined),
+      invoke: jest.fn(),
+      listGraphs: jest.fn().mockReturnValue([]),
+      getNodeConfig: jest.fn(),
+    } as unknown as jest.Mocked<GraphRegistryService>;
+
+    // Mock AgentSafetyService - allows all requests by default
+    mockSafetyService = {
+      createContext: jest.fn().mockImplementation((params) => ({
+        ...params,
+        timestamp: new Date(),
+      })),
+      validateRequest: jest.fn().mockReturnValue({
+        allowed: true,
+        inputValidation: { passed: true, violations: [], riskScore: 0 },
+        toolValidation: { allowedTools: [], deniedTools: [] },
+        overallRiskScore: 0,
+        sanitizedInput: undefined,
+        allViolations: [],
+        agentProfile: { id: 'chat-agent', allowedTools: [] },
+      }),
+      validateResponse: jest.fn().mockImplementation((message) => ({
+        safe: true,
+        outputValidation: { passed: true, violations: [], riskScore: 0 },
+        sanitizedOutput: message,
+        riskScore: 0,
+      })),
+      getAllowedTools: jest.fn().mockReturnValue([]),
+      canUseTool: jest.fn().mockReturnValue(true),
+      getAgentLimits: jest.fn().mockReturnValue({ maxToolCallsPerRequest: 20 }),
+    } as unknown as jest.Mocked<AgentSafetyService>;
+
+    // Mock ReconciliationService
+    mockReconciliationService = {
+      isAvailable: jest.fn().mockReturnValue(true),
+      analyzeWithInterrupt: jest.fn().mockResolvedValue({
+        completed: true,
+        runId: 'REC-test123',
+        result: {
+          runId: 'REC-test123',
+          status: 'completed',
+          summary: {
+            totalOrphanTests: 10,
+            inferredAtomsCount: 5,
+            inferredMoleculesCount: 2,
+            qualityPassCount: 4,
+            qualityFailCount: 1,
+          },
+          errors: [],
+        },
+      }),
+      getPendingReview: jest.fn().mockReturnValue(null),
+    } as unknown as jest.Mocked<ReconciliationService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ChatAgentService,
         { provide: LLMService, useValue: mockLLMService },
         { provide: ToolRegistryService, useValue: mockToolRegistry },
+        { provide: GraphRegistryService, useValue: mockGraphRegistry },
+        { provide: AgentSafetyService, useValue: mockSafetyService },
+        { provide: ReconciliationService, useValue: mockReconciliationService },
       ],
     }).compile();
 
@@ -451,6 +517,142 @@ describe('ChatAgentService', () => {
         expect.objectContaining({
           tools: mockTools,
         }),
+      );
+    });
+  });
+
+  // @atom IA-008
+  describe('coverage fast-path routing', () => {
+    let graphEnabledService: ChatAgentService;
+
+    beforeEach(async () => {
+      // Enable graph-based agent via environment variable
+      const originalEnv = process.env.USE_GRAPH_AGENT;
+      process.env.USE_GRAPH_AGENT = 'true';
+
+      // Set up mock to recognize both graphs
+      mockGraphRegistry.hasGraph.mockImplementation((name: string) =>
+        ['chat-exploration', 'coverage-fast'].includes(name),
+      );
+
+      // Create a new service instance with the graph agent enabled
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          ChatAgentService,
+          { provide: LLMService, useValue: mockLLMService },
+          { provide: ToolRegistryService, useValue: mockToolRegistry },
+          { provide: GraphRegistryService, useValue: mockGraphRegistry },
+          { provide: AgentSafetyService, useValue: mockSafetyService },
+          { provide: ReconciliationService, useValue: mockReconciliationService },
+        ],
+      }).compile();
+
+      graphEnabledService = module.get<ChatAgentService>(ChatAgentService);
+
+      // Restore original env var for subsequent tests
+      if (originalEnv !== undefined) {
+        process.env.USE_GRAPH_AGENT = originalEnv;
+      } else {
+        delete process.env.USE_GRAPH_AGENT;
+      }
+    });
+
+    it('should use fast-path for coverage questions when metrics found', async () => {
+      mockGraphRegistry.invoke.mockResolvedValueOnce({
+        input: 'What is the test coverage?',
+        coverageFiles: ['test-results/coverage-summary.json'],
+        metrics: { lines: { pct: 85 } },
+        findings: [],
+        output: '## Test Coverage Summary\n\n- **lines**: 85.0%',
+        error: null,
+      });
+
+      const response = await graphEnabledService.chat({ message: 'What is the test coverage?' });
+
+      expect(mockGraphRegistry.invoke).toHaveBeenCalledWith(
+        'coverage-fast',
+        expect.objectContaining({ input: 'What is the test coverage?' }),
+      );
+      expect(response.message).toContain('Coverage');
+      expect(response.message).toContain('85');
+    });
+
+    it('should fall back to standard graph when fast-path finds no data', async () => {
+      // Fast-path returns error (no coverage files found)
+      mockGraphRegistry.invoke
+        .mockResolvedValueOnce({
+          input: 'What is the test coverage?',
+          coverageFiles: [],
+          metrics: null,
+          findings: [],
+          output: "I couldn't find coverage data.",
+          error: 'No coverage files found in standard locations',
+        })
+        // Standard graph succeeds with more thorough search
+        .mockResolvedValueOnce({
+          input: 'What is the test coverage?',
+          output: 'After searching the codebase, I found coverage data in a custom location.',
+          findings: [{ source: 'custom/coverage.json', content: '{}', relevance: 'Coverage' }],
+          toolHistory: [],
+          discoveredPaths: [],
+          evidenceLevel: 3,
+        });
+
+      const response = await graphEnabledService.chat({ message: 'What is the test coverage?' });
+
+      // Should have called both graphs - fast-path first, then standard
+      expect(mockGraphRegistry.invoke).toHaveBeenCalledTimes(2);
+      expect(mockGraphRegistry.invoke).toHaveBeenNthCalledWith(
+        1,
+        'coverage-fast',
+        expect.any(Object),
+      );
+      expect(mockGraphRegistry.invoke).toHaveBeenNthCalledWith(
+        2,
+        'chat-exploration',
+        expect.any(Object),
+      );
+      // Response should be from standard graph
+      expect(response.message).toContain('After searching');
+    });
+
+    it('should fall back to standard graph when fast-path throws error', async () => {
+      // Fast-path throws exception
+      mockGraphRegistry.invoke
+        .mockRejectedValueOnce(new Error('Graph execution failed'))
+        // Standard graph succeeds
+        .mockResolvedValueOnce({
+          input: 'What is the test coverage?',
+          output: 'I found the coverage data through standard exploration.',
+          findings: [],
+          toolHistory: [],
+          discoveredPaths: [],
+          evidenceLevel: 3,
+        });
+
+      const response = await graphEnabledService.chat({ message: 'What is the test coverage?' });
+
+      // Should have called both graphs
+      expect(mockGraphRegistry.invoke).toHaveBeenCalledTimes(2);
+      expect(response.message).toContain('standard exploration');
+    });
+
+    it('should not use fast-path for non-coverage questions', async () => {
+      mockGraphRegistry.invoke.mockResolvedValueOnce({
+        input: 'List all atoms',
+        output: 'Here are the atoms in the system.',
+        findings: [],
+        toolHistory: [],
+        discoveredPaths: [],
+        evidenceLevel: 2,
+      });
+
+      await graphEnabledService.chat({ message: 'List all atoms' });
+
+      // Should use standard graph directly
+      expect(mockGraphRegistry.invoke).toHaveBeenCalledWith(
+        'chat-exploration',
+        expect.any(Object),
       );
     });
   });

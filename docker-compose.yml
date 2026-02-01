@@ -41,6 +41,7 @@ services:
       NODE_ENV: development
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      NODE_OPTIONS: --max-old-space-size=4096
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,6 +63,7 @@ services:
       DATABASE_PASSWORD: pact_dev_password
       DATABASE_NAME: pact_test
       NODE_ENV: test
+      NODE_OPTIONS: --max-old-space-size=4096
     depends_on:
       postgres:
         condition: service_healthy
@@ -96,7 +98,7 @@ services:
 
   # Frontend test runner (separate container for isolation)
   # Uses Playwright image with browsers pre-installed for E2E tests
-  # NOTE: No volume mounts - this container is self-contained to ensure
+  # NOTE: Only test-results is mounted - source code stays in container to ensure
   # Playwright version in node_modules matches the Docker image's browsers
   frontend-test:
     build:
@@ -108,6 +110,9 @@ services:
       - NEXT_PUBLIC_WS_URL=ws://app:3000
       - PLAYWRIGHT_BASE_URL=http://frontend:3000
       - CI=true
+    volumes:
+      # Mount test-results directory to persist reports to host
+      - ./test-results/frontend:/app/test-results/frontend
     depends_on:
       - app
       - frontend

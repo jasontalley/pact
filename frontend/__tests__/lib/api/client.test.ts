@@ -15,9 +15,9 @@ describe('apiClient', () => {
   });
 
   // @atom IA-API-001
-  it('has timeout set to 30 seconds', () => {
-    // Timeout prevents requests from hanging indefinitely
-    expect(apiClient.defaults.timeout).toBe(30000);
+  it('has timeout set to 120 seconds', () => {
+    // Timeout matches backend circuit breaker (synthesize can take 90s+)
+    expect(apiClient.defaults.timeout).toBe(120000);
   });
 
   // @atom IA-API-001

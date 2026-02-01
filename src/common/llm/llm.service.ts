@@ -61,6 +61,10 @@ export interface LLMRequest {
   reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   // Function calling
   tools?: import('./providers/types').ToolDefinition[];
+  // Custom timeout in ms (overrides default)
+  timeout?: number;
+  // Skip retries and fail fast to fallback (useful for synthesize with long context)
+  skipRetries?: boolean;
 }
 
 export interface LLMResponse {
@@ -102,6 +106,16 @@ export class NoProviderAvailableError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'NoProviderAvailableError';
+  }
+}
+
+export class CircuitBreakerOpenError extends Error {
+  constructor(
+    public readonly provider: string,
+    message?: string,
+  ) {
+    super(message || `Circuit breaker is open for provider: ${provider}`);
+    this.name = 'CircuitBreakerOpenError';
   }
 }
 
@@ -278,15 +292,30 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
       );
 
       breaker.on('open', () => {
-        this.logger.error(`Circuit breaker opened for ${providerName}`);
+        const stats = breaker.stats;
+        this.logger.error(
+          `Circuit breaker OPENED for ${providerName}: ` +
+            `failures=${stats.failures}, timeouts=${stats.timeouts}, ` +
+            `successes=${stats.successes}, rejects=${stats.rejects}`,
+        );
       });
 
       breaker.on('halfOpen', () => {
-        this.logger.warn(`Circuit breaker half-open for ${providerName}`);
+        this.logger.warn(`Circuit breaker half-open for ${providerName}, testing recovery...`);
       });
 
       breaker.on('close', () => {
-        this.logger.log(`Circuit breaker closed for ${providerName}`);
+        this.logger.log(`Circuit breaker CLOSED for ${providerName}, service recovered`);
+      });
+
+      breaker.on('timeout', () => {
+        this.logger.warn(`Circuit breaker timeout for ${providerName}`);
+      });
+
+      breaker.on('failure', (error: Error) => {
+        this.logger.warn(
+          `Circuit breaker failure for ${providerName}: ${error.message?.substring(0, 100)}`,
+        );
       });
 
       this.circuitBreakers.set(providerName, breaker);
@@ -424,7 +453,11 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
     requestId: string,
     startTime: number,
   ): Promise<LLMResponse> {
-    if (!this.config.retry.enabled) {
+    // Skip retries if disabled globally or requested (for fail-fast to fallback)
+    if (!this.config.retry.enabled || request.skipRetries) {
+      if (request.skipRetries) {
+        this.logger.debug(`Skipping retries for ${requestId} (fail-fast mode)`);
+      }
       return this.executeWithRouting(request, requestId, startTime, 0);
     }
 
@@ -442,7 +475,12 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
         maxTimeout: this.config.retry.maxDelay,
         onFailedAttempt: (error) => {
           this.logger.warn(`Retry attempt ${error.attemptNumber} failed for ${requestId}`);
-          if (error instanceof BudgetExceededError || error instanceof AbortError) {
+          // Abort retries for non-recoverable errors
+          if (
+            error instanceof BudgetExceededError ||
+            error instanceof AbortError ||
+            error instanceof CircuitBreakerOpenError
+          ) {
             throw error;
           }
         },
@@ -489,7 +527,8 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
       throw new NoProviderAvailableError(`Provider ${decision.provider} not available`);
     }
 
-    // Build provider request
+    // Build provider request with custom timeout support
+    const effectiveTimeout = request.timeout || this.config.defaultTimeout;
     const providerRequest: ProviderRequest = {
       messages: this.convertMessages(request.messages),
       model: decision.model,
@@ -497,7 +536,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
       options: {
         temperature: request.temperature,
         maxTokens: request.maxTokens,
-        timeout: this.config.defaultTimeout,
+        timeout: effectiveTimeout,
         reasoningEffort: decision.reasoningEffort || request.reasoningEffort,
       },
       metadata: {
@@ -562,11 +601,30 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
     try {
       return await breaker.fire(request, provider);
     } catch (error: any) {
+      const isBreakerOpen = error.message?.includes('Breaker is open');
+
       // If circuit is open, try fallbacks
-      if (error.message?.includes('Breaker is open') && decision.fallbacks.length > 0) {
+      if (isBreakerOpen && decision.fallbacks.length > 0) {
         this.logger.warn(`Circuit open for ${provider.name}, trying fallbacks`);
-        return this.tryFallbacks(request, decision.fallbacks);
+        try {
+          return await this.tryFallbacks(request, decision.fallbacks);
+        } catch (fallbackError) {
+          // All fallbacks failed - throw CircuitBreakerOpenError to prevent retries
+          throw new CircuitBreakerOpenError(
+            provider.name,
+            `Circuit breaker open for ${provider.name} and all fallbacks failed`,
+          );
+        }
       }
+
+      // If breaker is open with no fallbacks, throw specific error to abort retries
+      if (isBreakerOpen) {
+        throw new CircuitBreakerOpenError(
+          provider.name,
+          `Circuit breaker open for ${provider.name}, no fallbacks available`,
+        );
+      }
+
       throw error;
     }
   }
@@ -629,6 +687,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
+    const legacyTimeout = request.timeout || this.config.defaultTimeout;
     const providerRequest: ProviderRequest = {
       messages: this.convertMessages(request.messages),
       model: this.config.primaryModel.modelName,
@@ -636,7 +695,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
       options: {
         temperature: request.temperature ?? this.config.primaryModel.temperature,
         maxTokens: request.maxTokens ?? this.config.primaryModel.maxTokens,
-        timeout: this.config.defaultTimeout,
+        timeout: legacyTimeout,
       },
       metadata: {
         requestId,

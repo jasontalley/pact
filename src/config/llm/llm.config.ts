@@ -114,7 +114,9 @@ export const defaultLLMConfig: LLMServiceConfig = {
       costPerOutputToken: 0.0000016, // $1.60 per 1M output tokens
     },
   ],
-  defaultTimeout: 30000, // 30 seconds
+  // Circuit breaker uses this timeout - must accommodate longest expected request (synthesize: 90s)
+  // Individual requests can specify shorter timeouts via the request options
+  defaultTimeout: 120000, // 120 seconds - allows synthesize to complete
   streamingEnabled: false,
 
   circuitBreaker: {

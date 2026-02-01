@@ -107,7 +107,7 @@ describe('Invariants (e2e)', () => {
       const response = await request(app.getHttpServer())
         .post('/invariants')
         .send({
-          invariantId: 'INV-CUSTOM-001',
+          invariantId: 'INV-100',
           name: 'Custom Test Invariant',
           description: 'A custom invariant for E2E testing',
           checkType: 'custom',
@@ -121,7 +121,7 @@ describe('Invariants (e2e)', () => {
         .expect(201);
 
       expect(response.body.id).toBeDefined();
-      expect(response.body.invariantId).toBe('INV-CUSTOM-001');
+      expect(response.body.invariantId).toBe('INV-100');
       expect(response.body.name).toBe('Custom Test Invariant');
       expect(response.body.isBuiltin).toBe(false);
       expect(response.body.checkType).toBe('custom');
@@ -133,9 +133,10 @@ describe('Invariants (e2e)', () => {
       await request(app.getHttpServer())
         .post('/invariants')
         .send({
-          invariantId: 'INV-CUSTOM-001', // Same as above
+          invariantId: 'INV-100', // Same as above
           name: 'Duplicate Invariant',
           description: 'This should fail',
+          checkType: 'custom',
           errorMessage: 'Error',
         })
         .expect(400);
@@ -239,11 +240,12 @@ describe('Invariants (e2e)', () => {
     let testAtomId: string;
 
     beforeAll(async () => {
-      // Create a test atom for invariant checking
+      // Create a test atom for invariant checking (with traceability for INV-005)
       const response = await request(app.getHttpServer()).post('/atoms').send({
         description:
           'Invariant test: System must validate user input before processing with proper sanitization',
         category: 'security',
+        createdBy: 'test-user@example.com',
       });
       testAtomId = response.body.id;
 

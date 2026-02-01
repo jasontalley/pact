@@ -9,8 +9,16 @@
  */
 
 import { ChatAnthropic } from '@langchain/anthropic';
-import { BaseMessage, HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
+import {
+  BaseMessage,
+  HumanMessage,
+  SystemMessage,
+  AIMessage,
+  ToolMessage,
+} from '@langchain/core/messages';
 import { LangChainTracer } from '@langchain/core/tracers/tracer_langchain';
+import { DynamicStructuredTool } from '@langchain/core/tools';
+import { z } from 'zod';
 
 import { BaseLLMProvider } from './base.provider';
 import {
@@ -19,6 +27,8 @@ import {
   ProviderRequest,
   ProviderResponse,
   ModelCapabilities,
+  ToolDefinition,
+  ToolCall,
 } from './types';
 
 /**
@@ -234,6 +244,13 @@ export class AnthropicProvider extends BaseLLMProvider {
     // Create client for this request
     const client = new ChatAnthropic(modelOptions);
 
+    // Convert tools to LangChain format and bind to client
+    let boundClient = client;
+    if (request.tools && request.tools.length > 0) {
+      const langchainTools = this.convertToolsToLangChain(request.tools);
+      boundClient = client.bindTools(langchainTools) as ChatAnthropic;
+    }
+
     // Convert messages to LangChain format
     // Note: Anthropic requires system messages to be separate
     const systemMessages: string[] = [];
@@ -245,8 +262,31 @@ export class AnthropicProvider extends BaseLLMProvider {
           // Collect system messages to combine
           systemMessages.push(msg.content);
           break;
-        case 'assistant':
-          chatMessages.push(new AIMessage(msg.content));
+        case 'assistant': {
+          // Construct AIMessage with tool_calls in constructor if present
+          if (msg.toolCalls && msg.toolCalls.length > 0) {
+            const aiMsg = new AIMessage({
+              content: msg.content || '',
+              tool_calls: msg.toolCalls.map((tc) => ({
+                id: tc.id,
+                name: tc.name,
+                args: tc.arguments,
+                type: 'tool_call' as const,
+              })),
+            });
+            chatMessages.push(aiMsg);
+          } else {
+            chatMessages.push(new AIMessage(msg.content));
+          }
+          break;
+        }
+        case 'tool':
+          chatMessages.push(
+            new ToolMessage({
+              content: msg.content,
+              tool_call_id: msg.toolCallId || '',
+            }),
+          );
           break;
         case 'user':
         default:
@@ -264,7 +304,7 @@ export class AnthropicProvider extends BaseLLMProvider {
     const callbacks = this.tracer ? [this.tracer] : [];
 
     // Invoke the model
-    const response = await client.invoke(chatMessages, {
+    const response = await boundClient.invoke(chatMessages, {
       callbacks,
       runName: request.metadata?.agentName || 'anthropic-call',
       metadata: {
@@ -290,8 +330,35 @@ export class AnthropicProvider extends BaseLLMProvider {
     const outputTokens = (response as any).response_metadata?.usage?.output_tokens || 0;
     const stopReason = (response as any).response_metadata?.stop_reason;
 
+    // Extract tool calls from response
+    const toolCalls: ToolCall[] = [];
+    if ((response as any).tool_calls) {
+      for (const tc of (response as any).tool_calls) {
+        toolCalls.push({
+          id: tc.id,
+          name: tc.name,
+          arguments: tc.args || {},
+        });
+      }
+    }
+
+    // Extract text content - handle both string and array content formats
+    // Anthropic can return content as array of content blocks when tool_use is involved
+    let textContent: string;
+    if (typeof response.content === 'string') {
+      textContent = response.content;
+    } else if (Array.isArray(response.content)) {
+      // Extract text from content blocks
+      textContent = response.content
+        .filter((block: any) => block.type === 'text')
+        .map((block: any) => block.text)
+        .join('');
+    } else {
+      textContent = '';
+    }
+
     return {
-      content: response.content as string,
+      content: textContent,
       usage: {
         inputTokens,
         outputTokens,
@@ -301,8 +368,61 @@ export class AnthropicProvider extends BaseLLMProvider {
       providerUsed: 'anthropic',
       latencyMs: 0, // Will be set by base class
       finishReason: stopReason,
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       rawResponse: response,
     };
+  }
+
+  /**
+   * Convert ToolDefinition to LangChain StructuredTool
+   */
+  private convertToolsToLangChain(tools: ToolDefinition[]): any[] {
+    const result: any[] = [];
+
+    for (const tool of tools) {
+      // Convert parameters to Zod schema
+      const zodSchema: Record<string, z.ZodTypeAny> = {};
+      for (const [key, param] of Object.entries(tool.parameters.properties)) {
+        switch (param.type) {
+          case 'string':
+            zodSchema[key] = param.enum
+              ? z.enum(param.enum as [string, ...string[]])
+              : z.string().describe(param.description || '');
+            break;
+          case 'number':
+            zodSchema[key] = z.number().describe(param.description || '');
+            break;
+          case 'boolean':
+            zodSchema[key] = z.boolean().describe(param.description || '');
+            break;
+          case 'array':
+            zodSchema[key] = z.array(z.any()).describe(param.description || '');
+            break;
+          case 'object':
+            zodSchema[key] = z.record(z.any()).describe(param.description || '');
+            break;
+          default:
+            zodSchema[key] = z.any().describe(param.description || '');
+        }
+      }
+
+      const schema = z.object(zodSchema);
+
+      // @ts-expect-error - Type instantiation is too deep, but this works at runtime
+      const langchainTool = new DynamicStructuredTool({
+        name: tool.name,
+        description: tool.description,
+        schema,
+        func: async () => {
+          // This is a placeholder - actual execution happens in chat-agent service
+          throw new Error('Tool execution should be handled by chat-agent service');
+        },
+      });
+
+      result.push(langchainTool);
+    }
+
+    return result;
   }
 
   /**

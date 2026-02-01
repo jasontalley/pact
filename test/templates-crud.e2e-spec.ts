@@ -39,13 +39,22 @@ describe('Templates CRUD (e2e)', () => {
     it('should have built-in templates seeded on startup', async () => {
       const response = await request(app.getHttpServer()).get('/templates').expect(200);
 
-      expect(response.body).toHaveProperty('data');
-      expect(response.body.data.length).toBeGreaterThan(0);
+      expect(response.body).toHaveProperty('items');
+      expect(response.body.items.length).toBeGreaterThan(0);
+      expect(response.body.total).toBeGreaterThan(0);
 
-      // Check for specific built-in templates
-      const templateNames = response.body.data.map((t: any) => t.name);
-      expect(templateNames).toContain('Authentication Required');
-      expect(templateNames).toContain('Role-Based Access');
+      // Check for specific built-in templates using search
+      const authRequiredResponse = await request(app.getHttpServer())
+        .get('/templates?search=Authentication Required')
+        .expect(200);
+      expect(authRequiredResponse.body.items.length).toBeGreaterThan(0);
+      expect(authRequiredResponse.body.items[0].name).toBe('Authentication Required');
+
+      const roleBasedResponse = await request(app.getHttpServer())
+        .get('/templates?search=Role-Based Access')
+        .expect(200);
+      expect(roleBasedResponse.body.items.length).toBeGreaterThan(0);
+      expect(roleBasedResponse.body.items[0].name).toBe('Role-Based Access');
     });
 
     it('should have at least 20 built-in templates', async () => {
@@ -140,7 +149,7 @@ describe('Templates CRUD (e2e)', () => {
         })
         .expect(400);
 
-      expect(response.body.message).toContain('Name must be at least 3 characters');
+      expect(response.body.message).toContain('Name must be at least 3 characters long');
     });
 
     it('should reject template with invalid category', async () => {
@@ -177,11 +186,11 @@ describe('Templates CRUD (e2e)', () => {
     it('should list all templates', async () => {
       const response = await request(app.getHttpServer()).get('/templates').expect(200);
 
-      expect(response.body).toHaveProperty('data');
+      expect(response.body).toHaveProperty('items');
       expect(response.body).toHaveProperty('total');
       expect(response.body).toHaveProperty('page');
       expect(response.body).toHaveProperty('limit');
-      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(Array.isArray(response.body.items)).toBe(true);
     });
 
     it('should filter templates by category', async () => {
@@ -189,8 +198,8 @@ describe('Templates CRUD (e2e)', () => {
         .get('/templates?category=authentication')
         .expect(200);
 
-      expect(response.body.data.length).toBeGreaterThan(0);
-      expect(response.body.data.every((t: any) => t.category === 'authentication')).toBe(true);
+      expect(response.body.items.length).toBeGreaterThan(0);
+      expect(response.body.items.every((t: any) => t.category === 'authentication')).toBe(true);
     });
 
     it('should filter templates by format', async () => {
@@ -198,7 +207,7 @@ describe('Templates CRUD (e2e)', () => {
         .get('/templates?format=gherkin')
         .expect(200);
 
-      expect(response.body.data.every((t: any) => t.format === 'gherkin')).toBe(true);
+      expect(response.body.items.every((t: any) => t.format === 'gherkin')).toBe(true);
     });
 
     it('should filter built-in templates', async () => {
@@ -206,7 +215,7 @@ describe('Templates CRUD (e2e)', () => {
         .get('/templates?isBuiltin=true')
         .expect(200);
 
-      expect(response.body.data.every((t: any) => t.isBuiltin === true)).toBe(true);
+      expect(response.body.items.every((t: any) => t.isBuiltin === true)).toBe(true);
     });
 
     it('should filter custom templates', async () => {
@@ -214,7 +223,7 @@ describe('Templates CRUD (e2e)', () => {
         .get('/templates?isBuiltin=false')
         .expect(200);
 
-      expect(response.body.data.every((t: any) => t.isBuiltin === false)).toBe(true);
+      expect(response.body.items.every((t: any) => t.isBuiltin === false)).toBe(true);
     });
 
     it('should search templates by name', async () => {
@@ -222,7 +231,7 @@ describe('Templates CRUD (e2e)', () => {
         .get('/templates?search=Authentication')
         .expect(200);
 
-      expect(response.body.data.length).toBeGreaterThan(0);
+      expect(response.body.items.length).toBeGreaterThan(0);
     });
 
     it('should paginate templates', async () => {
@@ -230,7 +239,7 @@ describe('Templates CRUD (e2e)', () => {
         .get('/templates?page=1&limit=5')
         .expect(200);
 
-      expect(response.body.data.length).toBeLessThanOrEqual(5);
+      expect(response.body.items.length).toBeLessThanOrEqual(5);
       expect(response.body.page).toBe(1);
       expect(response.body.limit).toBe(5);
     });
@@ -273,7 +282,7 @@ describe('Templates CRUD (e2e)', () => {
         .get('/templates?search=Authentication Required&limit=1')
         .expect(200);
 
-      builtinTemplateId = response.body.data[0]?.id;
+      builtinTemplateId = response.body.items[0]?.id;
     });
 
     it('should return a template by ID', async () => {
@@ -309,7 +318,7 @@ describe('Templates CRUD (e2e)', () => {
         .get('/templates?search=Role-Based Access&limit=1')
         .expect(200);
 
-      roleBasedTemplateId = response.body.data[0]?.id;
+      roleBasedTemplateId = response.body.items[0]?.id;
     });
 
     it('should instantiate a validator from a template', async () => {
@@ -323,7 +332,7 @@ describe('Templates CRUD (e2e)', () => {
           atomId: testAtomId,
           parameters: {
             roleName: 'admin',
-            resource: '/api/admin/settings',
+            resourceName: 'admin settings page',
           },
         })
         .expect(201);
@@ -332,7 +341,7 @@ describe('Templates CRUD (e2e)', () => {
       expect(response.body.atomId).toBe(testAtomId);
       expect(response.body.templateId).toBe(roleBasedTemplateId);
       expect(response.body.content).toContain('admin');
-      expect(response.body.content).toContain('/api/admin/settings');
+      expect(response.body.content).toContain('admin settings page');
     });
 
     it('should instantiate with custom name and description', async () => {
@@ -346,7 +355,7 @@ describe('Templates CRUD (e2e)', () => {
           atomId: testAtomId,
           parameters: {
             roleName: 'moderator',
-            resource: '/api/content',
+            resourceName: 'content management',
           },
           name: 'Moderator Content Access Check',
           description: 'Custom description for moderator access',
@@ -368,7 +377,7 @@ describe('Templates CRUD (e2e)', () => {
           atomId: testAtomId,
           parameters: {
             // Missing required 'roleName' parameter
-            resource: '/api/users',
+            resourceName: 'user management',
           },
         })
         .expect(400);
@@ -385,7 +394,7 @@ describe('Templates CRUD (e2e)', () => {
           atomId: '00000000-0000-0000-0000-000000000000',
           parameters: {
             roleName: 'admin',
-            resource: '/api/admin',
+            resourceName: 'admin panel',
           },
         })
         .expect(404);
@@ -422,7 +431,7 @@ describe('Templates CRUD (e2e)', () => {
       const builtinResponse = await request(app.getHttpServer()).get(
         '/templates?isBuiltin=true&limit=1',
       );
-      builtinTemplateId = builtinResponse.body.data[0]?.id;
+      builtinTemplateId = builtinResponse.body.items[0]?.id;
     });
 
     it('should update a custom template', async () => {
@@ -479,7 +488,7 @@ describe('Templates CRUD (e2e)', () => {
       const builtinResponse = await request(app.getHttpServer()).get(
         '/templates?isBuiltin=true&limit=1',
       );
-      builtinTemplateId = builtinResponse.body.data[0]?.id;
+      builtinTemplateId = builtinResponse.body.items[0]?.id;
     });
 
     it('should delete a custom template', async () => {
@@ -505,9 +514,8 @@ describe('Templates CRUD (e2e)', () => {
 
       expect(response.body).toHaveProperty('total');
       expect(response.body).toHaveProperty('byCategory');
-      expect(response.body).toHaveProperty('byFormat');
       expect(response.body).toHaveProperty('builtinCount');
-      expect(response.body).toHaveProperty('customCount');
+      expect(response.body).toHaveProperty('userCreatedCount');
     });
   });
 
@@ -532,7 +540,7 @@ describe('Templates CRUD (e2e)', () => {
 
     beforeAll(async () => {
       const response = await request(app.getHttpServer()).get('/templates?isBuiltin=true&limit=1');
-      templateId = response.body.data[0]?.id;
+      templateId = response.body.items[0]?.id;
     });
 
     it('should return usage information for a template', async () => {

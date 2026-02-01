@@ -156,8 +156,15 @@ function MessageBubble({ message }: { message: ChatMessage }) {
  * Message content with code highlighting
  */
 function MessageContent({ content }: { content: string }) {
+  // Ensure content is a string - handle cases where API returns unexpected format
+  const textContent = typeof content === 'string'
+    ? content
+    : Array.isArray(content)
+      ? (content as any[]).filter((b: any) => b?.type === 'text').map((b: any) => b?.text || '').join('')
+      : String(content || '');
+
   // Simple code block detection and rendering
-  const parts = content.split(/(```[\s\S]*?```)/g);
+  const parts = textContent.split(/(```[\s\S]*?```)/g);
 
   return (
     <>
@@ -281,10 +288,17 @@ export function AgentChat({ className, defaultOpen = false }: AgentChatProps) {
       }
 
       // Add assistant message
+      // Ensure message is always a string (handle edge cases where LLM returns array content)
+      const messageContent = typeof data.message === 'string'
+        ? data.message
+        : Array.isArray(data.message)
+          ? (data.message as any[]).filter((b: any) => b?.type === 'text').map((b: any) => b?.text || '').join('')
+          : String(data.message || 'No response received');
+
       const assistantMessage: ChatMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: data.message,
+        content: messageContent,
         timestamp: new Date(),
         toolCalls: data.toolCalls,
         toolResults: data.toolResults,

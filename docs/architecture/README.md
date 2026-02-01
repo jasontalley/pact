@@ -8,6 +8,7 @@ This directory contains architecture documentation for Pact's core services and 
 |----------|---------|-------------|
 | [intent-refinement.md](./intent-refinement.md) | `IntentRefinementService` | AI-powered iterative refinement of Intent Atoms |
 | [atomicity-checker.md](./atomicity-checker.md) | `AtomicityCheckerService` | Hybrid heuristic + LLM atomicity validation |
+| [brownfield-agent-architecture-proposal.md](./brownfield-agent-architecture-proposal.md) | **Reconciliation Agent** (proposal) | Repo–Pact reconciliation: full-scan (once) and delta closure (ongoing). Deterministic delta + patch output; operators over atoms/invariants/coupling. Pact-chat as command surface. |
 
 ## Service Relationships
 
