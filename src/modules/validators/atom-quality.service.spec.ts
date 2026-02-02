@@ -679,13 +679,15 @@ describe('AtomQualityService', () => {
         content: 'Not valid JSON at all',
       });
 
-      // Should not throw, should use default values
+      // Should not throw, should fall back to heuristics
       const result = await service.validateAtom(atom);
 
       // Service should gracefully handle parse failures with valid decision
       expect(['approve', 'revise', 'reject']).toContain(result.decision);
-      // Malformed JSON should result in zero score for dimension
-      expect(result.dimensions.observable.score).toBe(0);
+      // Malformed JSON should fall back to heuristic scoring (not zero)
+      // Heuristics start with base scores and adjust based on content
+      expect(result.dimensions.observable.score).toBeGreaterThan(0);
+      expect(result.dimensions.observable.feedback).toContain('heuristic');
     });
   });
 

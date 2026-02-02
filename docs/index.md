@@ -1,8 +1,8 @@
 # Pact System Documentation
 
-**Version**: 3.7
-**Last Updated**: 2026-01-28
-**Status**: Phase 3.5-3.7 Complete, Phase 3.6 Pending
+**Version**: 4.0
+**Last Updated**: 2026-02-02
+**Status**: Phase 5 (Reconciliation Agent) ~80% Complete
 
 ---
 
@@ -50,9 +50,13 @@ Pact introduces:
 **Phase 2**: Validators & Templates ✅
 **Phase 3**: Commitment Boundary & Invariants ✅
 **Phase 3.5**: Multi-Provider LLM & Agent UI ✅
-**Phase 3.6**: LangGraph ReAct Agent Architecture ⏳
+**Phase 3.6**: LangGraph ReAct Agent Architecture ✅
 **Phase 3.7**: Admin Configuration UI ✅
+**Phase 4**: Molecules (Intent Composition) ✅
+**Phase 5**: Reconciliation Agent ⏳ (~80% Complete)
+**Phase 6**: Reconciliation Agent Reliability & UX ⏳
 
+**Core Features:**
 - ✅ Development infrastructure (Docker, NestJS, PostgreSQL)
 - ✅ Atomization Agent with iterative refinement
 - ✅ Atom Quality Validator (5 quality dimensions)
@@ -74,6 +78,23 @@ Pact introduces:
 - ✅ Admin Configuration UI (layered configuration system)
 - ✅ Settings pages for Agent, Resilience, Safety, Observability, Features
 - ✅ Configuration audit logging
+
+**Molecules (Phase 4):**
+- ✅ Molecule entity with lens types (user_story, feature, journey, epic, release, capability, custom)
+- ✅ Hierarchical molecule support (parent/child with max depth 10)
+- ✅ Computed metrics (atom count, coverage)
+- ✅ Molecule-atom junction table with positions
+
+**Reconciliation Agent (Phase 5):**
+- ✅ Full LangGraph pipeline: structure → discover → context → infer → synthesize → verify → persist
+- ✅ Delta mode with INV-R001 (no new atoms from linked tests) and INV-R002 (delta closure)
+- ✅ Quality validation with 5-dimension LLM scoring and heuristic fallbacks
+- ✅ Human-in-the-loop review via NodeInterrupt
+- ✅ UI wizard: config → analyzing → review → apply → complete
+- ✅ Persistence: `reconciliation_runs`, `atom_recommendations`, `test_records`, `molecule_recommendations`
+- ✅ Path filtering with glob pattern support
+- ⏳ Coupling metrics dashboard
+- ⏳ Interview/molecule creation agent
 
 ---
 
@@ -158,10 +179,10 @@ Ideas (mutable)
 ### Technology Stack
 
 - **Backend**: NestJS + TypeScript
-- **Database**: PostgreSQL (17 tables: 13 core + 2 LLM tracking + 2 admin config)
-- **Frontend**: React/Next.js with Canvas UI, shadcn/ui, React Query
+- **Database**: PostgreSQL (21 tables: 13 core + 4 reconciliation + 2 LLM tracking + 2 admin config)
+- **Frontend**: Next.js 16 + React 19, @xyflow/react canvas, shadcn/ui, React Query, Zustand
 - **Infrastructure**: Docker + Docker Compose
-- **AI/Agents**: LangChain, Multi-provider LLM (OpenAI, Anthropic, Ollama), Model Context Protocol (MCP)
+- **AI/Agents**: LangGraph (state machines), Multi-provider LLM (OpenAI, Anthropic, Ollama), Model Context Protocol (MCP)
 - **Testing**: Jest (unit), Vitest (frontend), Playwright (E2E), Supertest (API)
 
 ---
@@ -343,8 +364,8 @@ it('processes payment securely using TLS 1.3', () => {
 **Core Tables** (9):
 
 1. `atoms` - Intent atoms with quality scores and refinement history
-2. `molecules` - Descriptive groupings
-3. `molecule_atoms` - Many-to-many relationships
+2. `molecules` - Descriptive groupings with lens types and hierarchy support
+3. `molecule_atoms` - Many-to-many relationships with positions
 4. `validators` - Validators with format translation and execution tracking
 5. `validator_templates` - Reusable validator patterns (21 built-in)
 6. `evidence` - Execution results
@@ -353,20 +374,30 @@ it('processes payment securely using TLS 1.3', () => {
 9. `bootstrap_scaffolds` - Temporary code tracking
 
 **Phase 3 Tables** (4):
+
 10. `projects` - Project organization
 11. `invariant_configs` - Configurable invariant rules
 12. `commitments` - Immutable commitment artifacts
 13. `commitment_atoms` - Commitment-atom associations
 
+**Reconciliation Tables** (4):
+
+14. `reconciliation_runs` - Tracks each reconciliation execution (mode, status, summary)
+15. `atom_recommendations` - Inferred atoms pending review
+16. `test_records` - Test analysis results for delta closure (INV-R002)
+17. `molecule_recommendations` - Inferred molecule groupings
+
 **LLM Tracking Tables** (2):
-14. `llm_configurations` - LLM settings
-15. `llm_usage_tracking` - Usage metrics
+
+18. `llm_configurations` - LLM settings
+19. `llm_usage_tracking` - Usage metrics
 
 **Admin Configuration Tables** (2):
-16. `system_configurations` - Layered configuration values
-17. `configuration_audit_log` - Configuration change audit trail
 
-**See**: [docs/schema.md](schema.md) for full schema documentation (v3.0)
+20. `system_configurations` - Layered configuration values
+21. `configuration_audit_log` - Configuration change audit trail
+
+**See**: [docs/schema.md](schema.md) for full schema documentation (v4.0)
 
 ---
 
@@ -454,18 +485,18 @@ it('processes payment securely using TLS 1.3', () => {
 
 **Status**: ✅ Complete
 
-### Phase 3.6: LangGraph ReAct Agent Architecture (Interlude)
+### Phase 3.6: LangGraph ReAct Agent Architecture (Interlude) ✅
 
 **Goal**: Replace manual tool loop with LangGraph-based ReAct agent for intelligent exploration
 
 **Deliverables**:
 
-- [ ] LangGraph state machine with 4 nodes (Plan, Search, Analyze, Synthesize)
-- [ ] Dynamic tool loop (not hardcoded iterations)
-- [ ] Planning phase that generates search strategies
-- [ ] "Enough information" detection to decide when to stop
-- [ ] Generic prompting (works for any data-finding task)
-- [ ] Full LangSmith observability
+- [x] LangGraph state machine with nodes (Plan, Search, Analyze, Synthesize)
+- [x] Dynamic tool loop (not hardcoded iterations)
+- [x] Planning phase that generates search strategies
+- [x] "Enough information" detection to decide when to stop
+- [x] Generic prompting (works for any data-finding task)
+- [x] Graph registry service for managing agent graphs
 
 **Key Benefits**:
 
@@ -474,7 +505,7 @@ it('processes payment securely using TLS 1.3', () => {
 - Structured state management for debugging
 - Extensible architecture for future agent capabilities
 
-**Status**: ⏳ Pending
+**Status**: ✅ Complete
 
 ### Phase 3.7: Admin Configuration UI (Interlude) ✅
 
@@ -499,36 +530,70 @@ it('processes payment securely using TLS 1.3', () => {
 
 **Status**: ✅ Complete
 
-### Phase 4: Agent-Driven Realization (Weeks 17-20)
+### Phase 4: Molecules (Intent Composition) ✅
 
-**Goal**: Automate execution from committed intent
-
-**Deliverables**:
-
-- Agent reads Commitment Artifacts
-- Test generation from validators (Red phase)
-- Code generation from Intent Atoms (Green phase)
-- Ambiguity detection and escalation
-
-### Phase 5: Evidence Collection (Weeks 21-24)
-
-**Goal**: Close the loop from intent → code → proof
+**Goal**: Enable meaningful groupings of atoms through lens types
 
 **Deliverables**:
 
-- Evidence Artifact generation (test results, coverage, security, quality)
-- Real-time evidence stream
-- Timeline/history view
-- Dashboard aggregation
+- [x] Molecule entity with 7 lens types (user_story, feature, journey, epic, release, capability, custom)
+- [x] Hierarchical molecule support (parent/child relationships, max depth 10)
+- [x] Computed metrics (atom count, coverage percentage)
+- [x] Junction table with position ordering
+- [x] CRUD API and UI for molecule management
 
-### Phase 6-8: System Evolution (Weeks 25+)
+**Status**: ✅ Complete
 
-**Future Enhancements**:
+### Phase 5: Reconciliation Agent ⏳
 
+**Goal**: Analyze existing codebases to infer atoms from orphan tests
+
+**Deliverables**:
+
+- [x] Full LangGraph pipeline: structure → discover → context → infer → synthesize → verify → persist
+- [x] Full-scan mode for initial reconciliation
+- [x] Delta mode for incremental analysis (INV-R001, INV-R002)
+- [x] Quality validation with 5-dimension LLM scoring
+- [x] Heuristic fallbacks when LLM returns malformed responses
+- [x] Human-in-the-loop review via NodeInterrupt
+- [x] UI wizard: config → analyzing → review → apply → complete
+- [x] Path filtering with glob pattern support
+- [ ] Coupling metrics dashboard
+- [ ] Interview/molecule creation agent
+
+**Reconciliation Invariants**:
+
+- **INV-R001**: No new atoms from linked tests (tests with @atom annotation)
+- **INV-R002**: Delta closure stopping rule (closed tests excluded from delta)
+- **INV-R003**: Quality gate (atoms must pass 5-dimension quality check)
+- **INV-R004**: Molecule lens axiom (molecules are views, failures degrade gracefully)
+
+**Status**: ⏳ ~80% Complete
+
+### Phase 6: Reconciliation Agent Reliability & UX ⏳
+
+**Goal**: Polish reconciliation agent for production reliability
+
+**Deliverables**:
+
+- [ ] Decoupled test detection (test refs non-existent atom)
+- [ ] Atom→code file coupling tracking
+- [ ] Reconciliation scheduling (cron/CI hook)
+- [ ] Comprehensive test coverage for all nodes
+- [ ] Error recovery and retry mechanisms
+- [ ] Progress streaming to UI
+
+**Status**: ⏳ Pending
+
+### Future Phases: System Evolution
+
+**Planned Enhancements**:
+
+- MCP Server for external coding agents (Claude, Cursor)
+- Persistent Pact-Chat with conversation compaction
+- Interview agent for multi-turn molecule creation
 - Cross-commit dependencies
-- Commitment supersession
 - External integrations (Git, CI/CD)
-- Completeness analysis
 - Multi-user collaboration
 
 ---
@@ -713,7 +778,9 @@ Pact uses specialized AI agents to automate key transformations while maintainin
 - Test-atom mismatch detection (INV-009 violations)
 - Reverse engineering (infer atoms from tests)
 
-**Status**: 🔨 In Progress
+**Note**: Core functionality now integrated into Reconciliation Agent (Phase 5).
+
+**Status**: ✅ Integrated into Reconciliation Agent
 
 #### Test Quality Analyzer
 
@@ -729,6 +796,32 @@ Pact uses specialized AI agents to automate key transformations while maintainin
 - Boundary/negative coverage analysis
 
 **Status**: ⏳ Pending
+
+#### Reconciliation Agent
+
+**Purpose**: Analyze existing codebases to infer atoms from orphan tests
+
+**Capabilities**:
+
+- Codebase structure analysis (test frameworks, file patterns)
+- Orphan test discovery (tests without @atom annotations)
+- Context gathering (documentation, related code)
+- Atom inference from test behavior (LLM-powered)
+- Molecule synthesis from related atoms
+- Quality validation with 5-dimension scoring
+- Human-in-the-loop review via NodeInterrupt
+
+**Pipeline Nodes**:
+
+1. `structure` - Analyze codebase structure and test frameworks
+2. `discover` - Find orphan tests (full-scan or delta mode)
+3. `context` - Gather relevant documentation and code context
+4. `infer_atoms` - LLM inference of atoms from tests
+5. `synthesize_molecules` - Group related atoms into molecules
+6. `verify` - Quality validation and invariant checks
+7. `persist` - Save recommendations or apply changes
+
+**Status**: ✅ ~80% Complete
 
 ### Agent Principles
 
@@ -880,5 +973,17 @@ Pact is not just a tool—it's a new way of thinking about software as **realize
 
 ---
 
-**For developers**: See [CLAUDE.md](../CLAUDE.md) for comprehensive developer documentation.  
-**For users**: See [README.md](../README.md) for quick start and usage guide.
+## Related Documents
+
+| Document | Purpose |
+|----------|---------|
+| [ux.md](ux.md) | UX principles, mental models, interaction flows |
+| [ui.md](ui.md) | UI architecture, state management, component patterns |
+| [schema.md](schema.md) | Database schema (21 tables across 5 categories) |
+| [analysis-git-for-intent.md](analysis-git-for-intent.md) | Conceptual analysis: Pact as "Git for Intent" |
+| [CLAUDE.md](../CLAUDE.md) | Developer documentation and conventions |
+| [README.md](../README.md) | Quick start and usage guide |
+
+---
+
+*This document is living. Changes should reflect current implementation status.*

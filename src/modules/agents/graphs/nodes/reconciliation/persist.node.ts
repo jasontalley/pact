@@ -155,9 +155,10 @@ export function createPersistNode(options: PersistNodeOptions = {}) {
         `[PersistNode] Building reconciliation patch (${inferredAtoms.length} atoms, ${inferredMolecules.length} molecules)`,
       );
 
-      // Use interim run ID if available, otherwise generate new one
-      const runId = state.interimRunId || `REC-${uuidv4().substring(0, 8)}`;
-      const hasInterimRun = !!state.interimRunId;
+      // Use interim run ID if available, then input runId, otherwise generate new one
+      // This ensures consistency: service → interim-persist → persist all use the same ID
+      const runId = state.interimRunId || state.input?.runId || `REC-${uuidv4().substring(0, 8)}`;
+      const hasInterimRun = !!state.interimRunUuid; // Check for UUID, not just ID
 
       if (hasInterimRun) {
         config.logger?.log(`[PersistNode] Using interim run ${runId}`);

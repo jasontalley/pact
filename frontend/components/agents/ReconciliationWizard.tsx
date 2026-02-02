@@ -415,14 +415,14 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
   // Initialize apply decisions from result
   const initializeApplyDecisions = (res: ReconciliationResult) => {
     const atomDec = new Map<string, 'approve' | 'reject'>();
-    res.inferredAtoms.forEach((atom) => {
+    (res.inferredAtoms ?? []).forEach((atom) => {
       const passes = (atom.qualityScore || 0) >= (config.options?.qualityThreshold || 80);
       atomDec.set(atom.tempId, passes ? 'approve' : 'reject');
     });
     setAtomDecisions(atomDec);
 
     const molDec = new Map<string, 'approve' | 'reject'>();
-    res.inferredMolecules.forEach((mol) => {
+    (res.inferredMolecules ?? []).forEach((mol) => {
       molDec.set(mol.tempId, mol.confidence >= 70 ? 'approve' : 'reject');
     });
     setMoleculeDecisions(molDec);
@@ -535,7 +535,7 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
     if (pendingReview) {
       pendingReview.pendingAtoms.forEach((a) => newDec.set(a.tempId, 'approve'));
     } else if (result) {
-      result.inferredAtoms.forEach((a) => newDec.set(a.tempId, 'approve'));
+      (result.inferredAtoms ?? []).forEach((a) => newDec.set(a.tempId, 'approve'));
     }
     setAtomDecisions(newDec);
   };
@@ -545,7 +545,7 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
     if (pendingReview) {
       pendingReview.pendingAtoms.forEach((a) => newDec.set(a.tempId, 'reject'));
     } else if (result) {
-      result.inferredAtoms.forEach((a) => newDec.set(a.tempId, 'reject'));
+      (result.inferredAtoms ?? []).forEach((a) => newDec.set(a.tempId, 'reject'));
     }
     setAtomDecisions(newDec);
   };

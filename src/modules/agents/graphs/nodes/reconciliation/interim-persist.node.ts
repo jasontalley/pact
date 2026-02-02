@@ -50,27 +50,29 @@ export function createInterimPersistNode(options: InterimPersistNodeOptions = {}
       const mode = state.input?.reconciliationMode || 'full-scan';
       const rootDirectory = state.rootDirectory;
 
+      // Use runId from input (service-generated) for consistency, fallback to generating one
+      const runId = state.input?.runId || `REC-${uuidv4().substring(0, 8)}`;
+
       config.logger?.log(
-        `[InterimPersistNode] Saving interim results (${inferredAtoms.length} atoms, ${inferredMolecules.length} molecules)`,
+        `[InterimPersistNode] Saving interim results (${inferredAtoms.length} atoms, ${inferredMolecules.length} molecules), runId=${runId}`,
       );
 
-      // Skip if no atoms or molecules to save
+      // Skip database persistence if no atoms or molecules, but still set the runId in state
       if (inferredAtoms.length === 0 && inferredMolecules.length === 0) {
-        config.logger?.log('[InterimPersistNode] No atoms or molecules to save, skipping');
-        return {};
+        config.logger?.log(
+          '[InterimPersistNode] No atoms or molecules to save, skipping database but setting runId',
+        );
+        return { interimRunId: runId };
       }
 
       const repository = options.repository;
 
       if (!persistToDatabase || !repository) {
         config.logger?.log('[InterimPersistNode] Skipping database persistence (no repository)');
-        return {};
+        return { interimRunId: runId };
       }
 
       try {
-        // Generate run ID
-        const runId = `REC-${uuidv4().substring(0, 8)}`;
-
         // Get current commit hash
         let currentCommitHash: string | undefined;
         try {

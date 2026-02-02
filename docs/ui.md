@@ -27,7 +27,7 @@ This document defines the **technical UI architecture** for Pact. It complements
 | Real-time | Socket.io-client | 4.8+ | WebSocket connection to NestJS gateway |
 | Testing | Vitest + Testing Library | 3.x | Fast, React 19-focused, compatible with Next.js 16 |
 | E2E Testing | Playwright | 1.50+ | Cross-browser, visual regression, API mocking |
-| Runtime | Node.js | 24.x LTS | Krypton LTS, required for Next.js 16 |
+| Runtime | Node.js | 22.x LTS | Jod LTS (current), required for Next.js 16 |
 
 ---
 
@@ -442,17 +442,277 @@ export class AtomsGateway {
 }
 ```
 
+### 6.4 Reconciliation Events
+
+```typescript
+// lib/socket/events.ts (additions)
+export type ReconciliationEvent =
+  | { type: 'reconciliation:started'; runId: string }
+  | { type: 'reconciliation:progress'; runId: string; phase: string; progress: number }
+  | { type: 'reconciliation:completed'; runId: string; summary: ReconciliationSummary }
+  | { type: 'reconciliation:failed'; runId: string; error: string }
+  | { type: 'reconciliation:review_ready'; runId: string; atomCount: number };
+
+// hooks/socket/use-reconciliation-events.ts
+export function useReconciliationEvents(runId: string) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    socket.on('reconciliation:progress', ({ runId: id, phase, progress }) => {
+      if (id === runId) {
+        // Update local state for progress indicator
+      }
+    });
+
+    socket.on('reconciliation:completed', ({ runId: id, summary }) => {
+      if (id === runId) {
+        queryClient.invalidateQueries({ queryKey: ['reconciliation', runId] });
+        toast.success(`Reconciliation complete: ${summary.inferredAtomsCount} atoms inferred`);
+      }
+    });
+
+    return () => {
+      socket.off('reconciliation:progress');
+      socket.off('reconciliation:completed');
+    };
+  }, [runId, queryClient]);
+}
+```
+
 ---
 
-## 7. Design System
+## 7. Reconciliation UI
 
-### 7.1 Visual Style: Minimal/Professional
+The Reconciliation Agent has a dedicated UI for analyzing codebases and reviewing inferred atoms.
+
+### 7.1 Wizard Flow
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                    Reconciliation Wizard                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Step 1: Configure          Step 2: Analyzing                   │
+│  ┌──────────────────┐       ┌──────────────────┐                │
+│  │ • Root directory │  ──▶  │ • Progress bar   │                │
+│  │ • Mode (full/Δ)  │       │ • Current phase  │                │
+│  │ • Path filters   │       │ • Tests found    │                │
+│  │ • Options        │       │ • LLM calls      │                │
+│  └──────────────────┘       └──────────────────┘                │
+│                                     │                            │
+│                                     ▼                            │
+│  Step 4: Complete           Step 3: Review                      │
+│  ┌──────────────────┐       ┌──────────────────┐                │
+│  │ • Summary stats  │  ◀──  │ • Atom list      │                │
+│  │ • Atoms created  │       │ • Accept/Reject  │                │
+│  │ • Molecules      │       │ • Quality scores │                │
+│  │ • Next actions   │       │ • Source links   │                │
+│  └──────────────────┘       └──────────────────┘                │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 7.2 Key Components
+
+```text
+frontend/
+├── app/
+│   └── reconciliation/
+│       ├── page.tsx              # Reconciliation list/history
+│       └── [runId]/
+│           └── page.tsx          # Run detail with review UI
+│
+├── components/
+│   └── agents/
+│       ├── ReconciliationWizard.tsx    # Multi-step wizard
+│       ├── ReconciliationConfig.tsx    # Step 1: Configuration form
+│       ├── ReconciliationProgress.tsx  # Step 2: Progress display
+│       ├── ReconciliationReview.tsx    # Step 3: Review interface
+│       ├── ReconciliationComplete.tsx  # Step 4: Summary
+│       ├── AtomRecommendationCard.tsx  # Single recommendation display
+│       ├── PathFilterInput.tsx         # Glob pattern filter
+│       └── QualityScoreDisplay.tsx     # 5-dimension breakdown
+```
+
+### 7.3 Review Interface Pattern
+
+```tsx
+// components/agents/AtomRecommendationCard.tsx
+export function AtomRecommendationCard({ recommendation, onAccept, onReject }: Props) {
+  return (
+    <Card className={cn(
+      'border-l-4',
+      recommendation.qualityScore >= 80 ? 'border-l-green-500' : 'border-l-yellow-500'
+    )}>
+      <CardHeader>
+        <div className="flex justify-between items-start">
+          <div>
+            <Badge variant="outline">{recommendation.category}</Badge>
+            <CardTitle className="mt-2">{recommendation.description}</CardTitle>
+          </div>
+          <QualityScoreDisplay score={recommendation.qualityScore} />
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        {/* Source test info */}
+        <div className="text-sm text-muted-foreground">
+          <span className="font-mono">{recommendation.sourceTestFilePath}</span>
+          <span className="ml-2">Line {recommendation.sourceTestLineNumber}</span>
+        </div>
+
+        {/* LLM reasoning (collapsible) */}
+        <Collapsible>
+          <CollapsibleTrigger>View reasoning</CollapsibleTrigger>
+          <CollapsibleContent className="text-sm mt-2">
+            {recommendation.reasoning}
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* Observable outcomes */}
+        {recommendation.observableOutcomes.length > 0 && (
+          <div>
+            <h4 className="text-sm font-medium">Observable Outcomes</h4>
+            <ul className="list-disc list-inside text-sm">
+              {recommendation.observableOutcomes.map((o, i) => (
+                <li key={i}>{o.description}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </CardContent>
+
+      <CardFooter className="justify-end space-x-2">
+        <Button variant="outline" onClick={() => onReject(recommendation.id)}>
+          Reject
+        </Button>
+        <Button
+          onClick={() => onAccept(recommendation.id)}
+          disabled={recommendation.qualityScore < 80}
+        >
+          Accept
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
+```
+
+### 7.4 Path Filter Input
+
+```tsx
+// components/agents/PathFilterInput.tsx
+export function PathFilterInput({ value, onChange }: Props) {
+  const [patterns, setPatterns] = useState<string[]>(value || []);
+  const [input, setInput] = useState('');
+
+  const addPattern = () => {
+    if (input && !patterns.includes(input)) {
+      const newPatterns = [...patterns, input];
+      setPatterns(newPatterns);
+      onChange(newPatterns);
+      setInput('');
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label>Path Exclusion Patterns (glob)</Label>
+      <div className="flex space-x-2">
+        <Input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="e.g., **/node_modules/**, **/*.mock.ts"
+          onKeyDown={(e) => e.key === 'Enter' && addPattern()}
+        />
+        <Button variant="outline" onClick={addPattern}>Add</Button>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {patterns.map((pattern, i) => (
+          <Badge key={i} variant="secondary" className="pr-1">
+            <code className="text-xs">{pattern}</code>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-4 w-4 p-0 ml-1"
+              onClick={() => {
+                const newPatterns = patterns.filter((_, j) => j !== i);
+                setPatterns(newPatterns);
+                onChange(newPatterns);
+              }}
+            >
+              ×
+            </Button>
+          </Badge>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+### 7.5 Reconciliation API Hooks
+
+```typescript
+// hooks/reconciliation/use-reconciliation.ts
+export function useReconciliationRun(runId: string) {
+  return useQuery({
+    queryKey: ['reconciliation', runId],
+    queryFn: () => reconciliationApi.getRun(runId),
+    refetchInterval: (data) =>
+      data?.status === 'running' ? 2000 : false, // Poll while running
+  });
+}
+
+export function useStartReconciliation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (config: ReconciliationConfig) =>
+      reconciliationApi.start(config),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['reconciliation-runs'] });
+      toast.info(`Reconciliation started: ${data.runId}`);
+    },
+  });
+}
+
+export function useAcceptRecommendation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ runId, recommendationId }: AcceptParams) =>
+      reconciliationApi.acceptRecommendation(runId, recommendationId),
+    onSuccess: (_, { runId }) => {
+      queryClient.invalidateQueries({ queryKey: ['reconciliation', runId] });
+    },
+  });
+}
+
+export function useRejectRecommendation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ runId, recommendationId, reason }: RejectParams) =>
+      reconciliationApi.rejectRecommendation(runId, recommendationId, reason),
+    onSuccess: (_, { runId }) => {
+      queryClient.invalidateQueries({ queryKey: ['reconciliation', runId] });
+    },
+  });
+}
+```
+
+---
+
+## 8. Design System
+
+### 8.1 Visual Style: Minimal/Professional
 
 - **Clarity over flourish**: Focus on content, not decoration
 - **Information density**: Show relevant data without overwhelming
 - **Consistent patterns**: Same interactions behave the same way
 
-### 7.2 Color Palette
+### 8.2 Color Palette
 
 ```css
 /* styles/globals.css */
@@ -475,13 +735,13 @@ export class AtomsGateway {
 }
 ```
 
-### 7.3 Typography
+### 8.3 Typography
 
 - **Font**: System font stack (via Tailwind defaults) or Inter
 - **Atom IDs**: Monospace (`font-mono`), e.g., `IA-001`
 - **Descriptions**: Prose-like, readable line height
 
-### 7.4 Component Conventions
+### 8.4 Component Conventions
 
 | Element | Pattern |
 |---------|---------|
@@ -493,9 +753,9 @@ export class AtomsGateway {
 
 ---
 
-## 8. API Client Layer
+## 9. API Client Layer
 
-### 8.1 Axios Instance
+### 9.1 Axios Instance
 
 ```typescript
 // lib/api/client.ts
@@ -521,7 +781,7 @@ apiClient.interceptors.response.use(
 );
 ```
 
-### 8.2 API Functions
+### 9.2 API Functions
 
 ```typescript
 // lib/api/atoms.ts
@@ -560,7 +820,7 @@ export const agentsApi = {
 
 ---
 
-## 9. Testing Strategy
+## 10. Testing Strategy
 
 | Test Type | Tool | Target | Focus |
 |-----------|------|--------|-------|
@@ -569,7 +829,7 @@ export const agentsApi = {
 | Integration | Playwright | Key flows | Canvas operations, commit ceremony |
 | E2E | Playwright | Critical paths | Full user journeys |
 
-### 9.1 Example: Hook Test
+### 10.1 Example: Hook Test
 
 ```typescript
 // __tests__/hooks/use-commit-atom.test.ts
@@ -591,7 +851,7 @@ describe('useCommitAtom', () => {
 
 ---
 
-## 10. Docker Integration
+## 11. Docker Integration
 
 ```yaml
 # docker-compose.yml (addition to existing)
@@ -632,11 +892,13 @@ CMD ["npm", "run", "dev"]
 
 ---
 
-## 11. Cross-References
+## 12. Cross-References
 
 - **UX Specification**: See [ux.md](ux.md) for interaction semantics and mental models
+- **Schema Documentation**: See [schema.md](schema.md) for database tables including reconciliation entities
 - **Implementation Checklist**: See [implementation-checklist-phase1.md](implementation-checklist-phase1.md) Part 5 for task breakdown
 - **Backend API**: Swagger documentation at `http://localhost:3000/api`
+- **Reconciliation Agent**: See [index.md](index.md) Section 5.5 for agent pipeline architecture
 
 ---
 

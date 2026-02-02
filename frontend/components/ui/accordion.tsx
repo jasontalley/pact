@@ -39,6 +39,8 @@ type AccordionProps = AccordionSingleProps | AccordionMultipleProps;
 
 const Accordion = React.forwardRef<HTMLDivElement, AccordionProps>(
   ({ type, value, defaultValue, onValueChange, className, children, ...props }, ref) => {
+    // Extract collapsible to prevent it from being passed to DOM element
+    const { collapsible: _collapsible, ...domProps } = props as AccordionSingleProps & React.HTMLAttributes<HTMLDivElement>;
     const [internalValue, setInternalValue] = React.useState<string | string[]>(
       defaultValue || (type === 'multiple' ? [] : '')
     );
@@ -67,7 +69,7 @@ const Accordion = React.forwardRef<HTMLDivElement, AccordionProps>(
       <AccordionContext.Provider
         value={{ value: currentValue, onValueChange: handleValueChange, type }}
       >
-        <div ref={ref} className={className} {...props}>
+        <div ref={ref} className={className} {...domProps}>
           {children}
         </div>
       </AccordionContext.Provider>

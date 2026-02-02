@@ -81,11 +81,13 @@ export interface InterruptPayload {
 
 /**
  * Tool result type for validate_atom_quality
+ * Matches AtomQualityResult from atom-quality.service.ts
  */
 interface ValidateAtomToolResult {
-  quality_score: number;
-  passes_threshold: boolean;
-  validation_issues: string[];
+  totalScore: number;
+  decision: 'approve' | 'revise' | 'reject';
+  actionableImprovements: string[];
+  overallFeedback: string;
 }
 
 /**
@@ -367,18 +369,16 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
         if (hasValidateTool) {
           try {
             const toolResult = (await config.toolRegistry.executeTool('validate_atom_quality', {
-              atom_temp_id: atom.tempId,
-              atom_description: atom.description,
-              observable_outcomes: atom.observableOutcomes?.join(',') || '',
+              atom_id: atom.tempId,
+              description: atom.description,
+              observable_outcomes: JSON.stringify(atom.observableOutcomes || []),
               category: atom.category || '',
-              reasoning: atom.reasoning || '',
-              confidence: String(atom.confidence || 0),
-              quality_threshold: String(inputThreshold),
             })) as ValidateAtomToolResult;
 
-            score = toolResult.quality_score;
-            issues = toolResult.validation_issues || [];
-            passes = toolResult.passes_threshold;
+            score = toolResult.totalScore;
+            issues = toolResult.actionableImprovements || [];
+            // Use the decision or fallback to threshold check
+            passes = toolResult.decision === 'approve' || score >= inputThreshold;
           } catch (toolError) {
             const toolErrorMessage =
               toolError instanceof Error ? toolError.message : String(toolError);

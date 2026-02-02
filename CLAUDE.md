@@ -25,14 +25,32 @@ Pact is a system for capturing product intent and translating it into code, desi
 pact/
 ├── src/
 │   ├── modules/          # NestJS feature modules
+│   │   ├── atoms/        # Atom CRUD and management
+│   │   ├── molecules/    # Molecule management with lens types
+│   │   ├── agents/       # LangGraph agent orchestration
+│   │   │   ├── graphs/   # Graph definitions (reconciliation, atomization)
+│   │   │   ├── nodes/    # Individual graph nodes
+│   │   │   └── entities/ # Agent-related database entities
+│   │   ├── llm/          # LLM service abstraction
+│   │   └── quality/      # Quality scoring system
 │   ├── common/           # Shared utilities, guards, interceptors
 │   ├── config/           # Configuration files
 │   └── main.ts           # Application entry point
 ├── test/                 # E2E and integration tests
-├── frontend/             # React/Next.js application
+├── frontend/             # Next.js 16 application (App Router)
+│   ├── app/              # App Router pages
+│   │   ├── atoms/        # Atom views
+│   │   ├── molecules/    # Molecule views
+│   │   ├── reconciliation/ # Reconciliation wizard
+│   │   └── canvas/       # Graph visualization
 │   ├── components/       # Reusable UI components
-│   ├── pages/            # Next.js pages
-│   └── lib/              # Frontend utilities
+│   │   ├── ui/           # shadcn/ui base components
+│   │   ├── atoms/        # Atom-specific components
+│   │   ├── agents/       # Agent UI (ReconciliationWizard, etc.)
+│   │   └── canvas/       # @xyflow/react components
+│   ├── hooks/            # React Query + custom hooks
+│   ├── stores/           # Zustand stores
+│   └── lib/              # API clients, utilities
 ├── .claude/
 │   └── skills/           # Claude skills for Pact workflows
 ├── ideas/                # Pre-commitment exploration (DATA - persists)
@@ -103,12 +121,39 @@ atoms/
 - **Mutability doesn't matter** (they're views, not commitments)
 - Atoms can be shared across multiple molecules
 - Users can endlessly recompose molecules to view atoms through different lenses
+- Support hierarchical nesting (parent/child molecules, max depth: 10)
 
-**Storage**: `/molecules/`
+**Lens Types**: Molecules have a `lens_type` that categorizes their purpose:
 
-**Format**: Markdown files with frontmatter linking to atoms
+| Lens Type | Purpose | Example |
+|-----------|---------|---------|
+| `user_story` | Single user behavior | "User can reset password" |
+| `feature` | Cohesive capability | "Authentication system" |
+| `journey` | Multi-step user flow | "Checkout process" |
+| `epic` | Large initiative | "Mobile app launch" |
+| `release` | Version milestone | "v2.0 release scope" |
+| `capability` | System ability | "Real-time sync" |
+| `custom` | User-defined | Any grouping |
 
-**Example**:
+**Storage**: `/molecules/` (bootstrap) or database `molecules` table (production)
+
+**Database Schema** (production):
+
+```typescript
+{
+  id: number;
+  name: string;
+  description: string;
+  lensType: 'user_story' | 'feature' | 'journey' | 'epic' | 'release' | 'capability' | 'custom';
+  lensLabel?: string;        // Custom label when lensType is 'custom'
+  parentMoleculeId?: number; // Hierarchical nesting
+  ownerId?: number;          // Creator/owner
+  tags: string[];            // Searchable tags
+  atomIds: number[];         // Linked atoms (many-to-many)
+}
+```
+
+**Bootstrap Format**: Markdown files with frontmatter linking to atoms
 
 ```markdown
 # M-001: Secure Checkout
@@ -490,21 +535,48 @@ Every scaffolded capability must have:
 
 ### Self-Hosting Milestones
 
-#### Phase 0: "Pact Exists as a Tool" (Current Target)
+#### Phase 0: "Pact Exists as a Tool" ✓ Complete
 
 - Can read atoms from `/atoms`
 - Can run test audits
 - Can produce reports
 - **Bootstrap status**: All four types active
 
-#### Phase 1: "Pact Can Validate Pact"
+#### Phase 1-3: "Core Infrastructure" ✓ Complete
+
+- Database schema with 21 tables across 5 categories
+- Atom CRUD with quality scoring (5 dimensions)
+- LLM service abstraction (OpenAI, Anthropic)
+- Atomization agent for intent decomposition
+
+#### Phase 4: "Molecules" ✓ Complete
+
+- Molecule management with lens types
+- Hierarchical molecule nesting
+- Many-to-many atom relationships
+
+#### Phase 5: "Reconciliation Agent" (~80% Complete) ← Current
+
+- LangGraph-based reconciliation pipeline
+- 7-node state machine: structure → discover → context → infer_atoms → synthesize_molecules → verify → persist
+- Human-in-the-loop review via NodeInterrupt
+- Delta mode for incremental reconciliation
+- **Bootstrap status**: Seed/migration active; tooling/runtime remain
+
+#### Phase 6: "Full Test Suite" (Pending)
+
+- Comprehensive test coverage for all agents
+- E2E tests for reconciliation flows
+- Performance benchmarks
+
+#### Phase 7: "Pact Can Validate Pact"
 
 - Pact's own repo described by atoms
 - Pact's build pipeline is described by atoms
 - Pact's CI gate is enforced by Pact
 - **Bootstrap status**: Seed/migration demolished; tooling/runtime remain
 
-#### Phase 2: "Pact Is Authoritative"
+#### Phase 8: "Pact Is Authoritative"
 
 - Any change to atoms/tests/invariants blocked unless Pact approves
 - All atoms/tests/invariants managed by Pact database
@@ -684,10 +756,75 @@ Each feature module should contain:
 
 ### Frontend Conventions
 
+**Technology Stack** (Next.js 16 / React 19):
+
+| Layer | Technology | Purpose |
+|-------|------------|---------|
+| Framework | Next.js 16 (App Router) | Server Components, Turbopack |
+| UI | React 19 | React Compiler, Server Actions |
+| Canvas | @xyflow/react 12 | Node graph visualization |
+| Server State | React Query 5 | Caching, optimistic updates |
+| Client State | Zustand 5 | UI state, canvas interactions |
+| URL State | nuqs 2.8+ | Type-safe search params |
+| Forms | React Hook Form + Zod | Validation, type inference |
+| Styling | Tailwind CSS 4 | CSS-first config |
+| Components | shadcn/ui | Accessible, customizable |
+
+**Component Patterns**:
+
 - **Component naming**: PascalCase (e.g., `UserProfile.tsx`)
 - **File organization**: Colocate components with their tests and styles
-- **State management**: Use React hooks and context for shared state
-- **API calls**: Abstract into service functions in `lib/api/`
+- **Server Components**: Default for data fetching and static content
+- **Client Components**: Use `'use client'` for interactivity, Zustand, React Query
+
+```tsx
+// Server Component (default)
+// app/atoms/page.tsx
+export default async function AtomsPage() {
+  const atoms = await getAtoms(); // Server-side fetch
+  return <AtomsList initialAtoms={atoms} />;
+}
+
+// Client Component
+// components/atoms/AtomsList.tsx
+'use client';
+export function AtomsList({ initialAtoms }: Props) {
+  const { data } = useAtoms({ initialData: initialAtoms });
+  const { selectedIds } = useCanvasStore();
+  // ...
+}
+```
+
+**State Management Architecture**:
+
+```text
+React Query (server state) → Atoms, Molecules, Quality, LLM responses
+Zustand (UI state)         → Canvas zoom/pan, selections, wizard steps
+nuqs (URL state)           → Filters, search, pagination, active view
+```
+
+**API calls**: Abstract into service functions in `lib/api/`
+
+```typescript
+// lib/api/atoms.ts
+export const atomsApi = {
+  list: (params?: AtomFilters) => apiClient.get('/atoms', { params }),
+  get: (id: string) => apiClient.get(`/atoms/${id}`),
+  commit: (id: string) => apiClient.patch(`/atoms/${id}/commit`),
+};
+```
+
+**Hooks Pattern**: One hook per API operation
+
+```typescript
+// hooks/atoms/use-atoms.ts
+export function useAtoms(filters?: AtomFilters) {
+  return useQuery({
+    queryKey: ['atoms', filters],
+    queryFn: () => atomsApi.list(filters),
+  });
+}
+```
 
 ---
 
@@ -956,11 +1093,81 @@ This project is designed to work seamlessly with AI assistants. When implementin
 
 ### Working with LangChain/LangGraph Agents
 
-- **Agent configuration**: Store in `src/config/agents/`
-- **Prompt templates**: Keep templates in version control
-- **Chain definitions**: Document chain logic clearly in code comments
-- **Error handling**: Always handle agent failures gracefully
-- **Testing agents**: Mock LLM calls in tests, use integration tests for real calls
+**Core Architecture**: Agents are implemented as LangGraph state machines with typed state channels.
+
+**Agent Location**: `src/modules/agents/graphs/`
+
+```typescript
+// Example: Reconciliation graph structure
+src/modules/agents/graphs/
+├── graph-registry.service.ts    // Central registry for all graphs
+├── graphs/
+│   ├── reconciliation.graph.ts  // Graph definition with nodes/edges
+│   └── atomization.graph.ts     // Atomization pipeline
+├── nodes/
+│   └── reconciliation/
+│       ├── structure.node.ts    // Discover test file structure
+│       ├── discover.node.ts     // Parse test cases
+│       ├── context.node.ts      // Gather supporting code
+│       ├── infer-atoms.node.ts  // LLM inference
+│       ├── synthesize.node.ts   // Group into molecules
+│       ├── verify.node.ts       // Quality scoring
+│       └── persist.node.ts      // Database writes
+└── types/
+    └── reconciliation-state.ts  // Typed state channels
+```
+
+**State Machine Pattern**:
+
+```typescript
+// Define typed state with Annotation
+const ReconciliationState = Annotation.Root({
+  runId: Annotation<string>(),
+  rootDirectory: Annotation<string>(),
+  testFiles: Annotation<TestFile[]>({ reducer: (a, b) => [...a, ...b] }),
+  atomRecommendations: Annotation<AtomRecommendation[]>(),
+  status: Annotation<'running' | 'review' | 'complete'>(),
+});
+
+// Build graph with nodes and edges
+const graph = new StateGraph(ReconciliationState)
+  .addNode('structure', structureNode)
+  .addNode('discover', discoverNode)
+  .addNode('infer_atoms', inferAtomsNode)
+  .addEdge(START, 'structure')
+  .addEdge('structure', 'discover')
+  .addConditionalEdges('discover', shouldContinue, { ... });
+```
+
+**Human-in-the-Loop Pattern**: Use `NodeInterrupt` for review gates:
+
+```typescript
+// In verify.node.ts
+if (requiresHumanReview) {
+  throw new NodeInterrupt('Review required', { recommendations });
+}
+```
+
+**Agent Conventions**:
+
+- **Graph registration**: Register all graphs in `GraphRegistryService`
+- **State persistence**: Use checkpointing for long-running graphs
+- **Prompt templates**: Keep in `src/modules/agents/prompts/` or inline with clear documentation
+- **Error handling**: Wrap LLM calls in try/catch, emit structured errors
+- **Testing**: Mock LLM responses via `LlmService` injection, test state transitions
+
+**Reconciliation Agent Pipeline**:
+
+```text
+structure → discover → context → infer_atoms → synthesize_molecules → verify → [human review] → persist
+```
+
+**Reconciliation Invariants**:
+
+- **INV-R001**: No new atoms from already-linked tests
+- **INV-R002**: Delta closure (stop when no new unlinked tests)
+- **INV-R003**: Quality gate (score ≥ 80 for acceptance)
+- **INV-R004**: Molecules are lenses (never authoritative)
 
 ### MCP (Model Context Protocol) Integration
 
@@ -1017,11 +1224,23 @@ This project is designed to work seamlessly with AI assistants. When implementin
 
 ## Additional Resources
 
+**Pact Documentation** (in `/docs`):
+
+- [index.md](docs/index.md) - System overview, architecture, current status
+- [schema.md](docs/schema.md) - Database schema (21 tables across 5 categories)
+- [ui.md](docs/ui.md) - UI architecture, state management, component patterns
+- [ux.md](docs/ux.md) - UX principles, mental models, interaction flows
+- [analysis-git-for-intent.md](docs/analysis-git-for-intent.md) - Conceptual framework: Pact as "Git for Intent"
+
+**External Documentation**:
+
 - **NestJS Documentation**: <https://docs.nestjs.com>
 - **TypeORM Documentation**: <https://typeorm.io>
-- **LangChain Documentation**: <https://js.langchain.com>
-- **Testing with Jest**: <https://jestjs.io/docs/getting-started>
+- **LangGraph Documentation**: <https://langchain-ai.github.io/langgraphjs/>
+- **Next.js Documentation**: <https://nextjs.org/docs>
+- **React Query Documentation**: <https://tanstack.com/query/latest>
+- **Testing with Vitest**: <https://vitest.dev>
 
 ---
 
-**Last Updated**: 2026-01-12
+**Last Updated**: 2026-02-02

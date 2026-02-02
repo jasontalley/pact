@@ -10,10 +10,11 @@
  * - Session resumption for failure recovery
  */
 
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { CompiledStateGraph } from '@langchain/langgraph';
 import { LLMService } from '../../../common/llm/llm.service';
 import { ToolRegistryService } from '../tools/tool-registry.service';
+import { ReconciliationRepository } from '../repositories/reconciliation.repository';
 
 import { NodeConfig } from './nodes/types';
 
@@ -39,6 +40,12 @@ export interface InvokeOptions {
   threadId?: string;
   /** Additional configurable options */
   configurable?: Record<string, unknown>;
+  /** Run name for LangSmith tracing (defaults to graph name) */
+  runName?: string;
+  /** Tags for LangSmith tracing */
+  tags?: string[];
+  /** Metadata for LangSmith tracing */
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -55,6 +62,7 @@ export class GraphRegistryService implements OnModuleInit {
   constructor(
     private readonly llmService: LLMService,
     private readonly toolRegistry: ToolRegistryService,
+    @Optional() private readonly reconciliationRepository?: ReconciliationRepository,
   ) {
     this.nodeConfig = {
       llmService: this.llmService,
@@ -95,9 +103,20 @@ export class GraphRegistryService implements OnModuleInit {
     const coverageGraph = createCoverageFastGraph(this.nodeConfig) as any;
     this.registerGraph(COVERAGE_FAST_GRAPH_NAME, coverageGraph, COVERAGE_FAST_GRAPH_CONFIG);
 
-    // Register reconciliation graph
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const reconciliationGraph = createReconciliationGraph(this.nodeConfig) as any;
+    // Register reconciliation graph with repository for database persistence
+
+    const reconciliationGraph = createReconciliationGraph(this.nodeConfig, {
+      nodeOptions: {
+        interimPersist: {
+          repository: this.reconciliationRepository,
+          persistToDatabase: !!this.reconciliationRepository,
+        },
+        persist: {
+          repository: this.reconciliationRepository,
+          persistToDatabase: !!this.reconciliationRepository,
+        },
+      },
+    }) as any;
     this.registerGraph(RECONCILIATION_GRAPH_NAME, reconciliationGraph, {
       description: RECONCILIATION_GRAPH_CONFIG.description,
       stateType: RECONCILIATION_GRAPH_CONFIG.stateType,
@@ -194,16 +213,27 @@ export class GraphRegistryService implements OnModuleInit {
       throw new Error(`Graph '${name}' not found in registry`);
     }
 
-    const config = options?.threadId
-      ? {
-          configurable: {
-            thread_id: options.threadId,
-            ...options.configurable,
-          },
-        }
-      : options?.configurable
-        ? { configurable: options.configurable }
-        : undefined;
+    // Build config with LangSmith tracing options
+    const config: Record<string, unknown> = {
+      // Use provided runName or default to graph name for easy identification in LangSmith
+      runName: options?.runName || `graph:${name}`,
+      // Add graph name as a tag for filtering in LangSmith
+      tags: ['langgraph', name, ...(options?.tags || [])],
+      // Include metadata about the graph
+      metadata: {
+        graphName: name,
+        graphPattern: this.configs.get(name)?.pattern,
+        ...options?.metadata,
+      },
+    };
+
+    // Add configurable options (thread_id, etc.)
+    if (options?.threadId || options?.configurable) {
+      config.configurable = {
+        ...(options?.threadId ? { thread_id: options.threadId } : {}),
+        ...options?.configurable,
+      };
+    }
 
     this.logger.debug(
       `Invoking graph '${name}'${options?.threadId ? ` with thread ${options.threadId}` : ''}`,
@@ -240,7 +270,18 @@ export class GraphRegistryService implements OnModuleInit {
       throw new Error(`Graph '${name}' not found in registry`);
     }
 
-    const config = { configurable: { thread_id: threadId } };
+    // Build config with LangSmith tracing options
+    const config: Record<string, unknown> = {
+      runName: `graph:${name}:resume`,
+      tags: ['langgraph', name, 'resume'],
+      metadata: {
+        graphName: name,
+        graphPattern: this.configs.get(name)?.pattern,
+        isResume: true,
+        threadId,
+      },
+      configurable: { thread_id: threadId },
+    };
 
     // Optionally update state before resuming
     if (updateState) {
@@ -270,9 +311,25 @@ export class GraphRegistryService implements OnModuleInit {
       throw new Error(`Graph '${name}' not found in registry`);
     }
 
-    const config = options?.threadId
-      ? { configurable: { thread_id: options.threadId } }
-      : undefined;
+    // Build config with LangSmith tracing options
+    const config: Record<string, unknown> = {
+      runName: options?.runName || `graph:${name}:stream`,
+      tags: ['langgraph', name, 'stream', ...(options?.tags || [])],
+      metadata: {
+        graphName: name,
+        graphPattern: this.configs.get(name)?.pattern,
+        isStreaming: true,
+        ...options?.metadata,
+      },
+    };
+
+    // Add configurable options (thread_id, etc.)
+    if (options?.threadId || options?.configurable) {
+      config.configurable = {
+        ...(options?.threadId ? { thread_id: options.threadId } : {}),
+        ...options?.configurable,
+      };
+    }
 
     for await (const chunk of await graph.stream(input, config)) {
       yield chunk as TOutput;

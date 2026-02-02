@@ -156,14 +156,18 @@ export class ReconciliationService {
   async analyze(dto: ReconciliationDto = {}): Promise<ReconciliationResult> {
     const rootDirectory = dto.rootDirectory || process.cwd();
     const mode = dto.mode || 'full-scan';
+    const runId = `REC-${uuidv4().substring(0, 8)}`;
 
-    this.logger.log(`Starting reconciliation analysis: mode=${mode}, root=${rootDirectory}`);
+    this.logger.log(
+      `Starting reconciliation analysis: mode=${mode}, root=${rootDirectory}, runId=${runId}`,
+    );
 
     // Build input for graph
     const input: ReconciliationInput = {
       rootDirectory,
       reconciliationMode: mode,
       deltaBaseline: dto.deltaBaseline,
+      runId, // Pass service-generated runId to ensure consistency across all nodes
       options: {
         analyzeDocs: dto.options?.analyzeDocs ?? true,
         maxTests: dto.options?.maxTests,
@@ -284,6 +288,7 @@ export class ReconciliationService {
       rootDirectory,
       reconciliationMode: mode,
       deltaBaseline: dto.deltaBaseline,
+      runId, // Pass service-generated runId to ensure consistency across all nodes
       options: {
         analyzeDocs: dto.options?.analyzeDocs ?? true,
         maxTests: dto.options?.maxTests,

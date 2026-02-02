@@ -1,7 +1,7 @@
 # Pact Database Schema Documentation
 
-**Version**: 3.0
-**Last Updated**: 2026-01-27
+**Version**: 4.0
+**Last Updated**: 2026-02-02
 **Database**: PostgreSQL 16
 **ORM**: TypeORM
 
@@ -11,31 +11,35 @@
 
 1. [Overview](#overview)
 2. [Core Tables](#core-tables)
-3. [LLM Tracking Tables](#llm-tracking-tables)
-4. [Relationships](#relationships)
-5. [Indexes](#indexes)
-6. [Views](#views)
-7. [Constraints](#constraints)
-8. [Data Types and Conventions](#data-types-and-conventions)
-9. [Entity Mappings](#entity-mappings)
+3. [Phase 3 Tables](#phase-3-tables-commitment-boundary)
+4. [Reconciliation Tables](#reconciliation-tables)
+5. [LLM Tracking Tables](#llm-tracking-tables)
+6. [Relationships](#relationships)
+7. [Indexes](#indexes)
+8. [Views](#views)
+9. [Constraints](#constraints)
+10. [Data Types and Conventions](#data-types-and-conventions)
+11. [Entity Mappings](#entity-mappings)
 
 ---
 
 ## Overview
 
-The Pact database schema consists of **15 tables** organized into three categories:
+The Pact database schema consists of **21 tables** organized into five categories:
 
 - **Core Tables (9)**: Intent management, validation, evidence, templates, and system tracking
 - **Phase 3 Tables (4)**: Projects, invariants, commitments, and commitment-atom associations
+- **Reconciliation Tables (4)**: Reconciliation runs, atom/molecule recommendations, test records
 - **LLM Tracking Tables (2)**: Configuration and usage tracking for AI agents
+- **Admin Configuration Tables (2)**: System configuration and audit logging
 
 ### Schema Statistics
 
-- **Total Tables**: 11
-- **Total Indexes**: 17+ (including composite and partial indexes)
+- **Total Tables**: 21
+- **Total Indexes**: 25+ (including composite and partial indexes)
 - **Total Views**: 2 (cost aggregation views)
-- **Foreign Key Relationships**: 9
-- **JSONB Columns**: 11 (for flexible metadata storage)
+- **Foreign Key Relationships**: 15
+- **JSONB Columns**: 20+ (for flexible metadata storage)
 
 ### Design Principles
 
@@ -160,24 +164,49 @@ VALUES (
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PRIMARY KEY, DEFAULT `uuid_generate_v4()` | Internal unique identifier |
-| `molecule_id` | VARCHAR(20) | UNIQUE, NOT NULL | Human-readable ID (e.g., "MOL-001") |
+| `molecule_id` | VARCHAR(20) | UNIQUE, NOT NULL | Human-readable ID (e.g., "M-001") |
 | `name` | VARCHAR(255) | NOT NULL | Molecule name |
-| `description` | TEXT | NULLABLE | Human-readable description |
+| `description` | TEXT | NULLABLE | Human-readable description (markdown-enabled) |
+| `lens_type` | VARCHAR(50) | NOT NULL | Lens type: user_story, feature, journey, epic, release, capability, custom |
+| `lens_label` | VARCHAR(100) | NULLABLE | Custom label when lens_type is 'custom' |
+| `parent_molecule_id` | UUID | NULLABLE, FK → `molecules(id)` | Parent for hierarchy (max depth 10) |
+| `owner_id` | VARCHAR(255) | NOT NULL | Creator/owner identifier |
+| `tags` | JSONB | DEFAULT '[]' | User-defined tags for filtering |
 | `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Creation timestamp |
 | `updated_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Last update timestamp |
-| `created_by` | VARCHAR(255) | NULLABLE | Creator identifier |
 | `metadata` | JSONB | DEFAULT '{}' | Extensible metadata |
 
 **Indexes**:
+
 - `idx_molecules_molecule_id` on `molecule_id` (unique)
+- `idx_molecules_lens_type` on `lens_type`
+- `idx_molecules_owner_id` on `owner_id`
+- `idx_molecules_parent_molecule_id` on `parent_molecule_id`
 
 **Relationships**:
+
 - Many-to-many with `atoms` via `molecule_atoms` join table
+- Self-referential hierarchy via `parent_molecule_id`
+
+**Lens Types**:
+
+| Type | Label | Description |
+|------|-------|-------------|
+| `user_story` | User Story | A specific user need written as "As a [user], I want..." |
+| `feature` | Feature | A distinct piece of functionality |
+| `journey` | User Journey | A sequence of interactions to accomplish a goal |
+| `epic` | Epic | A large body of work broken into smaller pieces |
+| `release` | Release | Features planned for a specific version |
+| `capability` | Capability | A high-level ability the system provides |
+| `custom` | Custom | User-defined grouping with custom label |
 
 **Business Rules**:
-- `molecule_id` must match pattern `MOL-\d{3}` (enforced in application)
+
+- `molecule_id` must match pattern `M-\d{3}` (enforced in application)
 - Molecules are mutable (unlike atoms)
 - Molecules are non-authoritative (atoms are truth)
+- Hierarchy max depth is 10 levels (enforced by database trigger)
+- Deleting a molecule never deletes atoms (UX invariant)
 
 **Example**:
 ```sql
@@ -783,9 +812,153 @@ VALUES (
 
 ---
 
+## Reconciliation Tables
+
+These tables support the Reconciliation Agent (Phase 5), which analyzes existing codebases to infer atoms from orphan tests.
+
+### 13. `reconciliation_runs`
+
+**Purpose**: Tracks each execution of the reconciliation agent, including configuration, status, and results summary.
+
+**TypeORM Entity**: `ReconciliationRun` (`src/modules/agents/entities/reconciliation-run.entity.ts`)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PRIMARY KEY, DEFAULT `uuid_generate_v4()` | Internal unique identifier |
+| `run_id` | VARCHAR(20) | UNIQUE, NOT NULL | Human-readable ID (e.g., "REC-001") |
+| `root_directory` | TEXT | NOT NULL | Root directory that was analyzed |
+| `reconciliation_mode` | VARCHAR(20) | NOT NULL | Mode: full-scan, delta |
+| `delta_baseline_run_id` | UUID | NULLABLE | For delta mode: baseline run reference |
+| `delta_baseline_commit_hash` | VARCHAR(64) | NULLABLE | For delta mode: baseline git commit |
+| `current_commit_hash` | VARCHAR(64) | NULLABLE | Current HEAD commit hash |
+| `status` | VARCHAR(20) | DEFAULT 'running' | Status: running, completed, failed, pending_review |
+| `options` | JSONB | DEFAULT '{}' | Run configuration options |
+| `summary` | JSONB | NULLABLE | Results summary (counts, duration, etc.) |
+| `patch_ops` | JSONB | DEFAULT '[]' | Reconciliation patch operations |
+| `project_id` | UUID | NULLABLE, FK → `projects(id)` | Optional project association |
+| `error_message` | TEXT | NULLABLE | Error message if run failed |
+| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Run start timestamp |
+| `completed_at` | TIMESTAMP | NULLABLE | Run completion timestamp |
+
+**JSONB Schema - `summary`**:
+
+```json
+{
+  "totalOrphanTests": 42,
+  "inferredAtomsCount": 15,
+  "inferredMoleculesCount": 3,
+  "qualityPassCount": 12,
+  "qualityFailCount": 3,
+  "changedAtomLinkedTestCount": 5,
+  "duration": 45000,
+  "llmCalls": 20
+}
+```
+
+---
+
+### 14. `atom_recommendations`
+
+**Purpose**: Stores inferred atoms from reconciliation runs, pending human review and approval.
+
+**TypeORM Entity**: `AtomRecommendation` (`src/modules/agents/entities/atom-recommendation.entity.ts`)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PRIMARY KEY, DEFAULT `uuid_generate_v4()` | Internal unique identifier |
+| `run_id` | UUID | NOT NULL, FK → `reconciliation_runs(id)` | Run that created this recommendation |
+| `temp_id` | VARCHAR(100) | NOT NULL | Temporary ID for cross-references during run |
+| `description` | TEXT | NOT NULL | Behavioral intent description |
+| `category` | VARCHAR(50) | NOT NULL | Category: functional, security, performance, etc. |
+| `confidence` | DECIMAL(5,2) | NOT NULL | LLM confidence score (0-100) |
+| `reasoning` | TEXT | NOT NULL | LLM reasoning for the inference |
+| `source_test_file_path` | TEXT | NOT NULL | Source test file path |
+| `source_test_name` | TEXT | NOT NULL | Source test name |
+| `source_test_line_number` | INTEGER | NOT NULL | Source test line number |
+| `observable_outcomes` | JSONB | DEFAULT '[]' | Observable outcomes for verification |
+| `related_docs` | JSONB | DEFAULT '[]' | Related documentation references |
+| `ambiguity_reasons` | JSONB | NULLABLE | Reasons for any ambiguity |
+| `quality_score` | DECIMAL(5,2) | NULLABLE | Quality score from validation |
+| `status` | VARCHAR(20) | DEFAULT 'pending' | Status: pending, accepted, rejected |
+| `rejection_reason` | TEXT | NULLABLE | Reason for rejection |
+| `atom_id` | UUID | NULLABLE, FK → `atoms(id)` | Created atom (if accepted) |
+| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Creation timestamp |
+| `accepted_at` | TIMESTAMP | NULLABLE | Acceptance timestamp |
+| `rejected_at` | TIMESTAMP | NULLABLE | Rejection timestamp |
+
+---
+
+### 15. `test_records`
+
+**Purpose**: Tracks each test analyzed during reconciliation. Critical for INV-R002 (Delta Closure Stopping Rule).
+
+**TypeORM Entity**: `TestRecord` (`src/modules/agents/entities/test-record.entity.ts`)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PRIMARY KEY, DEFAULT `uuid_generate_v4()` | Internal unique identifier |
+| `run_id` | UUID | NOT NULL, FK → `reconciliation_runs(id)` | Run that analyzed this test |
+| `file_path` | TEXT | NOT NULL | Test file path (relative to repo root) |
+| `test_name` | TEXT | NOT NULL | Test name from describe/it blocks |
+| `line_number` | INTEGER | NOT NULL | Line number where test starts |
+| `test_code_hash` | VARCHAR(64) | NULLABLE | Hash for change detection |
+| `status` | VARCHAR(20) | DEFAULT 'pending' | Status: pending, accepted, rejected, skipped |
+| `atom_recommendation_id` | UUID | NULLABLE, FK → `atom_recommendations(id)` | Linked recommendation |
+| `rejection_reason` | TEXT | NULLABLE | Reason for rejection |
+| `had_atom_annotation` | BOOLEAN | DEFAULT false | Whether test had @atom annotation |
+| `linked_atom_id` | VARCHAR(100) | NULLABLE | Atom ID from @atom annotation |
+| `is_delta_change` | BOOLEAN | DEFAULT false | Whether part of delta change |
+| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Creation timestamp |
+| `resolved_at` | TIMESTAMP | NULLABLE | Resolution timestamp |
+
+**Indexes**:
+
+- Composite index on (`file_path`, `test_name`)
+
+**Business Rules**:
+
+- Tests with 'accepted' or 'rejected' status are "closed" per INV-R002
+- Closed tests are excluded from future delta reconciliation
+- Prevents oscillation and duplicate suggestions
+
+---
+
+### 16. `molecule_recommendations`
+
+**Purpose**: Stores inferred molecule groupings from reconciliation runs.
+
+**TypeORM Entity**: `MoleculeRecommendation` (`src/modules/agents/entities/molecule-recommendation.entity.ts`)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PRIMARY KEY, DEFAULT `uuid_generate_v4()` | Internal unique identifier |
+| `run_id` | UUID | NOT NULL, FK → `reconciliation_runs(id)` | Run that created this recommendation |
+| `temp_id` | VARCHAR(100) | NOT NULL | Temporary ID for cross-references |
+| `name` | VARCHAR(255) | NOT NULL | Molecule name |
+| `description` | TEXT | NULLABLE | Molecule description |
+| `atom_recommendation_temp_ids` | JSONB | DEFAULT '[]' | Temp IDs of atom recommendations |
+| `atom_recommendation_ids` | JSONB | DEFAULT '[]' | UUIDs after lookup |
+| `atom_ids` | JSONB | NULLABLE | Actual atom UUIDs after apply |
+| `confidence` | DECIMAL(5,2) | NOT NULL | LLM confidence score (0-100) |
+| `reasoning` | TEXT | NOT NULL | LLM reasoning for grouping |
+| `status` | VARCHAR(20) | DEFAULT 'pending' | Status: pending, accepted, rejected |
+| `rejection_reason` | TEXT | NULLABLE | Reason for rejection |
+| `molecule_id` | UUID | NULLABLE, FK → `molecules(id)` | Created molecule (if accepted) |
+| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Creation timestamp |
+| `accepted_at` | TIMESTAMP | NULLABLE | Acceptance timestamp |
+| `rejected_at` | TIMESTAMP | NULLABLE | Rejection timestamp |
+
+**Business Rules (INV-R004)**:
+
+- Molecules are views, not truth
+- Molecule failures degrade to "unnamed cluster", NOT rejection
+- Molecule confidence does NOT affect atom confidence
+
+---
+
 ## LLM Tracking Tables
 
-### 13. `llm_configurations`
+### 17. `llm_configurations`
 
 **Purpose**: Stores user-configurable LLM service settings. Enables UI-based management of LLM behavior, cost control, and reliability features.
 
@@ -908,7 +1081,7 @@ The schema includes a default configuration inserted on initialization:
 
 ---
 
-### 14. `llm_usage_tracking`
+### 18. `llm_usage_tracking`
 
 **Purpose**: Tracks all LLM API calls for cost monitoring, performance analysis, and budget enforcement.
 
@@ -1168,7 +1341,7 @@ All tables have corresponding TypeORM entities in `src/modules/{module}/{entity}
 |-------|--------------|--------|
 | `atoms` | `Atom` | `atoms` |
 | `molecules` | `Molecule` | `molecules` |
-| `molecule_atoms` | (Join table, no entity) | `molecules` |
+| `molecule_atoms` | `MoleculeAtom` | `molecules` |
 | `validators` | `Validator` | `validators` |
 | `validator_templates` | `ValidatorTemplate` | `validators` |
 | `evidence` | `Evidence` | `evidence` |
@@ -1179,6 +1352,10 @@ All tables have corresponding TypeORM entities in `src/modules/{module}/{entity}
 | `invariant_configs` | `InvariantConfig` | `invariants` |
 | `commitments` | `CommitmentArtifact` | `commitments` |
 | `commitment_atoms` | (Join table, no entity) | `commitments` |
+| `reconciliation_runs` | `ReconciliationRun` | `agents/entities` |
+| `atom_recommendations` | `AtomRecommendation` | `agents/entities` |
+| `test_records` | `TestRecord` | `agents/entities` |
+| `molecule_recommendations` | `MoleculeRecommendation` | `agents/entities` |
 | `llm_configurations` | `LLMConfiguration` | `llm` |
 | `llm_usage_tracking` | `LLMUsageTracking` | `llm` |
 
@@ -1345,6 +1522,6 @@ Breaking changes require:
 
 ---
 
-**Last Updated**: 2026-01-27
-**Schema Version**: 3.0 (Phase 3: Commitment Boundary & Invariants)
+**Last Updated**: 2026-02-02
+**Schema Version**: 4.0 (Phase 5: Reconciliation Agent)
 **PostgreSQL Version**: 16

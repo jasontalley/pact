@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout';
-import { useRunDetails, useRecommendations, useApplyRecommendations, useUpdateAtomRecommendation } from '@/hooks/reconciliation';
+import { useRunDetails, useRecommendations, useApplyRecommendations } from '@/hooks/reconciliation';
 import { AtomRecommendationCard, ApplyRecommendationsDialog } from '@/components/reconciliation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -125,20 +125,13 @@ export default function RunDetailsPage() {
   const { data: runDetails, isLoading: detailsLoading, error: detailsError } = useRunDetails(runId);
   const { data: recommendations, isLoading: recsLoading } = useRecommendations(runId);
   const applyMutation = useApplyRecommendations();
-  const updateMutation = useUpdateAtomRecommendation();
 
   const isLoading = detailsLoading || recsLoading;
 
-  // Handle individual atom decision
-  const handleAtomDecision = useCallback((atomId: string, decision: 'approve' | 'reject', reason?: string) => {
+  // Handle individual atom decision (local state only, persisted on Apply)
+  const handleAtomDecision = useCallback((atomId: string, decision: 'approve' | 'reject', _reason?: string) => {
     setDecisions(prev => new Map(prev).set(atomId, decision));
-    // Persist to server
-    updateMutation.mutate({
-      runId,
-      atomId,
-      data: { status: decision === 'approve' ? 'approved' : 'rejected', rejectionReason: reason },
-    });
-  }, [runId, updateMutation]);
+  }, []);
 
   // Bulk approve all passing atoms
   const handleApproveAllPassing = useCallback(() => {
@@ -146,15 +139,10 @@ export default function RunDetailsPage() {
     const passingAtoms = recommendations.atoms.filter(a => (a.qualityScore ?? 0) >= 60);
     const newDecisions = new Map(decisions);
     passingAtoms.forEach(atom => {
-      newDecisions.set(atom.id, 'approve');
-      updateMutation.mutate({
-        runId,
-        atomId: atom.id,
-        data: { status: 'approved' },
-      });
+      newDecisions.set(atom.tempId, 'approve');
     });
     setDecisions(newDecisions);
-  }, [recommendations, decisions, runId, updateMutation]);
+  }, [recommendations, decisions]);
 
   // Bulk reject all failing atoms
   const handleRejectAllFailing = useCallback(() => {
@@ -162,21 +150,16 @@ export default function RunDetailsPage() {
     const failingAtoms = recommendations.atoms.filter(a => (a.qualityScore ?? 0) < 60);
     const newDecisions = new Map(decisions);
     failingAtoms.forEach(atom => {
-      newDecisions.set(atom.id, 'reject');
-      updateMutation.mutate({
-        runId,
-        atomId: atom.id,
-        data: { status: 'rejected', rejectionReason: 'Below quality threshold' },
-      });
+      newDecisions.set(atom.tempId, 'reject');
     });
     setDecisions(newDecisions);
-  }, [recommendations, decisions, runId, updateMutation]);
+  }, [recommendations, decisions]);
 
   // Calculate decision summary
   const decisionSummary = recommendations ? {
-    approved: recommendations.atoms.filter(a => decisions.get(a.id) === 'approve' || a.status === 'approved').length,
-    rejected: recommendations.atoms.filter(a => decisions.get(a.id) === 'reject' || a.status === 'rejected').length,
-    pending: recommendations.atoms.filter(a => !decisions.has(a.id) && a.status === 'pending').length,
+    approved: recommendations.atoms.filter(a => decisions.get(a.tempId) === 'approve' || a.status === 'approved').length,
+    rejected: recommendations.atoms.filter(a => decisions.get(a.tempId) === 'reject' || a.status === 'rejected').length,
+    pending: recommendations.atoms.filter(a => !decisions.has(a.tempId) && a.status === 'pending').length,
   } : { approved: 0, rejected: 0, pending: 0 };
 
   if (detailsError) {
@@ -333,7 +316,7 @@ export default function RunDetailsPage() {
                               variant="outline"
                               size="sm"
                               onClick={handleApproveAllPassing}
-                              disabled={updateMutation.isPending}
+                              disabled={applyMutation.isPending}
                             >
                               <CheckCheck className="h-4 w-4 mr-1" />
                               Approve All Passing
@@ -342,7 +325,7 @@ export default function RunDetailsPage() {
                               variant="outline"
                               size="sm"
                               onClick={handleRejectAllFailing}
-                              disabled={updateMutation.isPending}
+                              disabled={applyMutation.isPending}
                             >
                               <XCircle className="h-4 w-4 mr-1" />
                               Reject All Failing
@@ -351,12 +334,12 @@ export default function RunDetailsPage() {
                           <ScrollArea className="h-[500px] pr-4">
                             {recommendations.atoms.map((atom) => (
                               <AtomRecommendationCard
-                                key={atom.id}
+                                key={atom.tempId}
                                 atom={atom}
-                                decision={decisions.get(atom.id)}
-                                onApprove={() => handleAtomDecision(atom.id, 'approve')}
-                                onReject={(reason) => handleAtomDecision(atom.id, 'reject', reason)}
-                                disabled={updateMutation.isPending}
+                                decision={decisions.get(atom.tempId)}
+                                onApprove={() => handleAtomDecision(atom.tempId, 'approve')}
+                                onReject={(reason) => handleAtomDecision(atom.tempId, 'reject', reason)}
+                                disabled={applyMutation.isPending}
                               />
                             ))}
                           </ScrollArea>
@@ -441,7 +424,8 @@ export default function RunDetailsPage() {
           onOpenChange={setShowApplyDialog}
           atoms={recommendations.atoms}
           molecules={recommendations.molecules}
-          decisions={decisions}
+          atomDecisions={decisions}
+          moleculeDecisions={new Map()}
           onApply={(options) => {
             applyMutation.mutate({
               runId,

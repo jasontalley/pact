@@ -274,6 +274,27 @@ Respond in JSON format:
 
       const parsed = this.parseAllDimensionsResponse(response.content);
 
+      // Check if parsing returned valid dimensions - if not, fall back to heuristics
+      const hasValidDimensions =
+        parsed.observable !== undefined ||
+        parsed.falsifiable !== undefined ||
+        parsed.implementationAgnostic !== undefined ||
+        parsed.unambiguousLanguage !== undefined ||
+        parsed.clearSuccessCriteria !== undefined;
+
+      if (!hasValidDimensions) {
+        this.logger.warn(
+          `LLM response missing all dimensions for atom ${atom.atomId}, falling back to heuristics`,
+        );
+        return {
+          observable: this.heuristicObservable(atom),
+          falsifiable: this.heuristicFalsifiable(atom),
+          implementationAgnostic: this.heuristicImplementationAgnostic(atom),
+          unambiguousLanguage: this.heuristicUnambiguousLanguage(atom),
+          clearSuccessCriteria: this.heuristicClearSuccessCriteria(atom),
+        };
+      }
+
       return {
         observable: {
           name: 'Observable',
@@ -701,7 +722,9 @@ Respond in JSON format:
 
       return JSON.parse(cleaned);
     } catch (error) {
-      this.logger.warn(`Failed to parse LLM response as JSON: ${error}`);
+      this.logger.warn(
+        `Failed to parse LLM response as JSON: ${error}. Response preview: ${content.substring(0, 200)}...`,
+      );
       return {};
     }
   }

@@ -21,7 +21,14 @@
  * @see docs/architecture/reconcilation-agent-architecture-proposal.md
  */
 
-import { StateGraph, END, START, MemorySaver, BaseCheckpointSaver } from '@langchain/langgraph';
+import {
+  StateGraph,
+  END,
+  START,
+  MemorySaver,
+  BaseCheckpointSaver,
+  isGraphInterrupt,
+} from '@langchain/langgraph';
 import { NodeConfig } from '../nodes/types';
 import {
   ReconciliationGraphState,
@@ -112,6 +119,13 @@ function wrapWithErrorHandling(
     try {
       return await nodeFunc(state);
     } catch (error) {
+      // NodeInterrupt is a special LangGraph signal for human-in-the-loop
+      // It must be re-thrown to properly pause graph execution
+      if (isGraphInterrupt(error)) {
+        config.logger?.log(`[${nodeName}] NodeInterrupt thrown, pausing for human review`);
+        throw error;
+      }
+
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
 

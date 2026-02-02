@@ -1,184 +1,227 @@
-# Unified Tool System
+# Tools Module
+
+Tool definitions and registry for agent function calling.
 
 ## Overview
 
-The tool system provides a centralized registry for all agent tools, allowing any agent to access both custom Pact tools and standard tools (like file system operations from LangChain).
+Tools are discrete functions that agents can invoke to interact with the codebase, database, and external systems. This module provides:
 
-## Architecture
+1. **Tool Registry** - Central registration and lookup of tools
+2. **Tool Definitions** - Zod schemas defining tool inputs/outputs
+3. **Tool Executors** - Implementation of tool logic
+
+## Directory Structure
 
 ```
-ToolRegistryService (Singleton)
-  ├─ Registers all tools
-  ├─ Manages tool definitions
-  └─ Executes tools via executors
-
-AtomToolsService
-  └─ Executes atom management operations
-
-File System Tools (Built-in)
-  ├─ read_file
-  ├─ list_directory
-  └─ grep
+tools/
+├── tool-registry.service.ts       # Central tool lookup and execution
+├── atom-tools.service.ts          # Atom CRUD tools
+├── atom-tools.definitions.ts      # Atom tool schemas
+├── reconciliation-tools.service.ts # Reconciliation-specific tools
+├── reconciliation-tools.definitions.ts # Reconciliation tool schemas
+└── index.ts                       # Public exports
 ```
 
-## Components
+## Tool Registry
 
-### ToolRegistryService
-
-Central registry that:
-- Manages all tool definitions (`ToolDefinition[]`)
-- Routes tool execution to appropriate executors
-- Provides tool discovery and filtering
-- Automatically includes file system tools
-
-### AtomToolsService
-
-Executes all atom-related operations:
-- `analyze_intent` - Analyze raw intent
-- `count_atoms` - Get atom count
-- `get_statistics` - Get atom statistics
-- `search_atoms` - Search atoms
-- `list_atoms` - List atoms with pagination
-- `get_atom` - Get atom by ID
-- `refine_atom` - Get refinement suggestions
-- `create_atom` - Create new atom
-- `update_atom` - Update draft atom
-- `commit_atom` - Commit atom
-- `delete_atom` - Delete draft atom
-- `get_popular_tags` - Get popular tags
-
-### File System Tools
-
-Built-in tools for codebase exploration:
-- `read_file` - Read file contents (with optional line range)
-- `list_directory` - List directory contents
-- `grep` - Search for patterns in files
-
-## Usage
-
-### In an Agent Service
+The `ToolRegistryService` provides centralized tool management:
 
 ```typescript
-@Injectable()
-export class MyAgentService {
-  constructor(
-    private readonly toolRegistry: ToolRegistryService,
-  ) {}
+// Registration (at module init)
+toolRegistry.registerToolsFromService('atom-tools', atomToolsService);
+toolRegistry.registerToolsFromService('reconciliation-tools', reconciliationToolsService);
 
-  async doSomething() {
-    // Get all available tools
-    const tools = this.toolRegistry.getAllTools();
-    
-    // Get tools by category
-    const atomTools = this.toolRegistry.getToolsByCategory('atom');
-    const fileTools = this.toolRegistry.getToolsByCategory('filesystem');
-    
-    // Execute a tool
-    const result = await this.toolRegistry.executeTool('read_file', {
-      file_path: 'src/modules/agents/chat-agent.service.ts',
-      start_line: 1,
-      end_line: 50,
-    });
-  }
+// Lookup
+if (toolRegistry.hasTool('get_atom')) {
+  const result = await toolRegistry.executeTool('get_atom', { atomId: 'IA-001' });
 }
+
+// Get all tools for LLM
+const tools = toolRegistry.getToolsForLLM();
 ```
 
-### Registering Custom Tools
+## Available Tools
+
+### Atom Tools
+
+| Tool | Description |
+|------|-------------|
+| `get_atom` | Retrieve atom by ID |
+| `search_atoms` | Search atoms with filters |
+| `create_atom` | Create new draft atom |
+| `update_atom` | Update draft atom |
+| `commit_atom` | Commit atom (requires quality score ≥80) |
+
+### Reconciliation Tools
+
+| Tool | Description |
+|------|-------------|
+| `get_repo_structure` | List files with optional dependency analysis |
+| `discover_orphans_fullscan` | Find all tests without @atom annotations |
+| `discover_orphans_delta` | Find orphans in changed files only |
+| `get_test_analysis` | Parse and analyze test code |
+| `search_docs_by_concepts` | Semantic search in documentation |
+| `infer_atom_from_test` | LLM inference of atom from test |
+| `cluster_atoms_for_molecules` | Group atoms into molecules |
+| `validate_atom_quality` | Quality score with 5 dimensions |
+
+## Tool Definition Pattern
+
+Tools are defined with Zod schemas for type safety:
 
 ```typescript
-// In agents.module.ts onModuleInit
-onModuleInit() {
-  // Register custom tool
-  this.toolRegistry.registerTool(
-    {
-      name: 'my_custom_tool',
-      description: 'Does something custom',
-      parameters: {
-        type: 'object',
-        properties: {
-          param1: { type: 'string', description: 'Parameter 1' },
-        },
-        required: ['param1'],
-      },
-    },
-    {
-      execute: async (name, args) => {
-        // Tool implementation
-        return { result: 'success' };
-      },
-    },
-  );
-}
+// reconciliation-tools.definitions.ts
+import { z } from 'zod';
+
+export const GetRepoStructureSchema = z.object({
+  root_directory: z.string().describe('Root directory to scan'),
+  include_dependencies: z.boolean().optional().describe('Include dependency analysis'),
+  max_files: z.number().optional().describe('Maximum files to return'),
+  exclude_patterns: z.array(z.string()).optional().describe('Patterns to exclude'),
+});
+
+export type GetRepoStructureInput = z.infer<typeof GetRepoStructureSchema>;
 ```
 
-## Security
+## Creating New Tools
 
-### File System Tools
-
-- All file paths are validated to ensure they're within the workspace root
-- Path traversal attacks are prevented
-- Hidden files are excluded by default (can be enabled with `include_hidden: true`)
-- Large files are handled with line range support
-
-### Tool Execution
-
-- Tools are executed through the registry, providing a single point of control
-- All tool executions are logged
-- Errors are caught and returned as structured responses
-
-## Adding New Tools
-
-1. **Define the tool** in a definitions file (e.g., `atom-tools.definitions.ts`)
-2. **Create an executor** that implements `ToolExecutor` interface
-3. **Register the tool** in `agents.module.ts` `onModuleInit()`
-
-Example:
+### 1. Define Schema
 
 ```typescript
-// 1. Define tool
-export const MY_TOOLS: ToolDefinition[] = [
-  {
-    name: 'my_tool',
-    description: 'My tool description',
-    parameters: { /* ... */ },
-  },
-];
+// my-tools.definitions.ts
+import { z } from 'zod';
 
-// 2. Create executor
+export const MyToolSchema = z.object({
+  input: z.string().describe('Input parameter'),
+  option: z.boolean().optional().describe('Optional flag'),
+});
+
+export type MyToolInput = z.infer<typeof MyToolSchema>;
+```
+
+### 2. Implement Executor
+
+```typescript
+// my-tools.service.ts
+import { Injectable } from '@nestjs/common';
+import { ToolExecutor } from './tool-registry.service';
+
 @Injectable()
 export class MyToolsService implements ToolExecutor {
   async execute(name: string, args: Record<string, unknown>): Promise<unknown> {
     switch (name) {
       case 'my_tool':
-        return this.doSomething(args);
+        return this.myTool(args);
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
   }
-}
 
-// 3. Register in module
-onModuleInit() {
-  for (const toolDef of MY_TOOLS) {
-    this.toolRegistry.registerTool(toolDef, this.myToolsService);
+  private async myTool(args: Record<string, unknown>): Promise<MyResult> {
+    const input = args.input as string;
+    // Implementation
+    return { result: 'done' };
   }
 }
 ```
 
-## Benefits
+### 3. Register Tools
 
-1. **Unified Interface**: All agents use the same tool system
-2. **Reusability**: Tools can be shared across agents
-3. **Extensibility**: Easy to add new tools
-4. **Type Safety**: TypeScript ensures tool definitions match executors
-5. **Security**: Centralized validation and execution control
-6. **Standard Tools**: File system tools from LangChain are included automatically
+```typescript
+// tool-registry.service.ts
+async onModuleInit() {
+  // Existing registrations...
+  this.registerToolsFromService('my-tools', this.myToolsService);
+}
+```
 
-## Future Enhancements
+## Tool Execution Flow
 
-- Tool permissions/authorization
-- Tool usage analytics
-- Tool caching for expensive operations
-- Tool composition (tools that call other tools)
-- MCP tool integration
-- More LangChain tools (web search, database, etc.)
+```
+LLM decides to call tool
+    │
+    ▼
+ToolRegistryService.executeTool(name, args)
+    │
+    ├── Validate args against schema
+    │
+    ├── Find registered executor
+    │
+    └── Execute and return result
+    │
+    ▼
+Result returned to LLM
+```
+
+## LLM Integration
+
+Tools are formatted for LLM function calling:
+
+```typescript
+// Get tools as LangChain tool objects
+const tools = toolRegistry.getToolsForLLM();
+
+// Or get raw definitions for manual integration
+const definitions = toolRegistry.getToolDefinitions();
+```
+
+## Error Handling
+
+Tools should throw descriptive errors:
+
+```typescript
+private async getAtom(args: Record<string, unknown>): Promise<Atom> {
+  const atomId = args.atom_id as string;
+  if (!atomId) {
+    throw new Error('atom_id is required');
+  }
+
+  const atom = await this.atomRepository.findOne({ where: { atomId } });
+  if (!atom) {
+    throw new Error(`Atom not found: ${atomId}`);
+  }
+
+  return atom;
+}
+```
+
+Errors are captured and returned to the LLM for retry or user feedback.
+
+## Parameter Parsing
+
+Since LLMs may pass parameters as strings, use parsing helpers:
+
+```typescript
+// reconciliation-tools.service.ts
+private parseNumber(value: unknown, defaultValue: number): number {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = parseInt(value, 10);
+    return isNaN(parsed) ? defaultValue : parsed;
+  }
+  return defaultValue;
+}
+
+private parseBoolean(value: unknown, defaultValue: boolean): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    return value.toLowerCase() === 'true';
+  }
+  return defaultValue;
+}
+```
+
+## Testing
+
+```bash
+# All tool tests
+npm test -- --testPathPattern=tools
+
+# Specific service
+npm test -- --testPathPattern=reconciliation-tools
+```
+
+## See Also
+
+- [Graphs Module](../graphs/README.md) - How graphs use tools
+- [LangChain Tool Documentation](https://js.langchain.com/docs/modules/agents/tools/)

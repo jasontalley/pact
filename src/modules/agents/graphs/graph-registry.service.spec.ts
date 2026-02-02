@@ -276,5 +276,168 @@ describe('GraphRegistryService', () => {
       // After initialization, the chat-exploration graph should be registered
       expect(service.hasGraph('chat-exploration')).toBe(true);
     });
+
+    it('should register reconciliation graph on module init', async () => {
+      await service.onModuleInit();
+
+      // The reconciliation graph should be registered
+      expect(service.hasGraph('reconciliation')).toBe(true);
+    });
+  });
+
+  describe('LangSmith tracing options', () => {
+    it('should include runName in invoke config by default', async () => {
+      const graph = createTestGraph();
+      const invokeSpy = jest.spyOn(graph, 'invoke');
+      service.registerGraph('test-graph', graph, {
+        description: 'Test',
+        stateType: 'TestState',
+        pattern: 'custom',
+      });
+
+      await service.invoke('test-graph', { input: 'hello' });
+
+      // Verify that runName is passed in config
+      expect(invokeSpy).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          runName: 'graph:test-graph',
+        }),
+      );
+    });
+
+    it('should include tags in invoke config', async () => {
+      const graph = createTestGraph();
+      const invokeSpy = jest.spyOn(graph, 'invoke');
+      service.registerGraph('test-graph', graph, {
+        description: 'Test',
+        stateType: 'TestState',
+        pattern: 'custom',
+      });
+
+      await service.invoke('test-graph', { input: 'hello' });
+
+      // Verify that tags include langgraph and graph name
+      expect(invokeSpy).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tags: expect.arrayContaining(['langgraph', 'test-graph']),
+        }),
+      );
+    });
+
+    it('should include metadata with graphName in invoke config', async () => {
+      const graph = createTestGraph();
+      const invokeSpy = jest.spyOn(graph, 'invoke');
+      service.registerGraph('test-graph', graph, {
+        description: 'Test',
+        stateType: 'TestState',
+        pattern: 'react',
+      });
+
+      await service.invoke('test-graph', { input: 'hello' });
+
+      // Verify that metadata includes graph info
+      expect(invokeSpy).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            graphName: 'test-graph',
+            graphPattern: 'react',
+          }),
+        }),
+      );
+    });
+
+    it('should allow custom runName to override default', async () => {
+      const graph = createTestGraph();
+      const invokeSpy = jest.spyOn(graph, 'invoke');
+      service.registerGraph('test-graph', graph, {
+        description: 'Test',
+        stateType: 'TestState',
+        pattern: 'custom',
+      });
+
+      await service.invoke('test-graph', { input: 'hello' }, { runName: 'custom-run-name' });
+
+      expect(invokeSpy).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          runName: 'custom-run-name',
+        }),
+      );
+    });
+
+    it('should merge custom tags with default tags', async () => {
+      const graph = createTestGraph();
+      const invokeSpy = jest.spyOn(graph, 'invoke');
+      service.registerGraph('test-graph', graph, {
+        description: 'Test',
+        stateType: 'TestState',
+        pattern: 'custom',
+      });
+
+      await service.invoke('test-graph', { input: 'hello' }, { tags: ['custom-tag'] });
+
+      expect(invokeSpy).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tags: expect.arrayContaining(['langgraph', 'test-graph', 'custom-tag']),
+        }),
+      );
+    });
+
+    it('should merge custom metadata with default metadata', async () => {
+      const graph = createTestGraph();
+      const invokeSpy = jest.spyOn(graph, 'invoke');
+      service.registerGraph('test-graph', graph, {
+        description: 'Test',
+        stateType: 'TestState',
+        pattern: 'custom',
+      });
+
+      await service.invoke('test-graph', { input: 'hello' }, { metadata: { userId: 'user-123' } });
+
+      expect(invokeSpy).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            graphName: 'test-graph',
+            userId: 'user-123',
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('invoke with thread_id and configurable', () => {
+    it('should combine thread_id with other configurable options', async () => {
+      const graph = createTestGraph();
+      const invokeSpy = jest.spyOn(graph, 'invoke');
+      service.registerGraph('test-graph', graph, {
+        description: 'Test',
+        stateType: 'TestState',
+        pattern: 'custom',
+      });
+
+      await service.invoke(
+        'test-graph',
+        { input: 'hello' },
+        {
+          threadId: 'thread-abc',
+          configurable: { customKey: 'customValue' },
+        },
+      );
+
+      expect(invokeSpy).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          configurable: expect.objectContaining({
+            thread_id: 'thread-abc',
+            customKey: 'customValue',
+          }),
+        }),
+      );
+    });
   });
 });

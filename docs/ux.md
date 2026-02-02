@@ -144,21 +144,28 @@ Prohibited:
 
 ### 4.3 Molecule View (Projection)
 
-Examples:
+Molecules provide **lens types** for viewing atoms through different perspectives:
 
-- Feature view
-- User journey
-- Epic
-- Release
+| Lens Type | Purpose | Example |
+|-----------|---------|---------|
+| `user_story` | Single user behavior | "User can reset password" |
+| `feature` | Cohesive capability | "Authentication system" |
+| `journey` | Multi-step user flow | "Checkout process" |
+| `epic` | Large initiative | "Mobile app launch" |
+| `release` | Version milestone | "v2.0 release scope" |
+| `capability` | System ability | "Real-time sync" |
+| `custom` | User-defined | Any grouping |
 
 Capabilities:
 
-- Filter atoms
-- Group atoms
-- Annotate atoms
+- Filter atoms by any lens
+- Group atoms hierarchically (molecules can have parent molecules)
+- Annotate with tags and custom labels
+- View same atoms through multiple lenses simultaneously
 
-Explicit UX rule:
+Explicit UX rules:
 > Deleting a molecule must never delete atoms.
+> Molecules are lenses, not containers — atoms exist independently.
 
 ---
 
@@ -175,6 +182,29 @@ Used by:
 - Developers
 - CI systems
 - Agents performing audits
+
+---
+
+### 4.5 Reconciliation View
+
+The Reconciliation View surfaces **inferred intent** from existing codebases.
+
+Primary questions answered:
+
+- What intent exists in tests that isn't captured as atoms?
+- What quality level do inferred atoms meet?
+- What should be accepted, rejected, or revised?
+
+Key affordances:
+
+- **Run history**: List of reconciliation runs with status
+- **Recommendation queue**: Inferred atoms awaiting review
+- **Quality indicators**: 5-dimension scores for each recommendation
+- **Source traceability**: Link from recommendation to originating test
+- **Bulk actions**: Accept/reject multiple recommendations
+
+UX requirement:
+> Human review is **mandatory** for all inferred atoms. The system proposes; humans dispose.
 
 ---
 
@@ -226,6 +256,84 @@ UX signals:
 - Pending
 - Partially realized
 - Fully realized
+
+---
+
+### 5.4 Reconciliation Flow (Brownfield)
+
+For existing codebases with tests but no atoms, reconciliation **infers intent** from test behavior.
+
+**Step 1: Configuration**
+
+User provides:
+
+- Root directory to analyze
+- Mode: `full` (all tests) or `delta` (only changed since last run)
+- Path exclusion patterns (e.g., `**/node_modules/**`)
+- Quality threshold (default: 80)
+
+UX requirement:
+> Configuration must clearly communicate scope and expected duration.
+
+**Step 2: Analysis (Agent-Driven)**
+
+System performs:
+
+1. **Structure**: Discover test files
+2. **Discover**: Parse test cases
+3. **Context**: Gather supporting code
+4. **Infer**: LLM generates atom candidates
+5. **Synthesize**: Group atoms into molecules
+6. **Verify**: Quality scoring
+
+UX signals:
+
+- Progress percentage per phase
+- Current phase name
+- Tests discovered / processed
+- Estimated remaining time (optional)
+
+**Step 3: Human Review (Mandatory)**
+
+For each inferred atom:
+
+- Description and category
+- Quality score (5 dimensions)
+- Source test file and line
+- LLM reasoning (collapsible)
+- Observable outcomes
+
+Actions:
+
+- **Accept**: Promote to real atom
+- **Reject**: Discard with optional reason
+- **Edit**: Modify before accepting (future)
+
+UX requirements:
+> Review cannot be skipped. Every inferred atom requires explicit human decision.
+> Quality score < 80 should trigger warning before acceptance.
+
+**Step 4: Completion**
+
+Summary shows:
+
+- Atoms accepted / rejected / pending
+- Molecules created
+- Coverage improvement
+- Next recommended actions
+
+---
+
+### 5.5 Delta Reconciliation (Incremental)
+
+After initial reconciliation, subsequent runs use **delta mode**:
+
+- Only analyze tests modified since baseline run
+- Skip tests with existing atom annotations
+- Stop when no new unlinked tests found (INV-R002: Delta Closure)
+
+UX implication:
+> Delta mode should feel lightweight — a quick sync, not a full audit.
 
 ---
 
@@ -285,6 +393,9 @@ UX principles still apply:
 - How visible should atom versioning be to humans?
 - Should atom promotion ever be automated?
 - How much friction is *too much* friction?
+- Should reconciliation allow "auto-accept" for high-confidence (>95%) atoms?
+- How should molecule hierarchy depth be visualized (max depth: 10)?
+- When should delta reconciliation run automatically (CI hook vs manual trigger)?
 
 These are **design tensions**, not bugs.
 
@@ -302,6 +413,8 @@ These are **design tensions**, not bugs.
 ## 11. Related Documents
 
 - **UI Architecture**: See [ui.md](ui.md) for technical implementation decisions (technology stack, state management, component patterns)
+- **Schema Documentation**: See [schema.md](schema.md) for database tables including molecules and reconciliation entities
+- **System Overview**: See [index.md](index.md) for agent architecture and current implementation status
 - **Implementation Checklist**: See [implementation-checklist-phase1.md](implementation-checklist-phase1.md) for Phase 1 UI tasks
 
 ---
