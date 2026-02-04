@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TestQualitySnapshot } from './test-quality-snapshot.entity';
+import { QualityProfile } from './quality-profile.entity';
 import { TestQualityService } from './test-quality.service';
 import { QualityController } from './quality.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([TestQualitySnapshot])],
+  imports: [TypeOrmModule.forFeature([TestQualitySnapshot, QualityProfile])],
   controllers: [QualityController],
   providers: [TestQualityService],
   exports: [TestQualityService],

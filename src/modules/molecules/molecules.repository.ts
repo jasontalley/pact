@@ -363,6 +363,7 @@ export class MoleculesRepository {
       epic: 0,
       release: 0,
       capability: 0,
+      change_set: 0,
       custom: 0,
     };
 

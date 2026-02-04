@@ -380,7 +380,7 @@ describe('MoleculesService', () => {
     it('should return all lens types with metadata', () => {
       const lensTypes = service.getLensTypes();
 
-      expect(lensTypes).toHaveLength(7);
+      expect(lensTypes).toHaveLength(8);
       expect(lensTypes.map((lt) => lt.type)).toEqual([
         'user_story',
         'feature',
@@ -388,6 +388,7 @@ describe('MoleculesService', () => {
         'epic',
         'release',
         'capability',
+        'change_set',
         'custom',
       ]);
       expect(lensTypes[0].label).toBe('User Story');

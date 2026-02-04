@@ -527,3 +527,5 @@ Bootstrap is complete when:
 - [Implementation Checklist Phase 5](implementation-checklist-phase5.md) - Reconciliation agent details
 - [UX Specification](ux.md) - User experience principles
 - [UI Architecture](ui.md) - Frontend implementation guide
+- [Git-for-Intent Analysis](analysis-git-for-intent.md) - Conceptual framework analysis
+- [**Implementation Checklist (Bootstrap)**](implementation-checklist-bootstrap.md) - **Authoritative implementation guide** aligned with Git-for-Intent framework

@@ -5,7 +5,7 @@
  * Routes user requests to appropriate agents based on intent classification.
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { LLMService, LLMRequest } from '../../common/llm/llm.service';
 import { AgentTaskType } from '../../common/llm/providers/types';
@@ -14,13 +14,15 @@ import { ChatRequestDto, ChatResponseDto, ToolCallDto, ToolResultDto } from './d
 import { ToolRegistryService } from './tools/tool-registry.service';
 import { GraphRegistryService } from './graphs/graph-registry.service';
 import { ReconciliationService } from './reconciliation.service';
+import { InterviewService } from './interview.service';
+import { ConversationsService } from '../conversations/conversations.service';
 import { ChatExplorationStateType } from './graphs/types/exploration-state';
 import { CoverageFastStateType } from './graphs/graphs/coverage-fast.graph';
 
 /**
  * Query route types for fast-path routing
  */
-type QueryRoute = 'fast-coverage' | 'reconciliation' | 'standard';
+type QueryRoute = 'fast-coverage' | 'reconciliation' | 'interview' | 'standard';
 
 /**
  * Coverage question patterns for fast-path routing
@@ -50,6 +52,20 @@ const RECONCILIATION_PATTERNS = [
   /infer.*atoms.*tests/i,
   /discover.*atoms/i,
   /find.*orphan.*tests/i,
+];
+
+/**
+ * Interview command patterns
+ */
+const INTERVIEW_PATTERNS = [
+  /interview.*intent/i,
+  /start.*interview/i,
+  /extract.*intent/i,
+  /capture.*requirements/i,
+  /define.*feature/i,
+  /what.*should.*system.*do/i,
+  /help.*me.*define/i,
+  /new.*feature.*requirement/i,
 ];
 
 /**
@@ -114,6 +130,8 @@ export class ChatAgentService {
     private readonly graphRegistry: GraphRegistryService,
     private readonly safetyService: AgentSafetyService,
     private readonly reconciliationService: ReconciliationService,
+    @Optional() private readonly interviewService?: InterviewService,
+    @Optional() private readonly conversationsService?: ConversationsService,
   ) {
     // Enable graph agent via environment variable
     this.useGraphAgent = process.env.USE_GRAPH_AGENT === 'true';
@@ -164,6 +182,11 @@ export class ChatAgentService {
     session.messages.push({ role: 'user', content: sanitizedMessage });
     session.lastActivityAt = new Date();
 
+    // Persist user message to database
+    this.persistMessage(session.id, 'user', sanitizedMessage).catch((err) =>
+      this.logger.warn(`Failed to persist user message: ${err.message}`),
+    );
+
     this.logger.log(`Chat request in session ${session.id}: ${sanitizedMessage.slice(0, 50)}...`);
 
     // Process the request
@@ -181,6 +204,9 @@ export class ChatAgentService {
           session,
           startTime,
         );
+      } else if (route === 'interview' && this.graphRegistry.hasGraph('interview')) {
+        this.logger.log('Routing to interview agent');
+        response = await this.handleInterviewStart(sanitizedMessage, session, startTime);
       } else if (route === 'fast-coverage' && this.graphRegistry.hasGraph('coverage-fast')) {
         this.logger.log('Routing to coverage fast-path');
         response = await this.chatWithCoverageFastPath(
@@ -212,6 +238,11 @@ export class ChatAgentService {
 
     // Validate output before returning
     const outputValidation = this.safetyService.validateResponse(response.message, safetyContext);
+
+    // Persist assistant response to database
+    this.persistMessage(session.id, 'assistant', outputValidation.sanitizedOutput).catch((err) =>
+      this.logger.warn(`Failed to persist assistant message: ${err.message}`),
+    );
 
     // Return sanitized output
     return {
@@ -295,6 +326,10 @@ export class ChatAgentService {
     // Check for reconciliation command patterns
     if (RECONCILIATION_PATTERNS.some((p) => p.test(message))) {
       return 'reconciliation';
+    }
+    // Check for interview patterns
+    if (INTERVIEW_PATTERNS.some((p) => p.test(message))) {
+      return 'interview';
     }
     // Check for coverage question patterns
     if (COVERAGE_PATTERNS.some((p) => p.test(message))) {
@@ -542,6 +577,62 @@ export class ChatAgentService {
   }
 
   /**
+   * Handle interview start command.
+   * Delegates to InterviewService for multi-turn intent extraction.
+   */
+  private async handleInterviewStart(
+    message: string,
+    session: ChatSession,
+    startTime: number,
+  ): Promise<ChatResponseDto> {
+    if (!this.interviewService) {
+      const fallbackMsg = 'Interview service is not available. Please try again later.';
+      session.messages.push({ role: 'assistant', content: fallbackMsg });
+      return { sessionId: session.id, message: fallbackMsg };
+    }
+
+    try {
+      const result = await this.interviewService.startInterview(message);
+
+      let responseMessage: string;
+      if (result.questions.length > 0) {
+        const questionList = result.questions.map((q, i) => `${i + 1}. ${q.question}`).join('\n');
+        responseMessage =
+          `I've started an interview session to help extract intent atoms from your request.\n\n` +
+          `**Session**: ${result.sessionId}\n\n` +
+          `Here are some clarifying questions:\n\n${questionList}\n\n` +
+          `Please answer these questions, or say "done" if you have nothing more to add.`;
+      } else {
+        responseMessage =
+          `Interview session ${result.sessionId} completed. ` +
+          `The intent was clear enough to extract atoms directly.`;
+      }
+
+      session.messages.push({ role: 'assistant', content: responseMessage });
+      session.context.interviewSessionId = result.sessionId;
+
+      return {
+        sessionId: session.id,
+        message: responseMessage,
+        suggestedActions:
+          result.questions.length > 0
+            ? ['Answer the questions above', 'Say "done" to finish the interview']
+            : ['Review extracted atoms', 'Start a new interview'],
+      };
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Interview start failed: ${errMsg}`);
+      const errorMessage = `Failed to start interview: ${errMsg}`;
+      session.messages.push({ role: 'assistant', content: errorMessage });
+      return {
+        sessionId: session.id,
+        message: errorMessage,
+        suggestedActions: ['Try again', 'Rephrase your request'],
+      };
+    }
+  }
+
+  /**
    * Direct tool-calling implementation (original approach)
    * Used as fallback when graph-based agent is disabled or fails
    */
@@ -764,7 +855,44 @@ export class ChatAgentService {
     this.sessions.set(newSession.id, newSession);
     this.logger.log(`Created new chat session: ${newSession.id}`);
 
+    // Create persistent conversation record
+    if (this.conversationsService) {
+      this.conversationsService
+        .create()
+        .then((conv) => {
+          // Remap session ID to the persistent conversation ID
+          // Only if we generated the session ID (no user-provided ID)
+          if (!sessionId) {
+            this.sessions.delete(newSession.id);
+            newSession.id = conv.id;
+            this.sessions.set(conv.id, newSession);
+          }
+        })
+        .catch((err) => {
+          this.logger.warn(`Failed to create persistent conversation: ${err.message}`);
+        });
+    }
+
     return newSession;
+  }
+
+  /**
+   * Persist a message to the conversations database
+   */
+  private async persistMessage(
+    sessionId: string,
+    role: 'user' | 'assistant' | 'system',
+    content: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<void> {
+    if (!this.conversationsService) return;
+
+    try {
+      await this.conversationsService.addMessage(sessionId, role, content, metadata);
+    } catch {
+      // Conversation may not exist in DB yet (race condition with create).
+      // This is acceptable — persistence is best-effort during this transition.
+    }
   }
 
   /**

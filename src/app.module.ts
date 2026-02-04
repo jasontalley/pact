@@ -17,6 +17,10 @@ import { CommitmentsModule } from './modules/commitments/commitments.module';
 import { MoleculesModule } from './modules/molecules/molecules.module';
 import { GatewaysModule } from './gateways/gateways.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { ConflictsModule } from './modules/conflicts/conflicts.module';
+import { MetricsModule } from './modules/metrics/metrics.module';
+import { ConversationsModule } from './modules/conversations/conversations.module';
+import { CoverageModule } from './modules/coverage/coverage.module';
 
 @Module({
   imports: [
@@ -39,6 +43,10 @@ import { AdminModule } from './modules/admin/admin.module';
     CommitmentsModule,
     MoleculesModule,
     AdminModule,
+    ConflictsModule,
+    MetricsModule,
+    ConversationsModule,
+    CoverageModule,
   ],
   controllers: [AppController],
   providers: [AppService],

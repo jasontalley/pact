@@ -165,6 +165,12 @@ export interface OrphanTestInfo {
   relatedSourceFiles?: string[];
   /** Whether this test was part of a delta change */
   isDeltaChange?: boolean;
+  /**
+   * Full source code of the test file (Phase 14: Ingestion Boundary).
+   * Stored during discovery so quality analysis can run from the database
+   * without re-reading the filesystem.
+   */
+  testSourceCode?: string;
 }
 
 /**

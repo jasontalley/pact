@@ -9,6 +9,7 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
+import type { ChangeSetMetadata } from './change-set.types';
 
 /**
  * Lens types represent familiar product development concepts.
@@ -28,6 +29,7 @@ export type LensType =
   | 'epic'
   | 'release'
   | 'capability'
+  | 'change_set'
   | 'custom';
 
 /**
@@ -41,6 +43,7 @@ export const LENS_TYPE_LABELS: Record<LensType, string> = {
   epic: 'Epic',
   release: 'Release',
   capability: 'Capability',
+  change_set: 'Change Set',
   custom: 'Custom',
 };
 
@@ -55,6 +58,8 @@ export const LENS_TYPE_DESCRIPTIONS: Record<LensType, string> = {
   epic: 'A large body of work that can be broken down into smaller pieces',
   release: 'A collection of features or changes planned for a specific version',
   capability: 'A high-level ability or competency the system provides',
+  change_set:
+    'A set of proposed atom changes (additions, modifications) that can be reviewed and committed together, similar to a pull request',
   custom: 'A custom grouping type with your own label',
 };
 
@@ -151,6 +156,14 @@ export class Molecule {
    */
   @Column('jsonb', { default: [] })
   tags: string[];
+
+  /**
+   * Change set metadata for molecules with lensType 'change_set'.
+   * Tracks status, approvals, and commit history.
+   * Null for non-change-set molecules.
+   */
+  @Column('jsonb', { nullable: true })
+  changeSetMetadata: ChangeSetMetadata | null;
 
   /**
    * Additional metadata for extensibility

@@ -1004,6 +1004,8 @@ describe('AtomsService', () => {
         observableOutcomes: ['outcome1'],
         falsifiabilityCriteria: ['criteria1'],
         supersededBy: null,
+        intentIdentity: 'intent-original',
+        intentVersion: 1,
       };
 
       const newAtom = {
@@ -1014,6 +1016,8 @@ describe('AtomsService', () => {
         status: 'draft',
         tags: ['tag1'],
         parentIntent: 'original-uuid',
+        intentIdentity: 'intent-original',
+        intentVersion: 2,
       };
 
       // First findOne returns original atom
@@ -1224,6 +1228,167 @@ describe('AtomsService', () => {
 
       // INV-004: New atom must have original as parent
       expect(capturedCreateData.parentIntent).toBe('original-uuid');
+    });
+  });
+
+  // ========================
+  // Phase 8: Intent Identity Tests
+  // ========================
+
+  describe('intentIdentity auto-generation', () => {
+    it('should auto-generate intentIdentity on create', async () => {
+      let capturedCreateData: any;
+      mockAtomRepository.create.mockImplementation((data: any) => {
+        capturedCreateData = data;
+        return { ...data, id: 'new-uuid' };
+      });
+      mockAtomRepository.save.mockImplementation((atom: any) => Promise.resolve(atom));
+      mockAtomRepository.findOne.mockResolvedValue(null); // For generateAtomId
+
+      await service.create({
+        description: 'Test atom',
+        category: 'functional',
+      });
+
+      expect(capturedCreateData.intentIdentity).toBeDefined();
+      expect(typeof capturedCreateData.intentIdentity).toBe('string');
+      expect(capturedCreateData.intentIdentity.length).toBeGreaterThan(0);
+      expect(capturedCreateData.intentVersion).toBe(1);
+    });
+  });
+
+  describe('intentIdentity inheritance on supersession', () => {
+    it('should copy intentIdentity from original to new atom', async () => {
+      const originalAtom = {
+        id: 'original-uuid',
+        atomId: 'IA-001',
+        description: 'Original',
+        category: 'functional',
+        status: 'committed',
+        qualityScore: 85,
+        supersededBy: null,
+        tags: ['auth'],
+        observableOutcomes: [],
+        falsifiabilityCriteria: [],
+        intentIdentity: 'intent-abc-123',
+        intentVersion: 1,
+      };
+
+      mockAtomRepository.findOne
+        .mockResolvedValueOnce(originalAtom) // findOne for supersedeWithNewAtom
+        .mockResolvedValueOnce(null); // findOne for generateAtomId in create
+
+      let capturedCreateData: any;
+      mockAtomRepository.create.mockImplementation((data: any) => {
+        capturedCreateData = data;
+        return { ...data, id: 'new-uuid' };
+      });
+      mockAtomRepository.save.mockImplementation((atom: any) => Promise.resolve(atom));
+
+      await service.supersedeWithNewAtom('original-uuid', {
+        newDescription: 'Updated description',
+      });
+
+      expect(capturedCreateData.intentIdentity).toBe('intent-abc-123');
+      expect(capturedCreateData.intentVersion).toBe(2);
+    });
+
+    it('should generate intentIdentity for old atoms without one', async () => {
+      const originalAtom = {
+        id: 'original-uuid',
+        atomId: 'IA-001',
+        description: 'Original',
+        category: 'functional',
+        status: 'committed',
+        qualityScore: 85,
+        supersededBy: null,
+        tags: [],
+        observableOutcomes: [],
+        falsifiabilityCriteria: [],
+        intentIdentity: null,
+        intentVersion: 1,
+      };
+
+      mockAtomRepository.findOne
+        .mockResolvedValueOnce(originalAtom) // findOne for supersedeWithNewAtom
+        .mockResolvedValueOnce(null); // findOne for generateAtomId in create
+
+      let capturedCreateData: any;
+      mockAtomRepository.create.mockImplementation((data: any) => {
+        capturedCreateData = data;
+        return { ...data, id: 'new-uuid' };
+      });
+      mockAtomRepository.save.mockImplementation((atom: any) => Promise.resolve(atom));
+
+      await service.supersedeWithNewAtom('original-uuid', {
+        newDescription: 'Updated',
+      });
+
+      // Original should have been assigned an intentIdentity
+      expect(originalAtom.intentIdentity).toBeDefined();
+      expect(String(originalAtom.intentIdentity).length).toBeGreaterThan(0);
+
+      // New atom should inherit the same identity
+      expect(capturedCreateData.intentIdentity).toBe(originalAtom.intentIdentity);
+      expect(capturedCreateData.intentVersion).toBe(2);
+    });
+  });
+
+  describe('findByIntentIdentity', () => {
+    it('should return all versions ordered by intentVersion ASC', async () => {
+      const versions = [
+        { id: 'v1', intentIdentity: 'intent-abc', intentVersion: 1 },
+        { id: 'v2', intentIdentity: 'intent-abc', intentVersion: 2 },
+        { id: 'v3', intentIdentity: 'intent-abc', intentVersion: 3 },
+      ];
+      mockAtomRepository.find.mockResolvedValue(versions);
+
+      const result = await service.findByIntentIdentity('intent-abc');
+
+      expect(mockAtomRepository.find).toHaveBeenCalledWith({
+        where: { intentIdentity: 'intent-abc' },
+        order: { intentVersion: 'ASC' },
+      });
+      expect(result).toHaveLength(3);
+    });
+  });
+
+  describe('getVersionHistory', () => {
+    it('should return version history for atom with intentIdentity', async () => {
+      const atom = {
+        id: 'v2',
+        intentIdentity: 'intent-abc',
+        intentVersion: 2,
+      };
+      const versions = [
+        { id: 'v1', intentIdentity: 'intent-abc', intentVersion: 1 },
+        { id: 'v2', intentIdentity: 'intent-abc', intentVersion: 2 },
+      ];
+
+      mockAtomRepository.findOne.mockResolvedValue(atom);
+      mockAtomRepository.find.mockResolvedValue(versions);
+
+      const result = await service.getVersionHistory('v2');
+
+      expect(result.intentIdentity).toBe('intent-abc');
+      expect(result.versions).toHaveLength(2);
+      expect(result.currentVersion).toEqual(atom);
+    });
+
+    it('should handle atoms without intentIdentity (pre-migration)', async () => {
+      const atom = {
+        id: 'old-atom',
+        intentIdentity: null,
+        intentVersion: 1,
+      };
+
+      mockAtomRepository.findOne.mockResolvedValue(atom);
+
+      const result = await service.getVersionHistory('old-atom');
+
+      expect(result.intentIdentity).toBe('old-atom');
+      expect(result.versions).toHaveLength(1);
+      expect(result.versions[0]).toEqual(atom);
     });
   });
 });

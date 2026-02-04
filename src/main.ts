@@ -1,3 +1,6 @@
+import { join } from 'path';
+import { existsSync } from 'fs';
+import { spawn } from 'child_process';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -79,6 +82,22 @@ All endpoints return standard HTTP status codes:
   await app.listen(port);
   console.log(`Application is running on: http://localhost:${port}`);
   console.log(`Swagger documentation: http://localhost:${port}/api`);
+
+  // Start MCP server (SSE) when app runs so clients can connect via URL with no binary path.
+  const mcpPort = process.env.MCP_PORT ?? '3002';
+  if (mcpPort !== '0') {
+    const mcpPath = join(process.cwd(), 'dist', 'mcp', 'pact-mcp-server.js');
+    if (existsSync(mcpPath)) {
+      const apiUrl = process.env.PACT_API_URL || `http://localhost:${port}`;
+      const child = spawn(process.execPath, [mcpPath], {
+        env: { ...process.env, MCP_PORT: mcpPort, PACT_API_URL: apiUrl },
+        stdio: 'ignore',
+        detached: process.platform !== 'win32',
+      });
+      child.unref?.();
+      console.log(`MCP server (SSE) started; connect at http://localhost:${mcpPort}/sse`);
+    }
+  }
 }
 
 bootstrap();

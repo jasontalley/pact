@@ -8,6 +8,7 @@ import { AgentsModule } from '../agents/agents.module';
 import { ValidatorsModule } from '../validators/validators.module';
 import { MoleculesModule } from '../molecules/molecules.module';
 import { CommittedAtomGuard } from '../../common/guards/committed-atom.guard';
+import { SemanticDiffService } from './semantic-diff.service';
 
 @Module({
   imports: [
@@ -17,7 +18,7 @@ import { CommittedAtomGuard } from '../../common/guards/committed-atom.guard';
     forwardRef(() => MoleculesModule),
   ],
   controllers: [AtomsController],
-  providers: [AtomsService, AtomsRepository, CommittedAtomGuard],
-  exports: [AtomsService, AtomsRepository, CommittedAtomGuard],
+  providers: [AtomsService, AtomsRepository, CommittedAtomGuard, SemanticDiffService],
+  exports: [AtomsService, AtomsRepository, CommittedAtomGuard, SemanticDiffService],
 })
 export class AtomsModule {}

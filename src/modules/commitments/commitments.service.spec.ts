@@ -41,6 +41,8 @@ describe('CommitmentsService', () => {
     canvasPosition: null,
     parentIntent: null,
     refinementHistory: [],
+    intentIdentity: null,
+    intentVersion: 1,
     validators: [],
     ...overrides,
   });

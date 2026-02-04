@@ -354,6 +354,8 @@ export class ReconciliationRepository {
         hadAtomAnnotation: false,
         linkedAtomId: null,
         isDeltaChange: test.isDeltaChange || false,
+        // Phase 14: Ingestion Boundary — store test source for quality analysis
+        testSourceCode: test.testSourceCode || null,
       });
     });
 

@@ -11,6 +11,39 @@ import type { ReconciliationRun } from './reconciliation-run.entity';
 import type { AtomRecommendation } from './atom-recommendation.entity';
 
 /**
+ * Per-dimension quality score for a test
+ */
+export interface QualityDimensionScore {
+  /** Score for this dimension (0-1) */
+  score: number;
+  /** Whether this dimension passed its threshold */
+  passed: boolean;
+  /** Issues found in this dimension */
+  issues: Array<{
+    severity: 'critical' | 'warning' | 'info';
+    message: string;
+    lineNumber?: number;
+    suggestion?: string;
+  }>;
+}
+
+/**
+ * Quality grade mapping: A (90-100), B (80-89), C (70-79), D (60-69), F (<60)
+ */
+export type QualityGrade = 'A' | 'B' | 'C' | 'D' | 'F';
+
+/**
+ * Compute quality grade from a 0-100 score
+ */
+export function computeQualityGrade(score: number): QualityGrade {
+  if (score >= 90) return 'A';
+  if (score >= 80) return 'B';
+  if (score >= 70) return 'C';
+  if (score >= 60) return 'D';
+  return 'F';
+}
+
+/**
  * Status of a test in the reconciliation process.
  *
  * Per INV-R002 (Delta Closure Stopping Rule):
@@ -112,6 +145,44 @@ export class TestRecord {
    */
   @Column({ default: false })
   isDeltaChange: boolean;
+
+  // ========================================================================
+  // Phase 14 Extensions: Ingestion Boundary + Quality Analysis
+  // ========================================================================
+
+  /**
+   * Test source code stored during reconciliation discovery.
+   *
+   * This is the Ingestion Boundary: Project Plane data → Intent Plane.
+   * Once stored, quality analysis can run from the database without
+   * re-reading the filesystem.
+   */
+  @Column('text', { nullable: true })
+  testSourceCode: string | null;
+
+  /**
+   * Overall quality score (0-100) from per-test analysis
+   */
+  @Column('decimal', { precision: 5, scale: 2, nullable: true })
+  qualityScore: number | null;
+
+  /**
+   * Per-dimension quality scores
+   */
+  @Column('jsonb', { nullable: true })
+  qualityDimensions: Record<string, QualityDimensionScore> | null;
+
+  /**
+   * Letter grade: A (90-100), B (80-89), C (70-79), D (60-69), F (<60)
+   */
+  @Column({ type: 'varchar', length: 2, nullable: true })
+  qualityGrade: QualityGrade | null;
+
+  /**
+   * When quality analysis was last performed
+   */
+  @Column({ type: 'timestamp', nullable: true })
+  qualityAnalyzedAt: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;

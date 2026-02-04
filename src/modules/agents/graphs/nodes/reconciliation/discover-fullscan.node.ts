@@ -182,6 +182,8 @@ function parseTestFile(
           lineNumber,
           testCode,
           relatedSourceFiles,
+          // Phase 14: Ingestion Boundary — store full file source for quality analysis
+          testSourceCode: content,
         });
       }
     }

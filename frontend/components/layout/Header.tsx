@@ -4,12 +4,14 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Network, List, Plus, Menu, X, Settings, Layers, GitCompare } from 'lucide-react';
+import { LayoutDashboard, Network, List, Plus, Menu, X, Settings, Layers, GitCompare, AlertTriangle, MessageSquarePlus, GitPullRequest } from 'lucide-react';
+import { useConflictMetrics } from '@/hooks/conflicts/use-conflicts';
 
 interface NavItem {
   href: string;
   label: string;
   icon: React.ReactNode;
+  badge?: React.ReactNode;
 }
 
 const navItems: NavItem[] = [
@@ -18,6 +20,9 @@ const navItems: NavItem[] = [
   { href: '/atoms', label: 'Atoms', icon: <List className="h-4 w-4" /> },
   { href: '/molecules', label: 'Molecules', icon: <Layers className="h-4 w-4" /> },
   { href: '/reconciliation', label: 'Reconciliation', icon: <GitCompare className="h-4 w-4" /> },
+  { href: '/interview', label: 'Interview', icon: <MessageSquarePlus className="h-4 w-4" /> },
+  { href: '/change-sets', label: 'Change Sets', icon: <GitPullRequest className="h-4 w-4" /> },
+  { href: '/conflicts', label: 'Conflicts', icon: <AlertTriangle className="h-4 w-4" /> },
   { href: '/settings', label: 'Settings', icon: <Settings className="h-4 w-4" /> },
 ];
 
@@ -28,6 +33,9 @@ interface HeaderProps {
 export function Header({ onCreateAtom }: HeaderProps) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { data: conflictMetrics } = useConflictMetrics();
+  const openConflictCount = conflictMetrics?.open ?? 0;
+  const hasContradictions = (conflictMetrics?.byType?.contradiction ?? 0) > 0;
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -60,12 +68,14 @@ export function Header({ onCreateAtom }: HeaderProps) {
               const isActive = item.href === '/'
                 ? pathname === '/'
                 : pathname.startsWith(item.href);
+              const isConflicts = item.href === '/conflicts';
+              const showBadge = isConflicts && openConflictCount > 0;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+                    'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors relative',
                     isActive
                       ? 'bg-accent text-foreground'
                       : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
@@ -73,6 +83,14 @@ export function Header({ onCreateAtom }: HeaderProps) {
                 >
                   {item.icon}
                   {item.label}
+                  {showBadge && (
+                    <span className={cn(
+                      'inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full text-xs font-bold text-white',
+                      hasContradictions ? 'bg-red-500' : 'bg-yellow-500',
+                    )}>
+                      {openConflictCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -134,6 +152,8 @@ export function Header({ onCreateAtom }: HeaderProps) {
               const isActive = item.href === '/'
                 ? pathname === '/'
                 : pathname.startsWith(item.href);
+              const isConflicts = item.href === '/conflicts';
+              const showBadge = isConflicts && openConflictCount > 0;
               return (
                 <Link
                   key={item.href}
@@ -148,6 +168,14 @@ export function Header({ onCreateAtom }: HeaderProps) {
                 >
                   {item.icon}
                   {item.label}
+                  {showBadge && (
+                    <span className={cn(
+                      'inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full text-xs font-bold text-white ml-auto',
+                      hasContradictions ? 'bg-red-500' : 'bg-yellow-500',
+                    )}>
+                      {openConflictCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}

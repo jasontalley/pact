@@ -94,6 +94,9 @@ export class GraphRegistryService implements OnModuleInit {
     const { createReconciliationGraph, RECONCILIATION_GRAPH_NAME, RECONCILIATION_GRAPH_CONFIG } =
       await import('./graphs/reconciliation.graph');
 
+    const { createInterviewGraph, INTERVIEW_GRAPH_NAME, INTERVIEW_GRAPH_CONFIG } =
+      await import('./graphs/interview.graph');
+
     // Register chat exploration graph
     const chatGraph = createChatExplorationGraph(this.nodeConfig);
     this.registerGraph(CHAT_EXPLORATION_GRAPH_NAME, chatGraph, CHAT_EXPLORATION_GRAPH_CONFIG);
@@ -122,6 +125,11 @@ export class GraphRegistryService implements OnModuleInit {
       stateType: RECONCILIATION_GRAPH_CONFIG.stateType,
       pattern: 'custom',
     });
+
+    // Register interview graph
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const interviewGraph = createInterviewGraph(this.nodeConfig) as any;
+    this.registerGraph(INTERVIEW_GRAPH_NAME, interviewGraph, INTERVIEW_GRAPH_CONFIG);
 
     this.logger.log(`Graph registry initialized with ${this.graphs.size} graphs`);
   }

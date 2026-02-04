@@ -129,6 +129,23 @@ export class Atom {
   @Column('jsonb', { default: [] })
   refinementHistory: RefinementRecord[];
 
+  // Phase 8 Extensions (Intent Identity)
+
+  /**
+   * Stable identifier for the conceptual intent across versions.
+   * Auto-generated as UUID on first atom creation.
+   * Inherited (copied) on supersession.
+   */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  intentIdentity: string | null;
+
+  /**
+   * Version number within the same intent identity.
+   * Incremented on each supersession.
+   */
+  @Column('int', { default: 1 })
+  intentVersion: number;
+
   /**
    * Validators associated with this atom
    * Phase 2: Validators give Intent Atoms testable, enforceable meaning

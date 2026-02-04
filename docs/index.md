@@ -981,6 +981,14 @@ Pact is not just a tool—it's a new way of thinking about software as **realize
 | [ui.md](ui.md) | UI architecture, state management, component patterns |
 | [schema.md](schema.md) | Database schema (21 tables across 5 categories) |
 | [analysis-git-for-intent.md](analysis-git-for-intent.md) | Conceptual analysis: Pact as "Git for Intent" |
+| [bootstrap-completion-plan.md](bootstrap-completion-plan.md) | Bootstrap phase capability plan |
+| [implementation-checklist-bootstrap.md](implementation-checklist-bootstrap.md) | **Implementation checklist aligned to Git-for-Intent** |
+| [implementation-checklist-phase8.md](implementation-checklist-phase8.md) | Phase 8: Foundation (conflicts, metrics, conversations, identity) |
+| [implementation-checklist-phase9.md](implementation-checklist-phase9.md) | Phase 9: Visibility (epistemic dashboard, coupling health, conflicts UI) |
+| [implementation-checklist-phase10.md](implementation-checklist-phase10.md) | Phase 10: External Access (MCP server and tools) |
+| [implementation-checklist-phase11.md](implementation-checklist-phase11.md) | Phase 11: Conversation (change sets, interview agent, compaction) |
+| [implementation-checklist-phase12.md](implementation-checklist-phase12.md) | Phase 12: Polish (interview UI, change set UI, scheduling, trends) |
+| [implementation-checklist-phase13.md](implementation-checklist-phase13.md) | Phase 13: LangGraph agent testing (contracts, golden data, evaluation harness, rubrics) |
 | [CLAUDE.md](../CLAUDE.md) | Developer documentation and conventions |
 | [README.md](../README.md) | Quick start and usage guide |
 

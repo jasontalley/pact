@@ -937,6 +937,8 @@ The path forward:
 - [index.md](index.md) - System architecture overview
 - [schema.md](schema.md) - Database schema including reconciliation entities
 - [ui.md](ui.md) - UI architecture and component patterns
+- [bootstrap-completion-plan.md](bootstrap-completion-plan.md) - Original bootstrap capability plan
+- [implementation-checklist-bootstrap.md](implementation-checklist-bootstrap.md) - Implementation checklist aligned to this analysis
 - [CLAUDE.md](../CLAUDE.md) - Development context and conventions
 
 ---

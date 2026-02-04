@@ -1,4 +1,5 @@
 import { Module, forwardRef, OnModuleInit } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AtomizationController } from './atomization.controller';
 import { AtomizationService } from './atomization.service';
@@ -15,6 +16,7 @@ import { CommitmentAgentService } from './commitment-agent.service';
 import { ContextBuilderService } from './context-builder.service';
 import { MoleculeVerifierService } from './molecule-verifier.service';
 import { ReconciliationService } from './reconciliation.service';
+import { InterviewService } from './interview.service';
 import { ApplyService } from './apply.service';
 import { Atom } from '../atoms/atom.entity';
 import { Molecule } from '../molecules/molecule.entity';
@@ -28,12 +30,14 @@ import { ReconciliationRepository } from './repositories/reconciliation.reposito
 import { AtomsModule } from '../atoms/atoms.module';
 import { CommitmentsModule } from '../commitments/commitments.module';
 import { InvariantsModule } from '../invariants/invariants.module';
+import { ConversationsModule } from '../conversations/conversations.module';
 import { ToolRegistryService } from './tools/tool-registry.service';
 import { AtomToolsService } from './tools/atom-tools.service';
 import { ATOM_TOOLS } from './tools/atom-tools.definitions';
 import { ReconciliationToolsService } from './tools/reconciliation-tools.service';
 import { RECONCILIATION_TOOLS } from './tools/reconciliation-tools.definitions';
 import { GraphRegistryService } from './graphs/graph-registry.service';
+import { ReconciliationSchedulerService } from './reconciliation-scheduler.service';
 
 @Module({
   imports: [
@@ -47,9 +51,11 @@ import { GraphRegistryService } from './graphs/graph-registry.service';
       MoleculeRecommendation,
       TestRecord,
     ]),
+    ScheduleModule.forRoot(),
     forwardRef(() => AtomsModule),
     forwardRef(() => CommitmentsModule),
     InvariantsModule,
+    ConversationsModule,
   ],
   controllers: [
     AtomizationController,
@@ -69,12 +75,14 @@ import { GraphRegistryService } from './graphs/graph-registry.service';
     CommitmentAgentService,
     MoleculeVerifierService,
     ReconciliationService,
+    InterviewService,
     ReconciliationRepository,
     ApplyService,
     ToolRegistryService,
     AtomToolsService,
     ReconciliationToolsService,
     GraphRegistryService,
+    ReconciliationSchedulerService,
   ],
   exports: [
     AtomizationService,
@@ -87,10 +95,12 @@ import { GraphRegistryService } from './graphs/graph-registry.service';
     CommitmentAgentService,
     MoleculeVerifierService,
     ReconciliationService,
+    InterviewService,
     ReconciliationRepository,
     ApplyService,
     ToolRegistryService,
     GraphRegistryService,
+    ReconciliationSchedulerService,
   ],
 })
 export class AgentsModule implements OnModuleInit {

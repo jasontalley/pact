@@ -9,6 +9,7 @@ module.exports = {
     'node_modules/(?!(p-retry|is-network-error)/)',
   ],
   testEnvironment: 'node',
+  testTimeout: 30000,
   forceExit: true,
   // Run E2E tests sequentially to avoid database conflicts
   maxWorkers: 1,

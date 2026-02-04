@@ -454,6 +454,7 @@ describe('InterimPersistNode', () => {
     });
 
     it('should handle git hash retrieval failure gracefully', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { getCurrentCommitHash } = require('../../../utils/git-utils');
       getCurrentCommitHash.mockRejectedValueOnce(new Error('Not a git repo'));
 

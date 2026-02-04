@@ -7,7 +7,18 @@
  * @see docs/implementation-checklist-phase5.md Section 4.4
  */
 
-import { Controller, Post, Get, Body, Param, HttpCode, HttpStatus, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Delete,
+  Body,
+  Param,
+  HttpCode,
+  HttpStatus,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam } from '@nestjs/swagger';
 import {
   IsOptional,
@@ -34,6 +45,11 @@ import {
   RecoveryResult,
 } from './reconciliation.service';
 import { ApplyService, ApplyRequest, ApplyResult } from './apply.service';
+import {
+  ReconciliationSchedulerService,
+  ScheduleInfo,
+  ScheduleHistoryEntry,
+} from './reconciliation-scheduler.service';
 import { ReconciliationResult } from './graphs/types/reconciliation-result';
 import { InterruptPayload } from './graphs/nodes/reconciliation/verify.node';
 
@@ -168,6 +184,30 @@ class ReviewDecisionsDto implements SubmitReviewDto {
   comment?: string;
 }
 
+/**
+ * Request body for setting a reconciliation schedule
+ */
+class SetScheduleDto {
+  @IsOptional()
+  @IsString()
+  cron?: string;
+
+  @IsOptional()
+  @IsString()
+  rootDirectory?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  qualityThreshold?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  excludePaths?: string[];
+}
+
 // =============================================================================
 // Controller
 // =============================================================================
@@ -180,6 +220,7 @@ export class ReconciliationController {
   constructor(
     private readonly reconciliationService: ReconciliationService,
     private readonly applyService: ApplyService,
+    @Optional() private readonly schedulerService?: ReconciliationSchedulerService,
   ) {}
 
   // ===========================================================================
@@ -533,5 +574,79 @@ export class ReconciliationController {
   async recoverRun(@Param('runId') runId: string): Promise<RecoveryResult> {
     this.logger.log(`POST /agents/reconciliation/runs/${runId}/recover`);
     return this.reconciliationService.recoverRun(runId);
+  }
+
+  // ===========================================================================
+  // Schedule Endpoints (Phase 12.3)
+  // ===========================================================================
+
+  @Get('schedule')
+  @ApiOperation({
+    summary: 'Get reconciliation schedule',
+    description: 'Get the current reconciliation schedule configuration and status.',
+  })
+  @ApiResponse({ status: 200, description: 'Schedule info' })
+  getSchedule(): ScheduleInfo {
+    this.logger.log('GET /agents/reconciliation/schedule');
+    if (!this.schedulerService) {
+      return {
+        enabled: false,
+        cron: '',
+        mode: 'delta',
+        rootDirectory: '.',
+        qualityThreshold: 80,
+        excludePaths: [],
+        lastRunAt: null,
+        lastRunStatus: null,
+        nextRunAt: null,
+        runCount: 0,
+      };
+    }
+    return this.schedulerService.getSchedule();
+  }
+
+  @Post('schedule')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Set reconciliation schedule',
+    description: 'Create or update the reconciliation schedule.',
+  })
+  @ApiBody({ type: SetScheduleDto })
+  @ApiResponse({ status: 200, description: 'Schedule updated' })
+  setSchedule(@Body() dto: SetScheduleDto): ScheduleInfo {
+    this.logger.log('POST /agents/reconciliation/schedule');
+    if (!this.schedulerService) {
+      throw new Error('Scheduler service is not available');
+    }
+    return this.schedulerService.setSchedule(dto);
+  }
+
+  @Delete('schedule')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Disable reconciliation schedule',
+    description: 'Disable the current reconciliation schedule.',
+  })
+  @ApiResponse({ status: 204, description: 'Schedule disabled' })
+  deleteSchedule(): void {
+    this.logger.log('DELETE /agents/reconciliation/schedule');
+    if (!this.schedulerService) {
+      return;
+    }
+    this.schedulerService.clearSchedule();
+  }
+
+  @Get('schedule/history')
+  @ApiOperation({
+    summary: 'Get schedule execution history',
+    description: 'Get the history of scheduled reconciliation runs.',
+  })
+  @ApiResponse({ status: 200, description: 'Schedule history' })
+  getScheduleHistory(): ScheduleHistoryEntry[] {
+    this.logger.log('GET /agents/reconciliation/schedule/history');
+    if (!this.schedulerService) {
+      return [];
+    }
+    return this.schedulerService.getHistory();
   }
 }

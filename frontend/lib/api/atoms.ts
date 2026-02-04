@@ -12,6 +12,18 @@ import type {
   RefinementEntry,
 } from '@/types/atom';
 
+export interface SemanticDiff {
+  atomA: { id: string; atomId: string; description: string; category: string; status: string; qualityScore: number | null; tags: string[] };
+  atomB: { id: string; atomId: string; description: string; category: string; status: string; qualityScore: number | null; tags: string[] };
+  descriptionDiff: { changeType: 'expanded' | 'narrowed' | 'reframed' | 'unchanged'; summary: string };
+  outcomesDiff: { added: { description: string }[]; removed: { description: string }[]; modified: { old: { description: string }; new: { description: string } }[]; unchanged: number };
+  falsifiabilityDiff: { added: { condition: string; expectedBehavior: string }[]; removed: { condition: string; expectedBehavior: string }[]; modified: { old: { condition: string; expectedBehavior: string }; new: { condition: string; expectedBehavior: string } }[]; unchanged: number };
+  categoryDiff: { old: string; new: string } | null;
+  qualityDiff: { old: number | null; new: number | null; delta: number } | null;
+  tagsDiff: { added: string[]; removed: string[] };
+  overallAssessment: string;
+}
+
 /**
  * Atom API functions
  */
@@ -132,6 +144,14 @@ export const atomsApi = {
    */
   getRefinementHistory: async (id: string): Promise<RefinementEntry[]> => {
     const response = await apiClient.get<RefinementEntry[]>(`/atoms/${id}/refinement-history`);
+    return response.data;
+  },
+
+  /**
+   * Get semantic diff between two atoms
+   */
+  diff: async (idA: string, idB: string): Promise<SemanticDiff> => {
+    const response = await apiClient.get<SemanticDiff>(`/atoms/${idA}/diff/${idB}`);
     return response.data;
   },
 };

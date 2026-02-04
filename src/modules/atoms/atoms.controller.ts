@@ -39,6 +39,7 @@ import { CreateValidatorDto } from '../validators/dto/create-validator.dto';
 import { Validator } from '../validators/validator.entity';
 import { MoleculesService } from '../molecules/molecules.service';
 import { Molecule } from '../molecules/molecule.entity';
+import { SemanticDiffService, SemanticDiff } from './semantic-diff.service';
 
 @ApiTags('atoms')
 @Controller('atoms')
@@ -53,6 +54,7 @@ export class AtomsController {
     @Optional()
     @Inject(forwardRef(() => MoleculesService))
     private readonly moleculesService?: MoleculesService,
+    @Optional() private readonly semanticDiffService?: SemanticDiffService,
   ) {}
 
   @Post()
@@ -94,12 +96,29 @@ export class AtomsController {
     return this.atomsService.findOne(id);
   }
 
+  @Get('intent/:intentIdentity')
+  @ApiOperation({ summary: 'Get all versions of an intent by intentIdentity' })
+  @ApiParam({ name: 'intentIdentity', description: 'Intent identity UUID' })
+  @ApiResponse({ status: 200, description: 'All versions of the intent', type: [Atom] })
+  findByIntentIdentity(@Param('intentIdentity') intentIdentity: string): Promise<Atom[]> {
+    return this.atomsService.findByIntentIdentity(intentIdentity);
+  }
+
   @Get(':id/supersession-chain')
   @ApiOperation({ summary: 'Get the supersession chain for an atom' })
   @ApiParam({ name: 'id', description: 'UUID or atomId of the starting atom' })
   @ApiResponse({ status: 200, description: 'Supersession chain', type: [Atom] })
   findSupersessionChain(@Param('id') id: string): Promise<Atom[]> {
     return this.atomsService.findSupersessionChain(id);
+  }
+
+  @Get(':id/versions')
+  @ApiOperation({ summary: "Get version history for a specific atom's intent" })
+  @ApiParam({ name: 'id', description: 'UUID of the atom' })
+  @ApiResponse({ status: 200, description: 'Version history' })
+  @ApiResponse({ status: 404, description: 'Atom not found' })
+  getVersionHistory(@Param('id') id: string) {
+    return this.atomsService.getVersionHistory(id);
   }
 
   @Patch(':id')
@@ -480,5 +499,29 @@ export class AtomsController {
       throw new Error('Intent refinement service is not available');
     }
     return this.intentRefinementService.acceptSuggestion(id, acceptSuggestionDto);
+  }
+
+  // ===========================================================================
+  // Semantic Diffing (Phase 12.4)
+  // ===========================================================================
+
+  @Get(':id/diff/:compareId')
+  @ApiOperation({
+    summary: 'Compare two atoms semantically',
+    description:
+      'Get a semantic diff between two atoms, analyzing changes in description, outcomes, criteria, and quality.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID or atomId of the first atom' })
+  @ApiParam({ name: 'compareId', description: 'UUID or atomId of the second atom' })
+  @ApiResponse({ status: 200, description: 'Semantic diff result' })
+  @ApiResponse({ status: 404, description: 'One or both atoms not found' })
+  async diffAtoms(
+    @Param('id') id: string,
+    @Param('compareId') compareId: string,
+  ): Promise<SemanticDiff> {
+    if (!this.semanticDiffService) {
+      throw new Error('Semantic diff service is not available');
+    }
+    return this.semanticDiffService.diff(id, compareId);
   }
 }

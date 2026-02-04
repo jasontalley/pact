@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Molecule, LensType, LENS_TYPE_LABELS, LENS_TYPE_DESCRIPTIONS } from './molecule.entity';
+import { ChangeSetMetadata, ChangeSetStatus } from './change-set.types';
 import { MoleculeAtom } from './molecule-atom.entity';
 import { MoleculesRepository, PaginatedMoleculesResponse } from './molecules.repository';
 import {
@@ -565,6 +566,7 @@ export class MoleculesService {
       'epic',
       'release',
       'capability',
+      'change_set',
       'custom',
     ];
 
@@ -580,5 +582,224 @@ export class MoleculesService {
    */
   async getMoleculesForAtom(atomId: string): Promise<Molecule[]> {
     return this.moleculesRepository.findMoleculesContainingAtom(atomId);
+  }
+
+  // ========================================
+  // Change Set Operations
+  // ========================================
+
+  /**
+   * Create a new change set molecule.
+   * A change set groups proposed atom changes for batch review and commitment.
+   */
+  async createChangeSet(
+    dto: {
+      name: string;
+      description?: string;
+      summary?: string;
+      sourceRef?: string;
+      tags?: string[];
+    },
+    userId: string,
+  ): Promise<Molecule> {
+    const moleculeId = await this.moleculesRepository.generateMoleculeId();
+
+    const changeSetMetadata: ChangeSetMetadata = {
+      status: 'draft',
+      createdBy: userId,
+      summary: dto.summary,
+      sourceRef: dto.sourceRef,
+      approvals: [],
+      requiredApprovals: 1,
+    };
+
+    const molecule = this.moleculesRepository.baseRepository.create({
+      moleculeId,
+      name: dto.name,
+      description: dto.description || null,
+      lensType: 'change_set' as LensType,
+      lensLabel: null,
+      parentMoleculeId: null,
+      ownerId: userId,
+      tags: dto.tags || [],
+      metadata: {},
+      changeSetMetadata,
+    });
+
+    return this.moleculesRepository.baseRepository.save(molecule);
+  }
+
+  /**
+   * Add an atom to a change set.
+   * Only allowed when the change set is in 'draft' status.
+   */
+  async addAtomToChangeSet(
+    changeSetId: string,
+    atomId: string,
+    userId: string,
+    note?: string,
+  ): Promise<void> {
+    const molecule = await this.findOne(changeSetId);
+    this.assertChangeSet(molecule);
+    this.assertChangeSetStatus(molecule, ['draft']);
+
+    await this.addAtom(changeSetId, { atomId, note }, userId);
+  }
+
+  /**
+   * Submit a change set for review.
+   * Transitions status from 'draft' to 'review'.
+   */
+  async submitChangeSetForReview(changeSetId: string, userId: string): Promise<Molecule> {
+    const molecule = await this.findOne(changeSetId);
+    this.assertChangeSet(molecule);
+    this.assertChangeSetStatus(molecule, ['draft']);
+
+    // Must have at least one atom
+    const atoms = await this.getAtoms(changeSetId, { activeOnly: true });
+    if (atoms.length === 0) {
+      throw new BadRequestException('Cannot submit an empty change set for review');
+    }
+
+    molecule.changeSetMetadata = {
+      ...molecule.changeSetMetadata!,
+      status: 'review' as ChangeSetStatus,
+      submittedAt: new Date().toISOString(),
+    };
+
+    return this.moleculesRepository.baseRepository.save(molecule);
+  }
+
+  /**
+   * Approve or reject a change set.
+   * When sufficient approvals are received, status transitions to 'approved'.
+   */
+  async approveChangeSet(
+    changeSetId: string,
+    userId: string,
+    decision: 'approved' | 'rejected',
+    comment?: string,
+  ): Promise<Molecule> {
+    const molecule = await this.findOne(changeSetId);
+    this.assertChangeSet(molecule);
+    this.assertChangeSetStatus(molecule, ['review']);
+
+    const metadata = molecule.changeSetMetadata!;
+
+    // Check for duplicate approval from same user
+    const existingApproval = metadata.approvals.find((a) => a.userId === userId);
+    if (existingApproval) {
+      throw new ConflictException(`User "${userId}" has already submitted a decision`);
+    }
+
+    metadata.approvals.push({
+      userId,
+      decision,
+      comment,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (decision === 'rejected') {
+      metadata.status = 'rejected';
+    } else {
+      // Check if we have enough approvals
+      const approvalCount = metadata.approvals.filter((a) => a.decision === 'approved').length;
+      if (approvalCount >= metadata.requiredApprovals) {
+        metadata.status = 'approved';
+      }
+    }
+
+    molecule.changeSetMetadata = metadata;
+    return this.moleculesRepository.baseRepository.save(molecule);
+  }
+
+  /**
+   * Commit a change set — batch commits all draft atoms in the set.
+   * Only allowed when the change set is in 'approved' status.
+   * Atoms must meet quality gate (score >= 80).
+   */
+  async commitChangeSet(changeSetId: string, userId: string): Promise<Molecule> {
+    const molecule = await this.findOne(changeSetId);
+    this.assertChangeSet(molecule);
+    this.assertChangeSetStatus(molecule, ['approved']);
+
+    const atoms = await this.getAtoms(changeSetId, { activeOnly: true });
+    const draftAtoms = atoms.filter((a) => a.status === 'draft');
+
+    if (draftAtoms.length === 0) {
+      throw new BadRequestException('No draft atoms to commit in this change set');
+    }
+
+    // Quality gate check for all draft atoms
+    const failingAtoms = draftAtoms.filter((a) => (a.qualityScore ?? 0) < 80);
+    if (failingAtoms.length > 0) {
+      const ids = failingAtoms.map((a) => a.atomId || a.id).join(', ');
+      throw new BadRequestException(
+        `Cannot commit change set: atoms [${ids}] have quality score below 80`,
+      );
+    }
+
+    // Batch commit all draft atoms
+    const committedAtomIds: string[] = [];
+    for (const atom of draftAtoms) {
+      atom.status = 'committed';
+      atom.committedAt = new Date();
+      await this.atomRepository.save(atom);
+      committedAtomIds.push(atom.id);
+    }
+
+    // Update change set metadata
+    molecule.changeSetMetadata = {
+      ...molecule.changeSetMetadata!,
+      status: 'committed' as ChangeSetStatus,
+      committedAt: new Date().toISOString(),
+      committedAtomIds,
+    };
+
+    return this.moleculesRepository.baseRepository.save(molecule);
+  }
+
+  /**
+   * Get a change set with its current status and atoms.
+   */
+  async getChangeSet(changeSetId: string): Promise<{ molecule: Molecule; atoms: Atom[] }> {
+    const molecule = await this.findOne(changeSetId);
+    this.assertChangeSet(molecule);
+
+    const atoms = await this.getAtoms(changeSetId, { activeOnly: true });
+    return { molecule, atoms };
+  }
+
+  /**
+   * List all change sets, optionally filtered by status.
+   */
+  async listChangeSets(status?: ChangeSetStatus): Promise<Molecule[]> {
+    const qb = this.moleculesRepository.baseRepository
+      .createQueryBuilder('molecule')
+      .where('molecule.lensType = :lensType', { lensType: 'change_set' })
+      .orderBy('molecule.createdAt', 'DESC');
+
+    if (status) {
+      qb.andWhere("molecule.changeSetMetadata->>'status' = :status", { status });
+    }
+
+    return qb.getMany();
+  }
+
+  // ---- Change Set Helpers ----
+
+  private assertChangeSet(molecule: Molecule): void {
+    if (molecule.lensType !== 'change_set') {
+      throw new BadRequestException(`Molecule "${molecule.moleculeId}" is not a change set`);
+    }
+  }
+
+  private assertChangeSetStatus(molecule: Molecule, allowedStatuses: ChangeSetStatus[]): void {
+    const currentStatus = molecule.changeSetMetadata?.status;
+    if (!currentStatus || !allowedStatuses.includes(currentStatus)) {
+      throw new BadRequestException(
+        `Change set "${molecule.moleculeId}" is in status "${currentStatus}", expected one of: ${allowedStatuses.join(', ')}`,
+      );
+    }
   }
 }

@@ -2,6 +2,11 @@
 
 import { AppLayout } from '@/components/layout';
 import { DashboardStats } from '@/components/dashboard/DashboardStats';
+import { EpistemicStackCard } from '@/components/dashboard/EpistemicStackCard';
+import { CouplingHealthCard } from '@/components/dashboard/CouplingHealthCard';
+import { TrendChart } from '@/components/dashboard/TrendChart';
+import { TestQualityCard } from '@/components/dashboard/TestQualityCard';
+import { CoverageCard } from '@/components/dashboard/CoverageCard';
 import { RecentAtoms } from '@/components/dashboard/RecentAtoms';
 import { QuickActions } from '@/components/dashboard/QuickActions';
 
@@ -14,6 +19,23 @@ export default function DashboardPage() {
           <p className="text-muted-foreground">
             Overview of your Intent Atoms and system health
           </p>
+        </div>
+
+        {/* Epistemic Stack + Coupling Health */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <EpistemicStackCard />
+          <CouplingHealthCard />
+        </div>
+
+        {/* Test Quality + Coverage */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <TestQualityCard />
+          <CoverageCard />
+        </div>
+
+        {/* Trend Chart */}
+        <div className="mb-8">
+          <TrendChart />
         </div>
 
         {/* Stats Grid */}

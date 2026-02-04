@@ -98,6 +98,7 @@ function wrapWithErrorHandling(
   isCritical = false,
 ): (state: ReconciliationGraphStateType) => Promise<Partial<ReconciliationGraphStateType>> {
   // Import isGraphInterrupt dynamically to match actual implementation
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { isGraphInterrupt } = require('@langchain/langgraph');
 
   return async (

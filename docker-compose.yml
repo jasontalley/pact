@@ -27,12 +27,14 @@ services:
     command: sh -c "npm run migration:run && npm run start:dev"
     ports:
       - "3000:3000"
+      - "3002:3002"
     volumes:
       - .:/app
       - /app/node_modules
     env_file:
       - .env.development
     environment:
+      MCP_PORT: 3002
       DATABASE_HOST: postgres
       DATABASE_PORT: 5432
       DATABASE_USER: pact

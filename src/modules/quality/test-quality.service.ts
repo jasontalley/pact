@@ -5,6 +5,18 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'node:child_process';
 import { TestQualitySnapshot } from './test-quality-snapshot.entity';
+import {
+  QualityProfile,
+  DEFAULT_QUALITY_DIMENSIONS,
+  QualityDimensionConfig,
+} from './quality-profile.entity';
+import {
+  computeQualityGrade,
+  QualityDimensionScore,
+  QualityGrade,
+} from '../agents/entities/test-record.entity';
+import { TestQualityResultDto, TestQualityBatchResultDto } from './dto/analyze-test.dto';
+import { QualityProfileResponseDto } from './dto/quality-profile.dto';
 
 export interface QualityDimension {
   name: string;
@@ -95,6 +107,8 @@ export class TestQualityService {
   constructor(
     @InjectRepository(TestQualitySnapshot)
     private snapshotRepository: Repository<TestQualitySnapshot>,
+    @InjectRepository(QualityProfile)
+    private readonly profileRepository: Repository<QualityProfile>,
   ) {}
 
   /**
@@ -1043,5 +1057,253 @@ export class TestQualityService {
     }
 
     this.logger.log('Test quality gate PASSED');
+  }
+
+  // ==========================================================================
+  // Phase 14B: Text-Based Analysis (Ingestion Boundary Pattern)
+  // ==========================================================================
+
+  /**
+   * Analyze test quality from source code text (no filesystem access).
+   *
+   * This is the Ingestion Boundary version of analyzeTestFile:
+   * accepts source code as a string instead of reading from disk.
+   */
+  analyzeTestSource(
+    sourceCode: string,
+    options?: { filePath?: string; profileId?: string },
+  ): TestQualityResultDto {
+    const filePath = options?.filePath || 'unknown.spec.ts';
+
+    // Extract atom annotations and test info
+    const { referencedAtoms, orphanTests, totalTests, annotatedTests } =
+      this.extractTestInfo(sourceCode);
+
+    // Evaluate each dimension
+    const rawDimensions: Record<string, QualityDimension> = {};
+
+    rawDimensions.intentFidelity = this.evaluateIntentFidelity(
+      sourceCode,
+      referencedAtoms,
+      orphanTests,
+      totalTests,
+    );
+    rawDimensions.noVacuousTests = this.evaluateNoVacuousTests(sourceCode);
+    rawDimensions.noBrittleTests = this.evaluateNoBrittleTests(sourceCode);
+    rawDimensions.determinism = this.evaluateDeterminism(sourceCode);
+    rawDimensions.failureSignalQuality = this.evaluateFailureSignalQuality(
+      sourceCode,
+      referencedAtoms,
+    );
+    rawDimensions.integrationTestAuthenticity = this.evaluateIntegrationAuthenticity(
+      sourceCode,
+      filePath,
+    );
+    rawDimensions.boundaryAndNegativeCoverage =
+      this.evaluateBoundaryAndNegativeCoverage(sourceCode);
+
+    // Calculate overall score
+    const overallScore = this.calculateOverallScore(rawDimensions);
+    const passed = Object.values(rawDimensions).every((d) => d.passed);
+    const grade = computeQualityGrade(overallScore);
+
+    // Convert to QualityDimensionScore format for TestRecord storage
+    const dimensions: Record<string, QualityDimensionScore> = {};
+    for (const [key, dim] of Object.entries(rawDimensions)) {
+      dimensions[key] = {
+        score: dim.score,
+        passed: dim.passed,
+        issues: dim.issues.map((i) => ({
+          severity: i.severity,
+          message: i.message,
+          lineNumber: i.lineNumber,
+          suggestion: i.suggestion,
+        })),
+      };
+    }
+
+    return {
+      overallScore,
+      grade,
+      passed,
+      dimensions,
+      totalTests,
+      annotatedTests,
+      referencedAtoms,
+    };
+  }
+
+  /**
+   * Batch analyze multiple test sources.
+   */
+  analyzeTestSourceBatch(
+    tests: Array<{
+      sourceCode: string;
+      filePath?: string;
+      testRecordId?: string;
+    }>,
+    options?: { profileId?: string },
+  ): TestQualityBatchResultDto {
+    const results: TestQualityBatchResultDto['results'] = [];
+    const gradeDistribution: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, F: 0 };
+    let totalScore = 0;
+
+    for (const test of tests) {
+      const result = this.analyzeTestSource(test.sourceCode, {
+        filePath: test.filePath,
+        profileId: options?.profileId,
+      });
+
+      results.push({ ...result, testRecordId: test.testRecordId });
+      totalScore += result.overallScore;
+      gradeDistribution[result.grade] = (gradeDistribution[result.grade] || 0) + 1;
+    }
+
+    return {
+      results,
+      summary: {
+        totalAnalyzed: tests.length,
+        averageScore: tests.length > 0 ? totalScore / tests.length : 0,
+        gradeDistribution,
+      },
+    };
+  }
+
+  // ==========================================================================
+  // Phase 14B: Quality Profile CRUD
+  // ==========================================================================
+
+  /**
+   * List quality profiles, optionally filtered by project.
+   */
+  async listProfiles(projectId?: string): Promise<QualityProfileResponseDto[]> {
+    const where: Record<string, unknown> = {};
+    if (projectId) {
+      where.projectId = projectId;
+    }
+
+    const profiles = await this.profileRepository.find({
+      where,
+      order: { isDefault: 'DESC', name: 'ASC' },
+    });
+
+    return profiles.map((p) => this.toProfileResponse(p));
+  }
+
+  /**
+   * Get a specific quality profile by ID.
+   */
+  async getProfile(id: string): Promise<QualityProfile | null> {
+    return this.profileRepository.findOne({ where: { id } });
+  }
+
+  /**
+   * Get the default profile (or system default if none set).
+   */
+  async getDefaultProfile(projectId?: string): Promise<QualityDimensionConfig[]> {
+    const where: Record<string, unknown> = { isDefault: true };
+    if (projectId) {
+      where.projectId = projectId;
+    }
+
+    const profile = await this.profileRepository.findOne({ where });
+    return profile?.dimensions || DEFAULT_QUALITY_DIMENSIONS;
+  }
+
+  /**
+   * Create a new quality profile.
+   */
+  async createProfile(params: {
+    name: string;
+    description?: string;
+    projectId?: string;
+    dimensions: QualityDimensionConfig[];
+    isDefault?: boolean;
+  }): Promise<QualityProfile> {
+    // If setting as default, unset other defaults for this project
+    if (params.isDefault) {
+      await this.unsetDefaultProfiles(params.projectId || null);
+    }
+
+    const profile = this.profileRepository.create({
+      name: params.name,
+      description: params.description || null,
+      projectId: params.projectId || null,
+      dimensions: params.dimensions,
+      isDefault: params.isDefault || false,
+    });
+
+    return this.profileRepository.save(profile);
+  }
+
+  /**
+   * Update a quality profile.
+   */
+  async updateProfile(
+    id: string,
+    params: {
+      name?: string;
+      description?: string;
+      dimensions?: QualityDimensionConfig[];
+      isDefault?: boolean;
+    },
+  ): Promise<QualityProfile | null> {
+    const profile = await this.profileRepository.findOne({ where: { id } });
+    if (!profile) return null;
+
+    // If setting as default, unset other defaults
+    if (params.isDefault && !profile.isDefault) {
+      await this.unsetDefaultProfiles(profile.projectId);
+    }
+
+    if (params.name !== undefined) profile.name = params.name;
+    if (params.description !== undefined) profile.description = params.description;
+    if (params.dimensions !== undefined) profile.dimensions = params.dimensions;
+    if (params.isDefault !== undefined) profile.isDefault = params.isDefault;
+
+    return this.profileRepository.save(profile);
+  }
+
+  /**
+   * Delete a quality profile.
+   */
+  async deleteProfile(id: string): Promise<boolean> {
+    const result = await this.profileRepository.delete({ id });
+    return (result.affected || 0) > 0;
+  }
+
+  /**
+   * Unset default flag on all profiles for a project (or system-wide).
+   */
+  private async unsetDefaultProfiles(projectId: string | null): Promise<void> {
+    const qb = this.profileRepository
+      .createQueryBuilder()
+      .update(QualityProfile)
+      .set({ isDefault: false })
+      .where('isDefault = :isDefault', { isDefault: true });
+
+    if (projectId) {
+      qb.andWhere('projectId = :projectId', { projectId });
+    } else {
+      qb.andWhere('projectId IS NULL');
+    }
+
+    await qb.execute();
+  }
+
+  /**
+   * Convert QualityProfile entity to response DTO.
+   */
+  toProfileResponse(profile: QualityProfile): QualityProfileResponseDto {
+    return {
+      id: profile.id,
+      name: profile.name,
+      description: profile.description,
+      projectId: profile.projectId,
+      dimensions: profile.dimensions,
+      isDefault: profile.isDefault,
+      createdAt: profile.createdAt.toISOString(),
+      updatedAt: profile.updatedAt.toISOString(),
+    };
   }
 }

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { v4 as uuidv4 } from 'uuid';
 import { Atom, AtomStatus, AtomCategory } from './atom.entity';
 import { AtomsRepository } from './atoms.repository';
 import { CreateAtomDto } from './dto/create-atom.dto';
@@ -70,6 +71,8 @@ export class AtomsService {
       falsifiabilityCriteria: createAtomDto.falsifiabilityCriteria ?? [],
       refinementHistory: [],
       status: 'draft',
+      intentIdentity: (createAtomDto as any).intentIdentity ?? uuidv4(),
+      intentVersion: (createAtomDto as any).intentVersion ?? 1,
     });
 
     const savedAtom = await this.atomRepository.save(atom);
@@ -284,7 +287,14 @@ export class AtomsService {
       );
     }
 
-    // Create the new superseding atom
+    // Ensure the original atom has an intentIdentity (pre-migration backfill)
+    if (!originalAtom.intentIdentity) {
+      originalAtom.intentIdentity = uuidv4();
+      originalAtom.intentVersion = 1;
+      await this.atomRepository.save(originalAtom);
+    }
+
+    // Create the new superseding atom with inherited intentIdentity
     const newAtom = await this.create({
       description: supersedeDto.newDescription,
       category: supersedeDto.category ?? (originalAtom.category as AtomCategory),
@@ -294,7 +304,9 @@ export class AtomsService {
       falsifiabilityCriteria:
         supersedeDto.falsifiabilityCriteria ?? originalAtom.falsifiabilityCriteria,
       parentIntent: originalAtom.id, // Link to original as parent
-    });
+      intentIdentity: originalAtom.intentIdentity,
+      intentVersion: originalAtom.intentVersion + 1,
+    } as any);
 
     // Mark the original as superseded
     originalAtom.status = 'superseded';
@@ -397,5 +409,41 @@ export class AtomsService {
    */
   async getStatistics() {
     return this.atomsRepository.getStatistics();
+  }
+
+  /**
+   * Get all versions of an intent by intentIdentity
+   */
+  async findByIntentIdentity(intentIdentity: string): Promise<Atom[]> {
+    return this.atomRepository.find({
+      where: { intentIdentity },
+      order: { intentVersion: 'ASC' },
+    });
+  }
+
+  /**
+   * Get the version history for a specific atom's intent
+   */
+  async getVersionHistory(
+    id: string,
+  ): Promise<{ intentIdentity: string; versions: Atom[]; currentVersion: Atom }> {
+    const atom = await this.findOne(id);
+
+    if (!atom.intentIdentity) {
+      // Atom predates intent identity — return just this atom
+      return {
+        intentIdentity: atom.id,
+        versions: [atom],
+        currentVersion: atom,
+      };
+    }
+
+    const versions = await this.findByIntentIdentity(atom.intentIdentity);
+
+    return {
+      intentIdentity: atom.intentIdentity,
+      versions,
+      currentVersion: atom,
+    };
   }
 }

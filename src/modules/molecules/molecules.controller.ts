@@ -302,3 +302,125 @@ export class MoleculesController {
     return this.moleculesService.getMetrics(id);
   }
 }
+
+// ========================================
+// Change Set Controller
+// ========================================
+
+@ApiTags('change-sets')
+@Controller('change-sets')
+export class ChangeSetsController {
+  constructor(private readonly moleculesService: MoleculesService) {}
+
+  @Post()
+  @ApiOperation({
+    summary: 'Create a new change set',
+    description: 'Creates a change set molecule for grouping proposed atom changes.',
+  })
+  @ApiResponse({ status: 201, description: 'Change set created', type: Molecule })
+  @ApiResponse({ status: 400, description: 'Invalid input' })
+  async create(
+    @Body()
+    body: {
+      name: string;
+      description?: string;
+      summary?: string;
+      sourceRef?: string;
+      tags?: string[];
+    },
+  ): Promise<Molecule> {
+    const userId = 'system';
+    return this.moleculesService.createChangeSet(body, userId);
+  }
+
+  @Get()
+  @ApiOperation({
+    summary: 'List change sets',
+    description: 'Returns all change sets, optionally filtered by status.',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['draft', 'review', 'approved', 'committed', 'rejected'],
+  })
+  @ApiResponse({ status: 200, description: 'List of change sets', type: [Molecule] })
+  async list(
+    @Query('status') status?: 'draft' | 'review' | 'approved' | 'committed' | 'rejected',
+  ): Promise<Molecule[]> {
+    return this.moleculesService.listChangeSets(status);
+  }
+
+  @Get(':id')
+  @ApiOperation({
+    summary: 'Get a change set with atoms',
+    description: 'Returns the change set molecule and its associated atoms.',
+  })
+  @ApiParam({ name: 'id', description: 'Change set UUID' })
+  @ApiResponse({ status: 200, description: 'Change set details' })
+  @ApiResponse({ status: 404, description: 'Change set not found' })
+  async findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<{ molecule: Molecule; atoms: Atom[] }> {
+    return this.moleculesService.getChangeSet(id);
+  }
+
+  @Post(':id/atoms')
+  @ApiOperation({
+    summary: 'Add an atom to a change set',
+    description: 'Adds an atom to a draft change set.',
+  })
+  @ApiParam({ name: 'id', description: 'Change set UUID' })
+  @ApiResponse({ status: 201, description: 'Atom added' })
+  @ApiResponse({ status: 400, description: 'Change set not in draft status' })
+  @HttpCode(HttpStatus.CREATED)
+  async addAtom(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { atomId: string; note?: string },
+  ): Promise<void> {
+    const userId = 'system';
+    return this.moleculesService.addAtomToChangeSet(id, body.atomId, userId, body.note);
+  }
+
+  @Post(':id/submit')
+  @ApiOperation({
+    summary: 'Submit change set for review',
+    description: 'Transitions a draft change set to review status.',
+  })
+  @ApiParam({ name: 'id', description: 'Change set UUID' })
+  @ApiResponse({ status: 200, description: 'Change set submitted for review' })
+  @ApiResponse({ status: 400, description: 'Change set not in draft status or empty' })
+  async submitForReview(@Param('id', ParseUUIDPipe) id: string): Promise<Molecule> {
+    const userId = 'system';
+    return this.moleculesService.submitChangeSetForReview(id, userId);
+  }
+
+  @Post(':id/approve')
+  @ApiOperation({
+    summary: 'Approve or reject a change set',
+    description: 'Records an approval or rejection decision on a change set in review.',
+  })
+  @ApiParam({ name: 'id', description: 'Change set UUID' })
+  @ApiResponse({ status: 200, description: 'Decision recorded' })
+  @ApiResponse({ status: 400, description: 'Change set not in review status' })
+  @ApiResponse({ status: 409, description: 'User already submitted a decision' })
+  async approve(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { decision: 'approved' | 'rejected'; comment?: string },
+  ): Promise<Molecule> {
+    const userId = 'system';
+    return this.moleculesService.approveChangeSet(id, userId, body.decision, body.comment);
+  }
+
+  @Post(':id/commit')
+  @ApiOperation({
+    summary: 'Commit a change set',
+    description: 'Batch commits all draft atoms in an approved change set.',
+  })
+  @ApiParam({ name: 'id', description: 'Change set UUID' })
+  @ApiResponse({ status: 200, description: 'Change set committed' })
+  @ApiResponse({ status: 400, description: 'Change set not approved or atoms fail quality gate' })
+  async commit(@Param('id', ParseUUIDPipe) id: string): Promise<Molecule> {
+    const userId = 'system';
+    return this.moleculesService.commitChangeSet(id, userId);
+  }
+}

@@ -48,10 +48,13 @@ export class CreateMoleculeDto {
   })
   @IsString()
   @IsNotEmpty()
-  @IsEnum(['user_story', 'feature', 'journey', 'epic', 'release', 'capability', 'custom'], {
-    message:
-      'Lens type must be one of: user_story, feature, journey, epic, release, capability, custom',
-  })
+  @IsEnum(
+    ['user_story', 'feature', 'journey', 'epic', 'release', 'capability', 'change_set', 'custom'],
+    {
+      message:
+        'Lens type must be one of: user_story, feature, journey, epic, release, capability, change_set, custom',
+    },
+  )
   lensType: LensType;
 
   @ApiPropertyOptional({
