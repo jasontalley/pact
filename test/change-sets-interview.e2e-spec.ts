@@ -1,16 +1,16 @@
 /**
- * E2E tests for Phase 11: Conversation
+ * E2E tests for Change Sets and Interview Agent
  *
  * Tests the REST API surface for:
- * 1. Change Set Molecules (11.1) - Create, review, approve, commit change sets
- * 2. Interview Agent (11.2) - Graph registration verification
- * 3. Conversation Compaction (11.3) - Search, compact, compacted messages
+ * 1. Change Set Molecules - Create, review, approve, commit change sets
+ * 2. Interview Agent - Graph registration verification
+ * 3. Conversation Compaction - Search, compact, compacted messages
  */
 import * as request from 'supertest';
 import { setupE2EApp, teardownE2EApp } from './setup-e2e';
 import { INestApplication } from '@nestjs/common';
 
-describe('Phase 11: Conversation (e2e)', () => {
+describe('Change Sets and Interview Agent (e2e)', () => {
   let app: INestApplication;
 
   beforeAll(async () => {

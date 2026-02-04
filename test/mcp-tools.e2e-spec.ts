@@ -1,5 +1,5 @@
 /**
- * E2E tests for Phase 10: External Access (MCP Server)
+ * E2E tests for MCP Tools and External Access
  *
  * Tests the REST API surface that the MCP tool handlers depend on.
  * The MCP server is a stdio proxy that translates MCP tool calls into
@@ -14,7 +14,7 @@ import * as request from 'supertest';
 import { setupE2EApp, teardownE2EApp } from './setup-e2e';
 import { INestApplication } from '@nestjs/common';
 
-describe('Phase 10: MCP External Access (e2e)', () => {
+describe('MCP Tools and External Access (e2e)', () => {
   let app: INestApplication;
   let testAtomId: string;
   let testAtomHumanId: string;

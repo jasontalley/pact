@@ -1,16 +1,16 @@
 /**
- * E2E tests for Phase 12: Polish
+ * E2E tests for Scheduling, Diffing, and Trends
  *
  * Tests the REST API surface for:
- * 1. Reconciliation Scheduling (12.3) - CRUD for cron-based schedule
- * 2. Semantic Diffing (12.4) - Compare two atoms semantically
- * 3. Trend Charts (12.5) - Metrics snapshots and trend retrieval
+ * 1. Reconciliation Scheduling - CRUD for cron-based schedule
+ * 2. Semantic Diffing - Compare two atoms semantically
+ * 3. Trend Charts - Metrics snapshots and trend retrieval
  */
 import * as request from 'supertest';
 import { setupE2EApp, teardownE2EApp } from './setup-e2e';
 import { INestApplication } from '@nestjs/common';
 
-describe('Phase 12: Polish (e2e)', () => {
+describe('Scheduling, Diffing, and Trends (e2e)', () => {
   let app: INestApplication;
 
   beforeAll(async () => {

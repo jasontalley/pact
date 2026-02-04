@@ -1,16 +1,16 @@
 /**
- * E2E tests for Phase 9: Visibility
+ * E2E tests for Epistemic and Coupling Metrics
  *
- * Tests the Phase 9 subsystems:
- * 1. Epistemic Metrics API (9.1)
- * 2. Coupling + Epistemic integration (9.2)
- * 3. Conflicts API integration (9.3) - conflict metrics for nav badge
+ * Tests metrics subsystems:
+ * 1. Epistemic Metrics API
+ * 2. Coupling + Epistemic integration
+ * 3. Conflicts API integration - conflict metrics for nav badge
  */
 import * as request from 'supertest';
 import { setupE2EApp, teardownE2EApp } from './setup-e2e';
 import { INestApplication } from '@nestjs/common';
 
-describe('Phase 9: Visibility (e2e)', () => {
+describe('Epistemic and Coupling Metrics (e2e)', () => {
   let app: INestApplication;
 
   beforeAll(async () => {

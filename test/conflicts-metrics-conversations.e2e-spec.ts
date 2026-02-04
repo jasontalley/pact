@@ -1,17 +1,17 @@
 /**
- * E2E tests for Phase 8: Foundation
+ * E2E tests for Conflicts, Metrics, and Conversations
  *
- * Tests the four Phase 8 subsystems:
- * 1. Conflict Detection (8.1)
- * 2. Coupling Metrics (8.2)
- * 3. Conversation Persistence (8.3)
- * 4. Intent Identity (8.4)
+ * Tests foundational subsystems:
+ * 1. Conflict Detection API
+ * 2. Coupling Metrics API
+ * 3. Conversation Persistence API
+ * 4. Intent Identity (semantic diff)
  */
 import * as request from 'supertest';
 import { setupE2EApp, teardownE2EApp } from './setup-e2e';
 import { INestApplication } from '@nestjs/common';
 
-describe('Phase 8: Foundation (e2e)', () => {
+describe('Conflicts, Metrics, and Conversations (e2e)', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
