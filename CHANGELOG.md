@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-02-06
+
+### Fixed
+
+- **Production deployment stack**: `docker-compose.prod.yml` now uses published Docker Hub image
+  instead of requiring source code to build
+- **Database schema initialization**: Added `DATABASE_SYNCHRONIZE` env var to enable automatic
+  schema creation on first deployment (defaults to `true`)
+- **Postgres compatibility**: Downgraded from Postgres 18 to 16-alpine (18 has breaking data
+  directory changes incompatible with standard volume mounts)
+- **Redis healthcheck**: Added healthcheck and dependency ordering so app waits for Redis readiness
+- **Removed deprecated `version` key** from docker-compose.prod.yml
+
 ## [0.1.1] - 2026-02-06
 
 ### Fixed
