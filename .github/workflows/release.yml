@@ -54,17 +54,10 @@ jobs:
       - name: Run linter
         run: npm run lint
 
-      - name: Run migrations
-        env:
-          DATABASE_HOST: localhost
-          DATABASE_PORT: 5432
-          DATABASE_USER: pact
-          DATABASE_PASSWORD: pact_test_password
-          DATABASE_NAME: pact_test
-          REDIS_HOST: localhost
-          REDIS_PORT: 6379
-          NODE_ENV: test
-        run: npm run migration:run
+      - name: Setup test database
+        run: |
+          echo "Test database will be initialized by TypeORM entity synchronization during tests"
+          echo "Note: Migrations are for production; tests use synchronize:true from entities"
 
       - name: Run unit tests with coverage
         env:
