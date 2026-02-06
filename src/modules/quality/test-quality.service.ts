@@ -16,10 +16,7 @@ import {
 } from '../agents/entities/test-record.entity';
 import { TestQualityResultDto, TestQualityBatchResultDto } from './dto/analyze-test.dto';
 import { QualityProfileResponseDto } from './dto/quality-profile.dto';
-import {
-  ContentProvider,
-  FilesystemContentProvider,
-} from '../agents/content';
+import { ContentProvider, FilesystemContentProvider } from '../agents/content';
 import { CONTENT_PROVIDER } from '../agents/context-builder.service';
 
 export interface QualityDimension {
@@ -170,7 +167,10 @@ export class TestQualityService {
   /**
    * Analyze a single test file
    */
-  async analyzeTestFile(filePath: string, baseDir: string = process.cwd()): Promise<TestFileQualityResult> {
+  async analyzeTestFile(
+    filePath: string,
+    baseDir: string = process.cwd(),
+  ): Promise<TestFileQualityResult> {
     const content = await this.contentProvider.readFileOrNull(filePath);
     if (content === null) {
       // Return empty result for unreadable files

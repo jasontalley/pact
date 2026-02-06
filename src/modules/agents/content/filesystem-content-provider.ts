@@ -1,12 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import {
-  ContentProvider,
-  FileEntry,
-  ListOptions,
-  WalkOptions,
-} from './content-provider.interface';
+import { ContentProvider, FileEntry, ListOptions, WalkOptions } from './content-provider.interface';
 
 /**
  * Default exclude patterns for directory walking
@@ -79,7 +74,7 @@ export class FilesystemContentProvider implements ContentProvider {
         // Recursive listing
         if (options?.recursive && item.isDirectory()) {
           const maxDepth = options.maxDepth ?? 10;
-          const currentDepth = (itemPath.split(path.sep).length - dir.split(path.sep).length);
+          const currentDepth = itemPath.split(path.sep).length - dir.split(path.sep).length;
           if (currentDepth < maxDepth) {
             const subEntries = await this.listFiles(itemPath, {
               ...options,
@@ -120,7 +115,11 @@ export class FilesystemContentProvider implements ContentProvider {
           if (regex.test(name) || regex.test(fullPath)) {
             return true;
           }
-        } else if (name === pattern || fullPath.includes(`/${pattern}/`) || fullPath.includes(`\\${pattern}\\`)) {
+        } else if (
+          name === pattern ||
+          fullPath.includes(`/${pattern}/`) ||
+          fullPath.includes(`\\${pattern}\\`)
+        ) {
           return true;
         }
       }

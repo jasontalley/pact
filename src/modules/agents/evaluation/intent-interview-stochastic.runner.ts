@@ -157,17 +157,40 @@ async function runScenario(
       runResults.push(result);
       logger.log(
         `  Run ${i + 1}/${scenario.numRuns}: P=${result.groundTruthScore.precision.toFixed(2)} ` +
-        `R=${result.groundTruthScore.recall.toFixed(2)} F1=${result.groundTruthScore.f1.toFixed(2)} ` +
-        `Rubric=${result.rubricResult.totalScore}/${result.rubricResult.maxScore}`,
+          `R=${result.groundTruthScore.recall.toFixed(2)} F1=${result.groundTruthScore.f1.toFixed(2)} ` +
+          `Rubric=${result.rubricResult.totalScore}/${result.rubricResult.maxScore}`,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.error(`  Run ${i + 1}/${scenario.numRuns}: ERROR — ${message}`);
       runResults.push({
         runId: uuidv4(),
-        groundTruthScore: { precision: 0, recall: 0, f1: 0, matches: [], unmatchedFacts: [], orphanAtoms: [] },
-        rubricResult: { agent: 'interview', runId: '', totalScore: 0, maxScore: 12, passed: false, dimensions: [], criticalFailures: [], minimumScore: 0 },
-        output: { atomCandidates: [], moleculeCandidates: [], questionsAsked: 0, roundsCompleted: 0, userSignaledDone: false, errors: [message] },
+        groundTruthScore: {
+          precision: 0,
+          recall: 0,
+          f1: 0,
+          matches: [],
+          unmatchedFacts: [],
+          orphanAtoms: [],
+        },
+        rubricResult: {
+          agent: 'interview',
+          runId: '',
+          totalScore: 0,
+          maxScore: 12,
+          passed: false,
+          dimensions: [],
+          criticalFailures: [],
+          minimumScore: 0,
+        },
+        output: {
+          atomCandidates: [],
+          moleculeCandidates: [],
+          questionsAsked: 0,
+          roundsCompleted: 0,
+          userSignaledDone: false,
+          errors: [message],
+        },
         durationMs: 0,
         roundsCompleted: 0,
         questionsAsked: 0,
@@ -180,31 +203,33 @@ async function runScenario(
   const stats = aggregateStats(runResults);
   const passed = evaluateThresholds(stats, scenario);
 
-  const reason = passed
-    ? undefined
-    : buildFailureReason(stats, scenario);
+  const reason = passed ? undefined : buildFailureReason(stats, scenario);
 
   return {
     caseId: scenario.id,
     name: scenario.name,
     result: passed ? 'pass' : 'fail',
     reason,
-    diff: JSON.stringify({
-      runs: scenario.numRuns,
-      aggregate: stats,
-      perRun: runResults.map((r) => ({
-        runId: r.runId,
-        precision: r.groundTruthScore.precision,
-        recall: r.groundTruthScore.recall,
-        f1: r.groundTruthScore.f1,
-        rubricScore: r.rubricResult.totalScore,
-        questionsAsked: r.questionsAsked,
-        rounds: r.roundsCompleted,
-        unmatchedFacts: r.groundTruthScore.unmatchedFacts,
-        orphanAtoms: r.groundTruthScore.orphanAtoms,
-        errors: r.errors,
-      })),
-    }, null, 2),
+    diff: JSON.stringify(
+      {
+        runs: scenario.numRuns,
+        aggregate: stats,
+        perRun: runResults.map((r) => ({
+          runId: r.runId,
+          precision: r.groundTruthScore.precision,
+          recall: r.groundTruthScore.recall,
+          f1: r.groundTruthScore.f1,
+          rubricScore: r.rubricResult.totalScore,
+          questionsAsked: r.questionsAsked,
+          rounds: r.roundsCompleted,
+          unmatchedFacts: r.groundTruthScore.unmatchedFacts,
+          orphanAtoms: r.groundTruthScore.orphanAtoms,
+          errors: r.errors,
+        })),
+      },
+      null,
+      2,
+    ),
   };
 }
 
@@ -261,7 +286,7 @@ async function executeSingleRun(
 
   // Invoke the graph
   const threadId = `stochastic-${scenario.id}-${runId}`;
-  const result = await graph.invoke(
+  const result = (await graph.invoke(
     {
       rawIntent: scenario.initialIntent,
       maxRounds,
@@ -276,7 +301,7 @@ async function executeSingleRun(
       runName: `stochastic-${scenario.id}-run-${runNumber}`,
       tags: ['evaluation', 'stochastic', scenario.id],
     },
-  ) as InterviewGraphStateType;
+  )) as InterviewGraphStateType;
 
   const durationMs = Date.now() - startTime;
 
@@ -337,7 +362,10 @@ async function executeSingleRun(
 
   // Score
   const rubricResult = scoreInterviewRubric(artifact, scenario.evaluation.minimumRubricScore ?? 8);
-  const groundTruthScore = scoreAgainstGroundTruth(result.atomCandidates || [], scenario.groundTruth);
+  const groundTruthScore = scoreAgainstGroundTruth(
+    result.atomCandidates || [],
+    scenario.groundTruth,
+  );
 
   return {
     runId,
@@ -369,7 +397,11 @@ function aggregateStats(runs: SingleRunResult[]): ScenarioAggregateStats {
     recall: computeDistribution(recalls),
     f1: computeDistribution(f1s),
     rubricScore: computeDistribution(rubrics),
-    questionsAsked: { mean: mean(questions), min: Math.min(...questions), max: Math.max(...questions) },
+    questionsAsked: {
+      mean: mean(questions),
+      min: Math.min(...questions),
+      max: Math.max(...questions),
+    },
     roundsCompleted: { mean: mean(rounds), min: Math.min(...rounds), max: Math.max(...rounds) },
     durationMs: { mean: mean(durations), min: Math.min(...durations), max: Math.max(...durations) },
   };
@@ -378,20 +410,31 @@ function aggregateStats(runs: SingleRunResult[]): ScenarioAggregateStats {
 function evaluateThresholds(stats: ScenarioAggregateStats, scenario: StochasticScenario): boolean {
   if (stats.precision.mean < scenario.evaluation.minimumPrecision) return false;
   if (stats.recall.mean < scenario.evaluation.minimumRecall) return false;
-  if (scenario.evaluation.minimumRubricScore && stats.rubricScore.mean < scenario.evaluation.minimumRubricScore) return false;
+  if (
+    scenario.evaluation.minimumRubricScore &&
+    stats.rubricScore.mean < scenario.evaluation.minimumRubricScore
+  )
+    return false;
   return true;
 }
 
 function buildFailureReason(stats: ScenarioAggregateStats, scenario: StochasticScenario): string {
   const reasons: string[] = [];
   if (stats.precision.mean < scenario.evaluation.minimumPrecision) {
-    reasons.push(`precision ${stats.precision.mean.toFixed(2)} < ${scenario.evaluation.minimumPrecision}`);
+    reasons.push(
+      `precision ${stats.precision.mean.toFixed(2)} < ${scenario.evaluation.minimumPrecision}`,
+    );
   }
   if (stats.recall.mean < scenario.evaluation.minimumRecall) {
     reasons.push(`recall ${stats.recall.mean.toFixed(2)} < ${scenario.evaluation.minimumRecall}`);
   }
-  if (scenario.evaluation.minimumRubricScore && stats.rubricScore.mean < scenario.evaluation.minimumRubricScore) {
-    reasons.push(`rubric ${stats.rubricScore.mean.toFixed(1)} < ${scenario.evaluation.minimumRubricScore}`);
+  if (
+    scenario.evaluation.minimumRubricScore &&
+    stats.rubricScore.mean < scenario.evaluation.minimumRubricScore
+  ) {
+    reasons.push(
+      `rubric ${stats.rubricScore.mean.toFixed(1)} < ${scenario.evaluation.minimumRubricScore}`,
+    );
   }
   return `Mean thresholds not met: ${reasons.join(', ')}`;
 }
@@ -412,7 +455,12 @@ function stddev(values: number[]): number {
   return Math.sqrt(variance);
 }
 
-function computeDistribution(values: number[]): { mean: number; stddev: number; min: number; max: number } {
+function computeDistribution(values: number[]): {
+  mean: number;
+  stddev: number;
+  min: number;
+  max: number;
+} {
   return {
     mean: mean(values),
     stddev: stddev(values),

@@ -322,10 +322,16 @@ export function createDiscoverFullscanNode(options: DiscoverFullscanNodeOptions 
       // Fixture mode uses in-memory file contents instead of filesystem
       const fixtureFiles = state.fixtureFiles;
       const fixtureAnnotations = state.fixtureAnnotations;
-      const isFixtureMode = state.fixtureMode || !!(fixtureFiles && Object.keys(fixtureFiles).length > 0);
+      const isFixtureMode =
+        state.fixtureMode || !!(fixtureFiles && Object.keys(fixtureFiles).length > 0);
 
       // Try to use the tool if available and enabled (only if no filters and NOT fixture mode)
-      if (useTool && !hasFilters && !isFixtureMode && config.toolRegistry.hasTool('discover_orphans_fullscan')) {
+      if (
+        useTool &&
+        !hasFilters &&
+        !isFixtureMode &&
+        config.toolRegistry.hasTool('discover_orphans_fullscan')
+      ) {
         try {
           config.logger?.log('[DiscoverFullscanNode] Using discover_orphans_fullscan tool');
 

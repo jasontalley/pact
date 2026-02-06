@@ -31,7 +31,8 @@ export class MetricsHistoryService {
     private readonly testRecordRepository: Repository<TestRecord>,
     private readonly couplingMetricsService: CouplingMetricsService,
     private readonly epistemicMetricsService: EpistemicMetricsService,
-    @Optional() @Inject(DriftMetricsService)
+    @Optional()
+    @Inject(DriftMetricsService)
     private readonly driftMetricsService?: DriftMetricsService,
   ) {}
 

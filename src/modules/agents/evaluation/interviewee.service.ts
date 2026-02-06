@@ -10,7 +10,10 @@
 import { LLMService } from '../../../common/llm/llm.service';
 import { AgentTaskType } from '../../../common/llm/providers/types';
 import { InterviewQuestion, ConversationTurn } from '../graphs/types/interview-state';
-import { GroundTruthFact, IntervieweePersona } from '../../../../test/fixtures/agents/intent-interview/stochastic-schema';
+import {
+  GroundTruthFact,
+  IntervieweePersona,
+} from '../../../../test/fixtures/agents/intent-interview/stochastic-schema';
 
 export interface IntervieweeContext {
   domain: string;
@@ -69,13 +72,10 @@ export class IntervieweeService {
     const decidedFacts = groundTruth.filter((f) => f.isDecided);
     const undecidedFacts = groundTruth.filter((f) => !f.isDecided);
 
-    const factsSection = decidedFacts
-      .map((f) => `- ${f.fact}`)
-      .join('\n');
+    const factsSection = decidedFacts.map((f) => `- ${f.fact}`).join('\n');
 
-    const undecidedSection = undecidedFacts.length > 0
-      ? undecidedFacts.map((f) => `- ${f.fact}`).join('\n')
-      : 'None';
+    const undecidedSection =
+      undecidedFacts.length > 0 ? undecidedFacts.map((f) => `- ${f.fact}`).join('\n') : 'None';
 
     const constraintsSection = context.constraints?.length
       ? context.constraints.map((c) => `- ${c}`).join('\n')
@@ -107,16 +107,15 @@ ${constraintsSection}
     round: number,
     maxRounds: number,
   ): string {
-    const questionsText = questions
-      .map((q, i) => `${i + 1}. ${q.question}`)
-      .join('\n');
+    const questionsText = questions.map((q, i) => `${i + 1}. ${q.question}`).join('\n');
 
-    const historyText = conversationHistory.length > 0
-      ? conversationHistory
-          .slice(-6) // Last 3 turns (3 assistant + 3 user)
-          .map((t) => `${t.role === 'assistant' ? 'Interviewer' : 'You'}: ${t.content}`)
-          .join('\n\n')
-      : '';
+    const historyText =
+      conversationHistory.length > 0
+        ? conversationHistory
+            .slice(-6) // Last 3 turns (3 assistant + 3 user)
+            .map((t) => `${t.role === 'assistant' ? 'Interviewer' : 'You'}: ${t.content}`)
+            .join('\n\n')
+        : '';
 
     const parts = [
       `Round ${round} of ${maxRounds}.`,

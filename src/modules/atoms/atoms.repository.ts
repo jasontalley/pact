@@ -353,6 +353,7 @@ export class AtomsRepository {
       draft: 0,
       committed: 0,
       superseded: 0,
+      abandoned: 0,
     };
     for (const row of statusCounts) {
       byStatus[row.status as AtomStatus] = parseInt(row.count, 10);

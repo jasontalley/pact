@@ -26,7 +26,7 @@ export interface AtomCommittedEvent {
 export interface AtomProposedEvent {
   type: 'atom:proposed';
   atomId: string;
-  changeSetId: string;
+  changeSetId?: string;
   data: Atom;
 }
 
@@ -121,17 +121,18 @@ export class AtomsGateway implements OnGatewayInit, OnGatewayConnection, OnGatew
   }
 
   /**
-   * Emit event when an atom is created as proposed (in a change set)
+   * Emit event when an atom is created as proposed (in a change set or from agent inference)
    */
-  emitAtomProposed(atom: Atom, changeSetId: string): void {
+  emitAtomProposed(atom: Atom, changeSetId: string | null): void {
     const event: AtomProposedEvent = {
       type: 'atom:proposed',
       atomId: atom.id,
-      changeSetId,
+      changeSetId: changeSetId || undefined,
       data: atom,
     };
     this.server?.emit('atom:proposed', event);
-    this.logger.debug(`Emitted atom:proposed for ${atom.atomId} in change set ${changeSetId}`);
+    const source = changeSetId ? `in change set ${changeSetId}` : 'from agent inference';
+    this.logger.debug(`Emitted atom:proposed for ${atom.atomId} ${source}`);
   }
 
   /**

@@ -26,12 +26,7 @@ import { AgentsModule } from '../agents/agents.module';
     forwardRef(() => AgentsModule),
   ],
   controllers: [DriftController],
-  providers: [
-    DriftDebtRepository,
-    DriftDetectionService,
-    DriftPolicyService,
-    DriftMetricsService,
-  ],
+  providers: [DriftDebtRepository, DriftDetectionService, DriftPolicyService, DriftMetricsService],
   exports: [DriftDetectionService, DriftDebtRepository, DriftMetricsService, DriftPolicyService],
 })
 export class DriftModule {}

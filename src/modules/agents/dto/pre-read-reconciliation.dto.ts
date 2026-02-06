@@ -118,7 +118,10 @@ export class PreReadContentDto {
 
   @ApiProperty({
     description: 'File contents map (path → content)',
-    example: { 'src/app.ts': 'export const app = {}', 'src/app.spec.ts': 'describe("app", () => {})' },
+    example: {
+      'src/app.ts': 'export const app = {}',
+      'src/app.spec.ts': 'describe("app", () => {})',
+    },
   })
   @IsObject()
   fileContents: Record<string, string>;

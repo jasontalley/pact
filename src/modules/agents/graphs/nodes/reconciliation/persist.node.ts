@@ -32,6 +32,7 @@ import { ReconciliationRepository } from '../../../repositories/reconciliation.r
 import { getCurrentCommitHash } from '../../../utils/git-utils';
 import type { DriftDetectionService } from '../../../../drift/drift-detection.service';
 import type { DriftDetectionResult } from '../../../../drift/entities/drift-debt.entity';
+import type { ReconciliationAtomInferenceService } from '../../../reconciliation-atom-inference.service';
 
 /**
  * Options for customizing persist node behavior
@@ -47,6 +48,8 @@ export interface PersistNodeOptions {
   persistToDatabase?: boolean;
   /** Optional drift detection service for Phase 16 integration */
   driftDetectionService?: DriftDetectionService;
+  /** Optional atom inference service for Phase 18 integration */
+  reconciliationAtomInferenceService?: ReconciliationAtomInferenceService;
 }
 
 /**
@@ -346,6 +349,39 @@ export function createPersistNode(options: PersistNodeOptions = {}) {
         }
       }
 
+      // Phase 18: Atom inference from orphan tests (after persistence)
+      let proposedAtomsCount = 0;
+      const projectId = state.input?.options?.projectId;
+      if (options.reconciliationAtomInferenceService && projectId && orphanTests.length > 0) {
+        try {
+          config.logger?.log(
+            `[PersistNode] Running atom inference for ${orphanTests.length} orphan tests...`,
+          );
+          const inferenceResult =
+            await options.reconciliationAtomInferenceService.inferAtomsForOrphans(
+              projectId,
+              orphanTests,
+              runId,
+            );
+          proposedAtomsCount = inferenceResult.proposedAtoms.length;
+          config.logger?.log(
+            `[PersistNode] Atom inference complete: ` +
+              `${proposedAtomsCount} atoms proposed, ` +
+              `${inferenceResult.skippedOrphans} skipped`,
+          );
+          // Log each proposed atom for traceability
+          for (const atom of inferenceResult.proposedAtoms) {
+            config.logger?.log(
+              `[PersistNode]   - ${atom.atomId}: ${atom.description} (confidence: ${atom.confidence.toFixed(2)})`,
+            );
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          config.logger?.warn(`[PersistNode] Atom inference failed: ${errorMessage}`);
+          // Continue even if atom inference fails
+        }
+      }
+
       // Build result
       const result: ReconciliationResult = {
         runId,
@@ -359,6 +395,7 @@ export function createPersistNode(options: PersistNodeOptions = {}) {
           qualityPassCount,
           qualityFailCount,
           changedLinkedTestsCount: state.changedAtomLinkedTests?.length,
+          proposedAtomsCount: proposedAtomsCount > 0 ? proposedAtomsCount : undefined,
         },
         invariantFindings: [], // Will be populated when we add invariant checking
         metadata: {

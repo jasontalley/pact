@@ -121,7 +121,9 @@ export class DriftMetricsService {
     // Query drift records to build trend
     // Group by date for new, resolved, and running total
     const allDrift = await this.driftRepository.find({
-      where: projectId ? { projectId, detectedAt: MoreThanOrEqual(startDate) } : { detectedAt: MoreThanOrEqual(startDate) },
+      where: projectId
+        ? { projectId, detectedAt: MoreThanOrEqual(startDate) }
+        : { detectedAt: MoreThanOrEqual(startDate) },
       order: { detectedAt: 'ASC' },
     });
 

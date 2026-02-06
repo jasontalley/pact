@@ -68,7 +68,8 @@ export class AtomsController {
   @Post('propose')
   @ApiOperation({
     summary: 'Create a proposed atom within a governed change set',
-    description: 'Creates an atom with status "proposed" linked to a change set. Proposed atoms are mutable but must go through change set approval before being committed.',
+    description:
+      'Creates an atom with status "proposed" linked to a change set. Proposed atoms are mutable but must go through change set approval before being committed.',
   })
   @ApiResponse({ status: 201, description: 'Proposed atom created successfully', type: Atom })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
@@ -80,7 +81,8 @@ export class AtomsController {
   @Patch(':id/convert-to-draft')
   @ApiOperation({
     summary: 'Convert a proposed atom to draft',
-    description: 'Removes a proposed atom from governance, converting it back to a regular draft atom.',
+    description:
+      'Removes a proposed atom from governance, converting it back to a regular draft atom.',
   })
   @ApiParam({ name: 'id', description: 'UUID of the proposed atom' })
   @ApiResponse({ status: 200, description: 'Atom converted to draft', type: Atom })
@@ -92,7 +94,12 @@ export class AtomsController {
 
   @Get()
   @ApiOperation({ summary: 'List all atoms with optional filtering and pagination' })
-  @ApiQuery({ name: 'scope', required: false, enum: ['all', 'main', 'proposed'], description: 'Filter by governance scope' })
+  @ApiQuery({
+    name: 'scope',
+    required: false,
+    enum: ['all', 'main', 'proposed'],
+    description: 'Filter by governance scope',
+  })
   @ApiResponse({ status: 200, description: 'List of atoms' })
   findAll(@Query() searchDto: AtomSearchDto): Promise<PaginatedAtomsResponse<Atom>> {
     return this.atomsService.findAll(searchDto);
@@ -111,6 +118,97 @@ export class AtomsController {
   @ApiResponse({ status: 200, description: 'Atom statistics' })
   getStatistics() {
     return this.atomsService.getStatistics();
+  }
+
+  // Phase 18: Agent-Suggested Atoms HITL Approval
+  // NOTE: These routes MUST come before @Get(':id') to avoid route shadowing
+
+  @Get('pending-review')
+  @ApiOperation({
+    summary: 'Get all proposed atoms pending HITL review',
+    description: 'Returns proposed atoms created by agents that need human approval',
+  })
+  @ApiResponse({ status: 200, description: 'List of proposed atoms', type: [Atom] })
+  getPendingReview(): Promise<Atom[]> {
+    return this.atomsService.getPendingReview();
+  }
+
+  @Get('pending-review/count')
+  @ApiOperation({
+    summary: 'Get count of proposed atoms pending HITL review',
+    description: 'Returns the number of proposed atoms awaiting human approval',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Count of pending atoms',
+    schema: { properties: { count: { type: 'number' } } },
+  })
+  async getPendingCount(): Promise<{ count: number }> {
+    const count = await this.atomsService.getPendingCount();
+    return { count };
+  }
+
+  @Patch(':id/approve')
+  @ApiOperation({
+    summary: 'Approve a proposed atom',
+    description: 'HITL approval: promotes proposed atom to committed status',
+  })
+  @ApiParam({ name: 'id', description: 'UUID of the proposed atom' })
+  @ApiBody({
+    schema: {
+      properties: {
+        approvedBy: { type: 'string', example: 'user-123' },
+        description: { type: 'string' },
+        category: { type: 'string' },
+        tags: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['approvedBy'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Atom approved and committed', type: Atom })
+  @ApiResponse({ status: 400, description: 'Atom is not in proposed status' })
+  @ApiResponse({ status: 404, description: 'Atom not found' })
+  approveProposedAtom(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      approvedBy: string;
+      description?: string;
+      category?: string;
+      tags?: string[];
+    },
+  ): Promise<Atom> {
+    const { approvedBy, description, category, tags } = body;
+    return this.atomsService.approveProposedAtom(id, approvedBy, {
+      description,
+      category,
+      tags,
+    });
+  }
+
+  @Patch(':id/reject')
+  @ApiOperation({
+    summary: 'Reject a proposed atom',
+    description: 'HITL rejection: marks proposed atom as abandoned',
+  })
+  @ApiParam({ name: 'id', description: 'UUID of the proposed atom' })
+  @ApiBody({
+    schema: {
+      properties: {
+        rejectedBy: { type: 'string', example: 'user-123' },
+        reason: { type: 'string', example: 'Duplicate of existing atom IA-042' },
+      },
+      required: ['rejectedBy', 'reason'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Atom rejected and marked as abandoned', type: Atom })
+  @ApiResponse({ status: 400, description: 'Atom is not in proposed status' })
+  @ApiResponse({ status: 404, description: 'Atom not found' })
+  rejectProposedAtom(
+    @Param('id') id: string,
+    @Body() body: { rejectedBy: string; reason: string },
+  ): Promise<Atom> {
+    return this.atomsService.rejectProposedAtom(id, body.rejectedBy, body.reason);
   }
 
   @Get(':id')

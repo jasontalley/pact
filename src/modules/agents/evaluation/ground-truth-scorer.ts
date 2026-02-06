@@ -125,9 +125,7 @@ export function scoreAgainstGroundTruth(
     });
   }
 
-  const unmatchedFacts = decidedFacts
-    .filter((_, i) => !matchedFactIndices.has(i))
-    .map((f) => f.id);
+  const unmatchedFacts = decidedFacts.filter((_, i) => !matchedFactIndices.has(i)).map((f) => f.id);
 
   const orphanAtoms = atomCandidates
     .filter((_, i) => !matchedAtomIndices.has(i))
@@ -139,9 +137,7 @@ export function scoreAgainstGroundTruth(
   const precisionDenom = Math.min(atomCandidates.length, decidedFacts.length * 2);
   const precision = precisionDenom > 0 ? matches.length / precisionDenom : 0;
   const recall = matches.length / decidedFacts.length;
-  const f1 = precision + recall > 0
-    ? (2 * precision * recall) / (precision + recall)
-    : 0;
+  const f1 = precision + recall > 0 ? (2 * precision * recall) / (precision + recall) : 0;
 
   return { precision, recall, f1, matches, unmatchedFacts, orphanAtoms };
 }

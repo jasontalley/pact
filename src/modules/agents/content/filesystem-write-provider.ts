@@ -97,17 +97,19 @@ export class FilesystemWriteProvider implements WriteProvider {
           linesModified = 1;
           break;
 
-        case 'replace':
+        case 'replace': {
           const replaceCount = patch.lineCount ?? 1;
           lines.splice(lineIndex, replaceCount, patch.content);
           linesModified = replaceCount;
           break;
+        }
 
-        case 'delete':
+        case 'delete': {
           const deleteCount = patch.lineCount ?? 1;
           lines.splice(lineIndex, deleteCount);
           linesModified = deleteCount;
           break;
+        }
       }
 
       fs.writeFileSync(resolvedPath, lines.join('\n'), 'utf-8');

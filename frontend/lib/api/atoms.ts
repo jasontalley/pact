@@ -154,4 +154,36 @@ export const atomsApi = {
     const response = await apiClient.get<SemanticDiff>(`/atoms/${idA}/diff/${idB}`);
     return response.data;
   },
+
+  /**
+   * Get atoms pending human review (Phase 18)
+   */
+  getPendingReview: async (): Promise<Atom[]> => {
+    const response = await apiClient.get<Atom[]>('/atoms/pending-review');
+    return response.data;
+  },
+
+  /**
+   * Approve a proposed atom (Phase 18)
+   */
+  approve: async (id: string, data: { approvedBy: string; description?: string; category?: string }): Promise<Atom> => {
+    const response = await apiClient.patch<Atom>(`/atoms/${id}/approve`, data);
+    return response.data;
+  },
+
+  /**
+   * Reject a proposed atom (Phase 18)
+   */
+  reject: async (id: string, data: { rejectedBy: string; reason?: string }): Promise<Atom> => {
+    const response = await apiClient.patch<Atom>(`/atoms/${id}/reject`, data);
+    return response.data;
+  },
+
+  /**
+   * Get count of atoms pending review (Phase 18)
+   */
+  getPendingCount: async (): Promise<number> => {
+    const response = await apiClient.get<{ count: number }>('/atoms/pending-review/count');
+    return response.data.count;
+  },
 };

@@ -251,9 +251,7 @@ function scoreActionability(output: ReconciliationRunOutput): DimensionResult {
 
 function scoreMinimality(output: ReconciliationRunOutput): DimensionResult {
   // Check for single-atom molecules
-  const singleAtomMolecules = output.inferredMolecules.filter(
-    (m) => m.atomTempIds.length < 2,
-  );
+  const singleAtomMolecules = output.inferredMolecules.filter((m) => m.atomTempIds.length < 2);
 
   if (singleAtomMolecules.length > 0) {
     return {
@@ -510,7 +508,8 @@ function scoreEdgeCaseCoverage(output: InterviewRunOutput): DimensionResult {
   }
 
   // Check if at least some questions probe edge cases
-  const edgeCaseKeywords = /what happens|how should|what if|edge case|error|fail|conflict|invalid|timeout|exceed/i;
+  const edgeCaseKeywords =
+    /what happens|how should|what if|edge case|error|fail|conflict|invalid|timeout|exceed/i;
   const allQuestions = output.allQuestions || [];
   const edgeCaseQuestions = allQuestions.filter((q) => edgeCaseKeywords.test(q.question));
 

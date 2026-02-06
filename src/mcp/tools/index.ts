@@ -36,6 +36,8 @@ import { getCouplingStatusTool } from './get-coupling-status.tool';
 import { getEpistemicStatusTool } from './get-epistemic-status.tool';
 import { getIntentHistoryTool } from './get-intent-history.tool';
 import { getConflictsTool } from './get-conflicts.tool';
+import { suggestAtomTool } from './suggest-atom.tool';
+import { getImplementableAtomsTool } from './get-implementable-atoms.tool';
 
 /**
  * All registered MCP tools.
@@ -46,6 +48,9 @@ export const allTools: ToolDefinition[] = [
   listAtomsTool,
   getAtomForTestTool,
   searchAtomsTool,
+  // Agent tools (Phase 18)
+  suggestAtomTool,
+  getImplementableAtomsTool,
   // Coupling tools
   getCouplingStatusTool,
   // Epistemic tools

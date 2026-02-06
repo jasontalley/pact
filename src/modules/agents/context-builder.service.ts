@@ -48,9 +48,7 @@ export class ContextBuilderService {
   private readonly logger = new Logger(ContextBuilderService.name);
   private contentProvider: ContentProvider;
 
-  constructor(
-    @Optional() @Inject(CONTENT_PROVIDER) contentProvider?: ContentProvider,
-  ) {
+  constructor(@Optional() @Inject(CONTENT_PROVIDER) contentProvider?: ContentProvider) {
     this.contentProvider = contentProvider || new FilesystemContentProvider();
   }
 
@@ -86,7 +84,11 @@ export class ContextBuilderService {
     const expectedBehavior = this.inferExpectedBehavior(assertions, functionCalls);
 
     // Step 3: Build dependency graph
-    const relatedSourceFiles = await this.findRelatedSourceFiles(testFilePath, imports, rootDirectory);
+    const relatedSourceFiles = await this.findRelatedSourceFiles(
+      testFilePath,
+      imports,
+      rootDirectory,
+    );
     const relatedTestFiles = await this.findRelatedTestFiles(testFilePath, rootDirectory);
 
     // Step 4: Extract domain/technical concepts
@@ -425,7 +427,10 @@ export class ContextBuilderService {
   /**
    * Find related test files (tests in same directory or testing same module)
    */
-  private async findRelatedTestFiles(testFilePath: string, _rootDirectory: string): Promise<string[]> {
+  private async findRelatedTestFiles(
+    testFilePath: string,
+    _rootDirectory: string,
+  ): Promise<string[]> {
     const related: string[] = [];
     const testDir = path.dirname(testFilePath);
 
@@ -433,7 +438,10 @@ export class ContextBuilderService {
     try {
       const entries = await this.contentProvider.listFiles(testDir);
       for (const entry of entries) {
-        if (!entry.isDirectory && (entry.path.endsWith('.spec.ts') || entry.path.endsWith('.test.ts'))) {
+        if (
+          !entry.isDirectory &&
+          (entry.path.endsWith('.spec.ts') || entry.path.endsWith('.test.ts'))
+        ) {
           const fullPath = path.join(testDir, entry.path);
           if (fullPath !== testFilePath) {
             related.push(fullPath);

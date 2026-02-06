@@ -44,6 +44,8 @@ export interface ReconciliationSummary {
   changedLinkedTestsCount?: number;
   /** Number of tests excluded by stopping rule (delta mode, INV-R002) */
   excludedByStoppingRuleCount?: number;
+  /** Number of proposed atoms created from orphan tests (Phase 18) */
+  proposedAtomsCount?: number;
 }
 
 // ============================================================================

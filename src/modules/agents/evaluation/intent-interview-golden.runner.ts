@@ -74,9 +74,7 @@ export async function runInterviewGolden(
   const failedCases = cases.filter((c) => c.result === 'fail').length;
   const skippedCases = cases.filter((c) => c.result === 'skip').length;
 
-  const artifacts = cases
-    .map((c) => c.artifact)
-    .filter((a): a is RunArtifact => a !== undefined);
+  const artifacts = cases.map((c) => c.artifact).filter((a): a is RunArtifact => a !== undefined);
 
   return {
     suite: 'golden',
@@ -87,14 +85,15 @@ export async function runInterviewGolden(
     failedCases,
     skippedCases,
     cases,
-    aggregateMetrics: artifacts.length > 0
-      ? {
-          avgDurationMs:
-            artifacts.reduce((sum, a) => sum + a.metrics.totalDurationMs, 0) / artifacts.length,
-          avgTokens:
-            artifacts.reduce((sum, a) => sum + a.metrics.totalTokens, 0) / artifacts.length,
-        }
-      : undefined,
+    aggregateMetrics:
+      artifacts.length > 0
+        ? {
+            avgDurationMs:
+              artifacts.reduce((sum, a) => sum + a.metrics.totalDurationMs, 0) / artifacts.length,
+            avgTokens:
+              artifacts.reduce((sum, a) => sum + a.metrics.totalTokens, 0) / artifacts.length,
+          }
+        : undefined,
   };
 }
 
@@ -124,10 +123,7 @@ async function runScenario(
 
     // Score against rubric
     const minimumScore = options.minimumRubricScore ?? scenario.minimumRubricScore ?? 8;
-    const rubricResult = scoreInterviewRubric(
-      artifact as RunArtifact<'interview'>,
-      minimumScore,
-    );
+    const rubricResult = scoreInterviewRubric(artifact as RunArtifact<'interview'>, minimumScore);
 
     // Compare against expected output
     const comparisonFailures = compareToExpected(artifact, scenario);
@@ -228,8 +224,7 @@ function compareToExpected(
       const catMatch = matchCategory(atom.category, expected);
       const outcomesMatch = atom.observableOutcomes.length >= expected.minOutcomes;
       const confMatch = !expected.minConfidence || atom.confidence >= expected.minConfidence;
-      const evidenceMatch =
-        !expected.requiresEvidence || atom.sourceEvidence.length > 0;
+      const evidenceMatch = !expected.requiresEvidence || atom.sourceEvidence.length > 0;
 
       return descMatch && catMatch && outcomesMatch && confMatch && evidenceMatch;
     });
@@ -279,9 +274,7 @@ function matchDescription(
 
   // Multi-pattern: match if ANY substring is found
   if (expected.descriptionContainsAny && expected.descriptionContainsAny.length > 0) {
-    return expected.descriptionContainsAny.some((pattern) =>
-      desc.includes(pattern.toLowerCase()),
-    );
+    return expected.descriptionContainsAny.some((pattern) => desc.includes(pattern.toLowerCase()));
   }
 
   // Single pattern (backward compat)
@@ -303,7 +296,9 @@ function matchCategory(
 ): boolean {
   // Multi-category: match if any category matches
   if (expected.categoryOneOf && expected.categoryOneOf.length > 0) {
-    return expected.categoryOneOf.includes(category as 'functional' | 'performance' | 'security' | 'ux' | 'operational');
+    return expected.categoryOneOf.includes(
+      category as 'functional' | 'performance' | 'security' | 'ux' | 'operational',
+    );
   }
 
   // Single category (backward compat)
@@ -349,9 +344,18 @@ function scoreAtomMatch(
   const checks = [
     { ok: matchDescription(atom.description, expected), fail: 'desc:FAIL' },
     { ok: matchCategory(atom.category, expected), fail: `cat:FAIL(${atom.category})` },
-    { ok: atom.observableOutcomes.length >= expected.minOutcomes, fail: `outcomes:FAIL(${atom.observableOutcomes.length})` },
-    { ok: !expected.minConfidence || atom.confidence >= expected.minConfidence, fail: `conf:FAIL(${atom.confidence})` },
-    { ok: !expected.requiresEvidence || atom.sourceEvidence.length > 0, fail: `evidence:FAIL(${atom.sourceEvidence.length})` },
+    {
+      ok: atom.observableOutcomes.length >= expected.minOutcomes,
+      fail: `outcomes:FAIL(${atom.observableOutcomes.length})`,
+    },
+    {
+      ok: !expected.minConfidence || atom.confidence >= expected.minConfidence,
+      fail: `conf:FAIL(${atom.confidence})`,
+    },
+    {
+      ok: !expected.requiresEvidence || atom.sourceEvidence.length > 0,
+      fail: `evidence:FAIL(${atom.sourceEvidence.length})`,
+    },
   ];
 
   const failures = checks.filter((c) => !c.ok).map((c) => c.fail);

@@ -95,7 +95,9 @@ export class DriftDetectionService {
     });
 
     // 1. Detect orphan test drift (tests without @atom annotation)
-    const orphanTests = testRecords.filter((tr) => !tr.hadAtomAnnotation && !tr.atomRecommendationId);
+    const orphanTests = testRecords.filter(
+      (tr) => !tr.hadAtomAnnotation && !tr.atomRecommendationId,
+    );
 
     for (const test of orphanTests) {
       const result = await this.detectOrUpdateOrphanTestDrift(run.id, test, run.projectId);

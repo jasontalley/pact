@@ -251,10 +251,7 @@ function parseJsonWithRecovery(
 /**
  * Extract the outermost JSON object from content using brace counting.
  */
-function extractJsonText(
-  content: string,
-  logger?: { warn: (msg: string) => void },
-): string | null {
+function extractJsonText(content: string, logger?: { warn: (msg: string) => void }): string | null {
   const startIdx = content.indexOf('{');
   if (startIdx === -1) {
     logger?.warn('ExtractAtoms: No JSON object found in response');

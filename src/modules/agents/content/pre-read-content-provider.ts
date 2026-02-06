@@ -1,10 +1,5 @@
 import * as path from 'path';
-import {
-  ContentProvider,
-  FileEntry,
-  ListOptions,
-  WalkOptions,
-} from './content-provider.interface';
+import { ContentProvider, FileEntry, ListOptions, WalkOptions } from './content-provider.interface';
 
 /**
  * Configuration for PreReadContentProvider
@@ -106,9 +101,8 @@ export class PreReadContentProvider implements ContentProvider {
 
       // Check if this file is in the target directory
       if (normalizedDir === '' || normalizedPath.startsWith(normalizedDir + '/')) {
-        const relativePath = normalizedDir === ''
-          ? normalizedPath
-          : normalizedPath.slice(normalizedDir.length + 1);
+        const relativePath =
+          normalizedDir === '' ? normalizedPath : normalizedPath.slice(normalizedDir.length + 1);
 
         const parts = relativePath.split('/');
 
@@ -173,10 +167,13 @@ export class PreReadContentProvider implements ContentProvider {
       const normalizedPath = this.normalizePath(entry.path);
 
       // Check if this file is under the root directory
-      if (normalizedRoot === '' || normalizedPath.startsWith(normalizedRoot + '/') || normalizedPath === normalizedRoot) {
-        const relativePath = normalizedRoot === ''
-          ? normalizedPath
-          : normalizedPath.slice(normalizedRoot.length + 1);
+      if (
+        normalizedRoot === '' ||
+        normalizedPath.startsWith(normalizedRoot + '/') ||
+        normalizedPath === normalizedRoot
+      ) {
+        const relativePath =
+          normalizedRoot === '' ? normalizedPath : normalizedPath.slice(normalizedRoot.length + 1);
 
         if (!relativePath) continue;
 

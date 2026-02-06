@@ -13,6 +13,8 @@ export const atomKeys = {
   details: () => [...atomKeys.all, 'detail'] as const,
   detail: (id: string) => [...atomKeys.details(), id] as const,
   tags: () => [...atomKeys.all, 'tags'] as const,
+  pendingReview: () => [...atomKeys.all, 'pending-review'] as const,
+  pendingCount: () => [...atomKeys.all, 'pending-count'] as const,
 };
 
 /**
@@ -202,5 +204,76 @@ export function useTags() {
   return useQuery({
     queryKey: atomKeys.tags(),
     queryFn: () => atomsApi.getTags(),
+  });
+}
+
+/**
+ * Hook to fetch atoms pending human review (Phase 18)
+ */
+export function usePendingReviewAtoms() {
+  return useQuery({
+    queryKey: atomKeys.pendingReview(),
+    queryFn: () => atomsApi.getPendingReview(),
+  });
+}
+
+/**
+ * Hook to get count of atoms pending review (Phase 18)
+ */
+export function usePendingCount() {
+  return useQuery({
+    queryKey: atomKeys.pendingCount(),
+    queryFn: () => atomsApi.getPendingCount(),
+    refetchInterval: 30000, // Refetch every 30 seconds
+  });
+}
+
+/**
+ * Hook to approve a proposed atom (Phase 18)
+ */
+export function useApproveAtom() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { approvedBy: string; description?: string; category?: string } }) =>
+      atomsApi.approve(id, data),
+    onSuccess: (approvedAtom) => {
+      // Update specific atom in cache
+      queryClient.setQueryData(atomKeys.detail(approvedAtom.id), approvedAtom);
+      // Invalidate pending review queries
+      queryClient.invalidateQueries({ queryKey: atomKeys.pendingReview() });
+      queryClient.invalidateQueries({ queryKey: atomKeys.pendingCount() });
+      // Invalidate list queries
+      queryClient.invalidateQueries({ queryKey: atomKeys.lists() });
+      toast.success(`Atom ${approvedAtom.atomId} approved and committed`);
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to approve atom: ${error.message}`);
+    },
+  });
+}
+
+/**
+ * Hook to reject a proposed atom (Phase 18)
+ */
+export function useRejectAtom() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { rejectedBy: string; reason?: string } }) =>
+      atomsApi.reject(id, data),
+    onSuccess: (rejectedAtom) => {
+      // Update specific atom in cache
+      queryClient.setQueryData(atomKeys.detail(rejectedAtom.id), rejectedAtom);
+      // Invalidate pending review queries
+      queryClient.invalidateQueries({ queryKey: atomKeys.pendingReview() });
+      queryClient.invalidateQueries({ queryKey: atomKeys.pendingCount() });
+      // Invalidate list queries
+      queryClient.invalidateQueries({ queryKey: atomKeys.lists() });
+      toast.success(`Atom ${rejectedAtom.atomId} rejected`);
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to reject atom: ${error.message}`);
+    },
   });
 }

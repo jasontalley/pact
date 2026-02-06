@@ -155,11 +155,21 @@ export class CreateDriftDebt1738569600000 implements MigrationInterface {
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_drift_debt_due"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_drift_debt_type_status"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_drift_debt_project_status"`);
-    await queryRunner.query(`ALTER TABLE "drift_debt" DROP CONSTRAINT IF EXISTS "FK_drift_debt_atomId"`);
-    await queryRunner.query(`ALTER TABLE "drift_debt" DROP CONSTRAINT IF EXISTS "FK_drift_debt_projectId"`);
-    await queryRunner.query(`ALTER TABLE "drift_debt" DROP CONSTRAINT IF EXISTS "FK_drift_debt_resolvedByRunId"`);
-    await queryRunner.query(`ALTER TABLE "drift_debt" DROP CONSTRAINT IF EXISTS "FK_drift_debt_lastConfirmedByRunId"`);
-    await queryRunner.query(`ALTER TABLE "drift_debt" DROP CONSTRAINT IF EXISTS "FK_drift_debt_detectedByRunId"`);
+    await queryRunner.query(
+      `ALTER TABLE "drift_debt" DROP CONSTRAINT IF EXISTS "FK_drift_debt_atomId"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "drift_debt" DROP CONSTRAINT IF EXISTS "FK_drift_debt_projectId"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "drift_debt" DROP CONSTRAINT IF EXISTS "FK_drift_debt_resolvedByRunId"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "drift_debt" DROP CONSTRAINT IF EXISTS "FK_drift_debt_lastConfirmedByRunId"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "drift_debt" DROP CONSTRAINT IF EXISTS "FK_drift_debt_detectedByRunId"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "drift_debt"`);
   }
 }

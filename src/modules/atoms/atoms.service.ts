@@ -61,6 +61,9 @@ export class AtomsService {
   async create(createAtomDto: CreateAtomDto): Promise<Atom> {
     const atomId = await this.generateAtomId();
 
+    // Determine status: use provided status or default to 'draft'
+    const status = createAtomDto.status ?? 'draft';
+
     const atom = this.atomRepository.create({
       atomId,
       description: createAtomDto.description,
@@ -73,15 +76,27 @@ export class AtomsService {
       observableOutcomes: createAtomDto.observableOutcomes ?? [],
       falsifiabilityCriteria: createAtomDto.falsifiabilityCriteria ?? [],
       refinementHistory: [],
-      status: 'draft',
+      status,
       intentIdentity: (createAtomDto as any).intentIdentity ?? uuidv4(),
       intentVersion: (createAtomDto as any).intentVersion ?? 1,
+      // Phase 18 fields
+      source: createAtomDto.source ?? 'human',
+      confidence: createAtomDto.confidence ?? null,
+      rationale: createAtomDto.rationale ?? null,
+      relatedAtomId: createAtomDto.relatedAtomId ?? null,
+      proposedBy: createAtomDto.proposedBy ?? null,
+      approvedBy: null,
+      approvedAt: null,
     });
 
     const savedAtom = await this.atomRepository.save(atom);
 
     // Emit WebSocket event
-    this.atomsGateway?.emitAtomCreated(savedAtom);
+    if (status === 'proposed') {
+      this.atomsGateway?.emitAtomProposed?.(savedAtom, null);
+    } else {
+      this.atomsGateway?.emitAtomCreated(savedAtom);
+    }
 
     return savedAtom;
   }
@@ -277,9 +292,7 @@ export class AtomsService {
     }
 
     if (atom.status === 'proposed') {
-      throw new BadRequestException(
-        'Proposed atoms must be committed through their change set',
-      );
+      throw new BadRequestException('Proposed atoms must be committed through their change set');
     }
 
     // Quality gate enforcement
@@ -518,5 +531,100 @@ export class AtomsService {
       versions,
       currentVersion: atom,
     };
+  }
+
+  // Phase 18: Agent-Suggested Atoms HITL Approval
+
+  /**
+   * Approve a proposed atom (promote to committed)
+   * This is the HITL approval step for agent-suggested atoms
+   */
+  async approveProposedAtom(
+    id: string,
+    approvedBy: string,
+    edits?: { description?: string; category?: string; tags?: string[] },
+  ): Promise<Atom> {
+    const atom = await this.findOne(id);
+
+    if (atom.status !== 'proposed') {
+      throw new BadRequestException(
+        `Only proposed atoms can be approved. Current status: '${atom.status}'`,
+      );
+    }
+
+    // Apply optional edits before approval
+    if (edits?.description) {
+      atom.description = edits.description;
+    }
+    if (edits?.category) {
+      atom.category = edits.category;
+    }
+    if (edits?.tags) {
+      atom.tags = edits.tags;
+    }
+
+    // Promote to committed
+    atom.status = 'committed';
+    atom.approvedBy = approvedBy;
+    atom.approvedAt = new Date();
+    atom.committedAt = new Date();
+    atom.promotedToMainAt = new Date();
+
+    const savedAtom = await this.atomRepository.save(atom);
+
+    // Emit WebSocket events
+    this.atomsGateway?.emitAtomCommitted(savedAtom);
+    this.atomsGateway?.emitAtomPromotedToMain?.(savedAtom);
+
+    return savedAtom;
+  }
+
+  /**
+   * Reject a proposed atom (mark as abandoned)
+   */
+  async rejectProposedAtom(id: string, rejectedBy: string, reason: string): Promise<Atom> {
+    const atom = await this.findOne(id);
+
+    if (atom.status !== 'proposed') {
+      throw new BadRequestException(
+        `Only proposed atoms can be rejected. Current status: '${atom.status}'`,
+      );
+    }
+
+    atom.status = 'abandoned';
+
+    // Store rejection info in metadata
+    atom.metadata = {
+      ...atom.metadata,
+      rejectedBy,
+      rejectedAt: new Date().toISOString(),
+      rejectionReason: reason,
+    };
+
+    const savedAtom = await this.atomRepository.save(atom);
+
+    // Emit WebSocket event
+    this.atomsGateway?.emitAtomUpdated(savedAtom);
+
+    return savedAtom;
+  }
+
+  /**
+   * Get all proposed atoms pending HITL review
+   */
+  async getPendingReview(): Promise<Atom[]> {
+    return this.atomRepository.find({
+      where: { status: 'proposed' },
+      order: { createdAt: 'ASC' }, // Oldest first for review queue
+    });
+  }
+
+  /**
+   * Get count of proposed atoms pending HITL review
+   */
+  async getPendingCount(): Promise<number> {
+    return this.atomRepository.count({
+      where: { status: 'proposed' },
+    });
   }
 }

@@ -121,6 +121,50 @@ export async function searchAtoms(
   return request<PaginatedAtoms>('/atoms', { params });
 }
 
+export interface SuggestAtomRequest {
+  description: string;
+  category: 'functional' | 'security' | 'performance' | 'ux' | 'operational';
+  rationale: string;
+  relatedAtomId?: string;
+  validators?: string[];
+}
+
+export interface SuggestAtomResponse {
+  atomId: string;
+  status: string;
+  scope: string;
+  message: string;
+  reviewUrl: string;
+}
+
+export async function suggestAtom(req: SuggestAtomRequest): Promise<SuggestAtomResponse> {
+  return request<SuggestAtomResponse>('/atoms', {
+    method: 'POST',
+    body: {
+      ...req,
+      status: 'proposed',
+      source: 'agent_inference',
+      proposedBy: 'claude-code',
+    },
+  });
+}
+
+export async function getImplementableAtoms(filters?: {
+  limit?: number;
+  category?: string;
+  minCoverage?: number;
+  includeProposed?: boolean;
+}): Promise<AtomData[]> {
+  const params: Record<string, string | number | undefined> = {
+    status: 'committed',
+  };
+  if (filters?.category) params.category = filters.category;
+  if (filters?.limit) params.limit = filters.limit;
+  // Note: Coverage filtering would need backend support
+
+  return request<PaginatedAtoms>('/atoms', { params }).then((result) => result.items);
+}
+
 // ---------- Test record endpoints ----------
 
 export interface TestRecordData {

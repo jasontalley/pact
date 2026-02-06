@@ -13,7 +13,14 @@
  * @see docs/implementation-checklist-phase5.md Section 6.2
  */
 
-import { Injectable, Logger, NotFoundException, BadRequestException, Optional, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  Optional,
+  Inject,
+} from '@nestjs/common';
 import { DataSource, QueryRunner } from 'typeorm';
 import { ReconciliationRepository } from './repositories/reconciliation.repository';
 import { AtomRecommendation } from './entities/atom-recommendation.entity';
@@ -22,7 +29,12 @@ import { Atom } from '../atoms/atom.entity';
 import { Molecule } from '../molecules/molecule.entity';
 import { MoleculeAtom } from '../molecules/molecule-atom.entity';
 import { ChangeSetMetadata, ChangeSetStatus } from '../molecules/change-set.types';
-import { ContentProvider, WriteProvider, FilesystemContentProvider, FilesystemWriteProvider } from './content';
+import {
+  ContentProvider,
+  WriteProvider,
+  FilesystemContentProvider,
+  FilesystemWriteProvider,
+} from './content';
 import { CONTENT_PROVIDER } from './context-builder.service';
 
 /**
@@ -644,9 +656,7 @@ export class ApplyService {
 
       await queryRunner.commitTransaction();
 
-      this.logger.log(
-        `Change set created: ${savedChangeSet.id} with ${atomCount} proposed atoms`,
-      );
+      this.logger.log(`Change set created: ${savedChangeSet.id} with ${atomCount} proposed atoms`);
 
       return {
         changeSetId: savedChangeSet.id,

@@ -731,9 +731,7 @@ export class MoleculesService {
     this.assertChangeSetStatus(molecule, ['approved']);
 
     const atoms = await this.getAtoms(changeSetId, { activeOnly: true });
-    const uncommittedAtoms = atoms.filter(
-      (a) => a.status === 'draft' || a.status === 'proposed',
-    );
+    const uncommittedAtoms = atoms.filter((a) => a.status === 'draft' || a.status === 'proposed');
 
     if (uncommittedAtoms.length === 0) {
       throw new BadRequestException('No uncommitted atoms to commit in this change set');

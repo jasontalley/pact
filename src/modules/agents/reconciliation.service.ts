@@ -26,10 +26,7 @@ import { isGraphInterrupt } from '@langchain/langgraph';
 import { GraphRegistryService } from './graphs/graph-registry.service';
 import { ReconciliationRepository } from './repositories/reconciliation.repository';
 import { PreReadContentProvider } from './content/pre-read-content-provider';
-import {
-  PreReadContentDto,
-  PreReadAnalysisStartResult,
-} from './dto/pre-read-reconciliation.dto';
+import { PreReadContentDto, PreReadAnalysisStartResult } from './dto/pre-read-reconciliation.dto';
 import {
   ReconciliationInput,
   ReconciliationMode,
@@ -333,7 +330,9 @@ export class ReconciliationService {
     // TODO: Phase 17C.4 - Add invokeWithContentProvider method to GraphRegistryService
     // For now, we store the content provider reference for potential use
     // The full implementation will create a fresh graph instance with the custom provider
-    this.logger.debug(`Pre-read content provider created with ${contentProvider.getAvailablePaths().length} files`);
+    this.logger.debug(
+      `Pre-read content provider created with ${contentProvider.getAvailablePaths().length} files`,
+    );
 
     try {
       const result = await this.graphRegistry.invoke<

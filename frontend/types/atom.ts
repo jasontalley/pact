@@ -1,7 +1,7 @@
 /**
  * Atom status enum matching backend
  */
-export type AtomStatus = 'proposed' | 'draft' | 'committed' | 'superseded';
+export type AtomStatus = 'proposed' | 'draft' | 'committed' | 'superseded' | 'abandoned';
 
 /**
  * Scope filter for Pact Main governance
@@ -78,6 +78,14 @@ export interface Atom {
   committedAt: string | null;
   promotedToMainAt: string | null;
   changeSetId: string | null;
+  // Phase 18: Agent-suggested atoms with HITL approval
+  confidence?: number;
+  rationale?: string;
+  source?: string;
+  proposedBy?: string;
+  approvedBy?: string;
+  rejectedBy?: string;
+  metadata?: Record<string, unknown>;
 }
 
 /**

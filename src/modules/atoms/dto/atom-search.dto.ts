@@ -43,7 +43,8 @@ export class AtomSearchDto {
 
   // Scope filter (Pact Main governance)
   @ApiPropertyOptional({
-    description: 'Filter by governance scope: all (default), main (promoted atoms only), proposed (pending governance)',
+    description:
+      'Filter by governance scope: all (default), main (promoted atoms only), proposed (pending governance)',
     enum: ['all', 'main', 'proposed'],
     default: 'all',
   })

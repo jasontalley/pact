@@ -86,7 +86,9 @@ function classifyAnswer(response: string): AnswerStatus {
   }
 
   // Out-of-scope patterns: user declares topic irrelevant
-  if (/\b(out of scope|not in scope|not relevant|doesn't apply|not applicable|n\/a)\b/i.test(text)) {
+  if (
+    /\b(out of scope|not in scope|not relevant|doesn't apply|not applicable|n\/a)\b/i.test(text)
+  ) {
     return 'out_of_scope';
   }
 

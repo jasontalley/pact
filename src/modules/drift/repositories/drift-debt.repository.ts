@@ -159,7 +159,9 @@ export class DriftDebtRepository {
   /**
    * List open drift items with filtering and pagination
    */
-  async listOpenDrift(filters: DriftListFilters = {}): Promise<{ items: DriftDebt[]; total: number }> {
+  async listOpenDrift(
+    filters: DriftListFilters = {},
+  ): Promise<{ items: DriftDebt[]; total: number }> {
     const where: FindOptionsWhere<DriftDebt> = {};
 
     if (filters.projectId) {

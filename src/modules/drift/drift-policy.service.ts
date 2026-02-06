@@ -82,7 +82,11 @@ export class DriftPolicyService {
   /**
    * Compute deadline for a drift item based on its exception lane and policy
    */
-  computeDeadline(driftDetectedAt: Date, exceptionLane: ExceptionLane | null, policy: Required<DriftPolicies>): Date {
+  computeDeadline(
+    driftDetectedAt: Date,
+    exceptionLane: ExceptionLane | null,
+    policy: Required<DriftPolicies>,
+  ): Date {
     let convergenceDays: number;
 
     switch (exceptionLane) {
@@ -136,11 +140,7 @@ export class DriftPolicyService {
     for (const drift of openDrift) {
       // Update due date if not set
       if (!drift.dueAt) {
-        const dueAt = this.computeDeadline(
-          new Date(drift.detectedAt),
-          drift.exceptionLane,
-          policy,
-        );
+        const dueAt = this.computeDeadline(new Date(drift.detectedAt), drift.exceptionLane, policy);
         await this.driftDebtRepository.updateDueDate(drift.id, dueAt);
       }
 
@@ -196,7 +196,8 @@ export class DriftPolicyService {
     }
 
     const totalOpen = openDrift.length;
-    const convergenceScore = totalOpen > 0 ? Math.round(((onTrackCount + atRiskCount * 0.5) / totalOpen) * 100) : 100;
+    const convergenceScore =
+      totalOpen > 0 ? Math.round(((onTrackCount + atRiskCount * 0.5) / totalOpen) * 100) : 100;
 
     const policy = await this.getConvergencePolicy(projectId);
     const blocking = policy.blockOnOverdueDrift && overdueCount > 0;

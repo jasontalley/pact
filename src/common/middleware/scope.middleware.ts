@@ -72,15 +72,11 @@ export class ScopeMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction): void {
     // Extract project ID header (optional)
     const projectIdHeader = req.headers[PACT_PROJECT_ID_HEADER];
-    const projectId = Array.isArray(projectIdHeader)
-      ? projectIdHeader[0]
-      : projectIdHeader;
+    const projectId = Array.isArray(projectIdHeader) ? projectIdHeader[0] : projectIdHeader;
 
     // Extract scope header (optional, defaults to 'main')
     const scopeHeader = req.headers[PACT_SCOPE_HEADER];
-    const scopeValue = Array.isArray(scopeHeader)
-      ? scopeHeader[0]
-      : scopeHeader;
+    const scopeValue = Array.isArray(scopeHeader) ? scopeHeader[0] : scopeHeader;
 
     // Validate and normalize scope
     let scope: PactScope = 'main';

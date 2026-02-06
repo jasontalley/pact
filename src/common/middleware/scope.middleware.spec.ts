@@ -30,11 +30,7 @@ describe('ScopeMiddleware', () => {
 
   describe('use', () => {
     it('should set default scope to main when no headers provided', () => {
-      middleware.use(
-        mockRequest as Request,
-        mockResponse as Response,
-        nextFunction,
-      );
+      middleware.use(mockRequest as Request, mockResponse as Response, nextFunction);
 
       expect((mockRequest as Request).pactScope).toEqual({
         projectId: undefined,
@@ -48,11 +44,7 @@ describe('ScopeMiddleware', () => {
         [PACT_PROJECT_ID_HEADER]: 'project-123',
       };
 
-      middleware.use(
-        mockRequest as Request,
-        mockResponse as Response,
-        nextFunction,
-      );
+      middleware.use(mockRequest as Request, mockResponse as Response, nextFunction);
 
       expect((mockRequest as Request).pactScope?.projectId).toBe('project-123');
     });
@@ -62,11 +54,7 @@ describe('ScopeMiddleware', () => {
         [PACT_SCOPE_HEADER]: 'local',
       };
 
-      middleware.use(
-        mockRequest as Request,
-        mockResponse as Response,
-        nextFunction,
-      );
+      middleware.use(mockRequest as Request, mockResponse as Response, nextFunction);
 
       expect((mockRequest as Request).pactScope?.scope).toBe('local');
     });
@@ -76,11 +64,7 @@ describe('ScopeMiddleware', () => {
         [PACT_SCOPE_HEADER]: 'main',
       };
 
-      middleware.use(
-        mockRequest as Request,
-        mockResponse as Response,
-        nextFunction,
-      );
+      middleware.use(mockRequest as Request, mockResponse as Response, nextFunction);
 
       expect((mockRequest as Request).pactScope?.scope).toBe('main');
     });
@@ -90,11 +74,7 @@ describe('ScopeMiddleware', () => {
         [PACT_SCOPE_HEADER]: 'invalid',
       };
 
-      middleware.use(
-        mockRequest as Request,
-        mockResponse as Response,
-        nextFunction,
-      );
+      middleware.use(mockRequest as Request, mockResponse as Response, nextFunction);
 
       expect((mockRequest as Request).pactScope?.scope).toBe('main');
     });
@@ -105,11 +85,7 @@ describe('ScopeMiddleware', () => {
         [PACT_SCOPE_HEADER]: ['local', 'main'],
       };
 
-      middleware.use(
-        mockRequest as Request,
-        mockResponse as Response,
-        nextFunction,
-      );
+      middleware.use(mockRequest as Request, mockResponse as Response, nextFunction);
 
       // Should take first value from array
       expect((mockRequest as Request).pactScope?.projectId).toBe('project-1');
@@ -122,11 +98,7 @@ describe('ScopeMiddleware', () => {
         [PACT_SCOPE_HEADER]: 'local',
       };
 
-      middleware.use(
-        mockRequest as Request,
-        mockResponse as Response,
-        nextFunction,
-      );
+      middleware.use(mockRequest as Request, mockResponse as Response, nextFunction);
 
       expect((mockRequest as Request).pactScope).toEqual({
         projectId: 'my-project',
@@ -139,11 +111,7 @@ describe('ScopeMiddleware', () => {
         [PACT_SCOPE_HEADER]: 'merged',
       };
 
-      middleware.use(
-        mockRequest as Request,
-        mockResponse as Response,
-        nextFunction,
-      );
+      middleware.use(mockRequest as Request, mockResponse as Response, nextFunction);
 
       // 'merged' is not a valid scope, should default to 'main'
       expect((mockRequest as Request).pactScope?.scope).toBe('main');

@@ -47,7 +47,8 @@ export interface IntervieweePersona {
 export const PERSONAS: Record<string, IntervieweePersona> = {
   terse: {
     style: 'terse',
-    styleInstructions: 'Answer in 1-2 short sentences. Be direct and minimal. No elaboration unless asked.',
+    styleInstructions:
+      'Answer in 1-2 short sentences. Be direct and minimal. No elaboration unless asked.',
   },
   verbose: {
     style: 'verbose',
@@ -136,7 +137,9 @@ export function loadStochasticScenario(data: Record<string, unknown>): Stochasti
   const scenario = data as unknown as StochasticScenario;
 
   if (!scenario.id || !scenario.name || !scenario.scenarioVersion) {
-    throw new Error('Invalid stochastic scenario: missing required fields (id, name, scenarioVersion)');
+    throw new Error(
+      'Invalid stochastic scenario: missing required fields (id, name, scenarioVersion)',
+    );
   }
   if (!scenario.initialIntent) {
     throw new Error(`Scenario ${scenario.id}: must have an initialIntent`);

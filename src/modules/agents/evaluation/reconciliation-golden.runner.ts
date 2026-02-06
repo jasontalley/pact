@@ -78,9 +78,7 @@ export async function runReconciliationGolden(
   const failedCases = cases.filter((c) => c.result === 'fail').length;
   const skippedCases = cases.filter((c) => c.result === 'skip').length;
 
-  const artifacts = cases
-    .map((c) => c.artifact)
-    .filter((a): a is RunArtifact => a !== undefined);
+  const artifacts = cases.map((c) => c.artifact).filter((a): a is RunArtifact => a !== undefined);
 
   return {
     suite: 'golden',
@@ -91,14 +89,15 @@ export async function runReconciliationGolden(
     failedCases,
     skippedCases,
     cases,
-    aggregateMetrics: artifacts.length > 0
-      ? {
-          avgDurationMs:
-            artifacts.reduce((sum, a) => sum + a.metrics.totalDurationMs, 0) / artifacts.length,
-          avgTokens:
-            artifacts.reduce((sum, a) => sum + a.metrics.totalTokens, 0) / artifacts.length,
-        }
-      : undefined,
+    aggregateMetrics:
+      artifacts.length > 0
+        ? {
+            avgDurationMs:
+              artifacts.reduce((sum, a) => sum + a.metrics.totalDurationMs, 0) / artifacts.length,
+            avgTokens:
+              artifacts.reduce((sum, a) => sum + a.metrics.totalTokens, 0) / artifacts.length,
+          }
+        : undefined,
   };
 }
 
@@ -130,7 +129,11 @@ async function runFixture(
 
     // Score against rubric
     const minimumScore = options.minimumRubricScore ?? fixture.minimumRubricScore ?? 8;
-    const rubricResult = scoreReconciliationRubric(artifact as RunArtifact<'reconciliation'>, scoringContext, minimumScore);
+    const rubricResult = scoreReconciliationRubric(
+      artifact as RunArtifact<'reconciliation'>,
+      scoringContext,
+      minimumScore,
+    );
 
     // Compare against expected output
     const comparisonFailures = compareToExpected(artifact, fixture);
@@ -148,9 +151,7 @@ async function runFixture(
       caseId: fixture.id,
       name: fixture.name,
       result: passed ? 'pass' : 'fail',
-      reason: passed
-        ? undefined
-        : allFailures.map((f) => f.reason).join('; '),
+      reason: passed ? undefined : allFailures.map((f) => f.reason).join('; '),
       failures: allFailures.length > 0 ? allFailures : undefined,
       artifact,
       rubricResult,
@@ -242,10 +243,7 @@ function extractTestNames(fixture: ReconciliationFixture): string[] {
 /**
  * Compare run artifact output to fixture's expected output.
  */
-function compareToExpected(
-  artifact: RunArtifact,
-  fixture: ReconciliationFixture,
-): TaggedFailure[] {
+function compareToExpected(artifact: RunArtifact, fixture: ReconciliationFixture): TaggedFailure[] {
   const failures: TaggedFailure[] = [];
   const output = artifact.output as ReconciliationRunOutput;
   const expected = fixture.expected;

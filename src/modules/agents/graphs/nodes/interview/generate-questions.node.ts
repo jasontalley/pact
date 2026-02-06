@@ -77,7 +77,9 @@ export function createGenerateQuestionsNode(options?: GenerateQuestionsNodeOptio
 
       // Check if we should stop asking questions
       if (state.userDone || state.round > state.maxRounds) {
-        const reason: CompletionReason = state.userDone ? 'user_signaled_done' : 'max_rounds_reached';
+        const reason: CompletionReason = state.userDone
+          ? 'user_signaled_done'
+          : 'max_rounds_reached';
         logger?.log(`GenerateQuestions: ${reason}, proceeding to extraction`);
         return { currentPhase: 'extract_atoms', completionReason: reason };
       }
@@ -103,15 +105,18 @@ export function createGenerateQuestionsNode(options?: GenerateQuestionsNodeOptio
         const responseIndex = state.simulatedResponseIndex || 0;
         if (simulatedResponses.length > 0) {
           return handleFixtureMode(
-            questions, turn, simulatedResponses, responseIndex, state, logger,
+            questions,
+            turn,
+            simulatedResponses,
+            responseIndex,
+            state,
+            logger,
           );
         }
 
         // Stochastic mode: use interviewee callback
         if (options?.intervieweeCallback) {
-          return handleStochasticMode(
-            questions, turn, state, options.intervieweeCallback, logger,
-          );
+          return handleStochasticMode(questions, turn, state, options.intervieweeCallback, logger);
         }
 
         // Interactive mode: pause for real user response
@@ -119,7 +124,10 @@ export function createGenerateQuestionsNode(options?: GenerateQuestionsNodeOptio
           JSON.stringify({
             type: 'interview_questions',
             questions: questions.map((q) => ({
-              id: q.id, question: q.question, category: q.category, rationale: q.rationale,
+              id: q.id,
+              question: q.question,
+              category: q.category,
+              rationale: q.rationale,
             })),
             round: state.round,
             maxRounds: state.maxRounds,
@@ -242,7 +250,9 @@ function handleFixtureMode(
   }
 
   const simResponse = simulatedResponses[responseIndex];
-  logger?.log?.(`GenerateQuestions: Using simulated response ${responseIndex + 1}/${simulatedResponses.length}`);
+  logger?.log?.(
+    `GenerateQuestions: Using simulated response ${responseIndex + 1}/${simulatedResponses.length}`,
+  );
 
   // Mark questions as answered with the simulated response.
   // responseScope: 'batch' indicates this is a single response applied
@@ -270,12 +280,22 @@ function handleFixtureMode(
 
   if (simResponse.signalsDone) {
     logger?.log?.('GenerateQuestions: Simulated user signaled done');
-    return { ...base, currentPhase: 'extract_atoms', completionReason: 'user_signaled_done', userDone: true };
+    return {
+      ...base,
+      currentPhase: 'extract_atoms',
+      completionReason: 'user_signaled_done',
+      userDone: true,
+    };
   }
 
   const hasMoreResponses = simulatedResponses.length > responseIndex + 1;
   if (hasMoreResponses) {
-    return { ...base, currentPhase: 'generate_questions', pendingQuestions: [], round: state.round + 1 };
+    return {
+      ...base,
+      currentPhase: 'generate_questions',
+      pendingQuestions: [],
+      round: state.round + 1,
+    };
   }
 
   logger?.log?.('GenerateQuestions: Last simulated response used, proceeding to extraction');
@@ -297,7 +317,9 @@ async function handleStochasticMode(
   ) => Promise<{ content: string; signalsDone: boolean }>,
   logger?: { log?: (msg: string) => void },
 ): Promise<Partial<InterviewGraphStateType>> {
-  logger?.log?.(`GenerateQuestions: Stochastic mode — calling interviewee callback (round ${state.round})`);
+  logger?.log?.(
+    `GenerateQuestions: Stochastic mode — calling interviewee callback (round ${state.round})`,
+  );
 
   const response = await callback(
     questions,
@@ -327,8 +349,18 @@ async function handleStochasticMode(
 
   if (response.signalsDone) {
     logger?.log?.('GenerateQuestions: Stochastic interviewee signaled done');
-    return { ...base, currentPhase: 'extract_atoms', completionReason: 'user_signaled_done', userDone: true };
+    return {
+      ...base,
+      currentPhase: 'extract_atoms',
+      completionReason: 'user_signaled_done',
+      userDone: true,
+    };
   }
 
-  return { ...base, currentPhase: 'generate_questions', pendingQuestions: [], round: state.round + 1 };
+  return {
+    ...base,
+    currentPhase: 'generate_questions',
+    pendingQuestions: [],
+    round: state.round + 1,
+  };
 }

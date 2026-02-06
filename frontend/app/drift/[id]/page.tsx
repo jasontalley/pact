@@ -68,7 +68,7 @@ export default function DriftDetailPage() {
     );
   }
 
-  const isOverdue = item.dueAt && new Date(item.dueAt) < new Date();
+  const isOverdue = !!(item.dueAt && new Date(item.dueAt) < new Date());
 
   return (
     <AppLayout>

@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Network, List, Plus, Menu, X, Settings, Layers, GitCompare, AlertTriangle, MessageSquarePlus, GitPullRequest } from 'lucide-react';
+import { LayoutDashboard, Network, List, Plus, Menu, X, Settings, Layers, GitCompare, AlertTriangle, MessageSquarePlus, GitPullRequest, CheckSquare } from 'lucide-react';
 import { useConflictMetrics } from '@/hooks/conflicts/use-conflicts';
+import { usePendingCount } from '@/hooks/atoms/use-atoms';
 
 interface NavItem {
   href: string;
@@ -18,6 +19,7 @@ const navItems: NavItem[] = [
   { href: '/', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" /> },
   { href: '/canvas', label: 'Canvas', icon: <Network className="h-4 w-4" /> },
   { href: '/atoms', label: 'Atoms', icon: <List className="h-4 w-4" /> },
+  { href: '/atoms/pending', label: 'Pending Review', icon: <CheckSquare className="h-4 w-4" /> },
   { href: '/molecules', label: 'Molecules', icon: <Layers className="h-4 w-4" /> },
   { href: '/reconciliation', label: 'Reconciliation', icon: <GitCompare className="h-4 w-4" /> },
   { href: '/interview', label: 'Interview', icon: <MessageSquarePlus className="h-4 w-4" /> },
@@ -34,8 +36,10 @@ export function Header({ onCreateAtom }: HeaderProps) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { data: conflictMetrics } = useConflictMetrics();
+  const { data: pendingCount } = usePendingCount();
   const openConflictCount = conflictMetrics?.open ?? 0;
   const hasContradictions = (conflictMetrics?.byType?.contradiction ?? 0) > 0;
+  const pendingReviewCount = pendingCount ?? 0;
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -69,7 +73,9 @@ export function Header({ onCreateAtom }: HeaderProps) {
                 ? pathname === '/'
                 : pathname.startsWith(item.href);
               const isConflicts = item.href === '/conflicts';
-              const showBadge = isConflicts && openConflictCount > 0;
+              const isPendingReview = item.href === '/atoms/pending';
+              const showConflictBadge = isConflicts && openConflictCount > 0;
+              const showPendingBadge = isPendingReview && pendingReviewCount > 0;
               return (
                 <Link
                   key={item.href}
@@ -83,12 +89,17 @@ export function Header({ onCreateAtom }: HeaderProps) {
                 >
                   {item.icon}
                   {item.label}
-                  {showBadge && (
+                  {showConflictBadge && (
                     <span className={cn(
                       'inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full text-xs font-bold text-white',
                       hasContradictions ? 'bg-red-500' : 'bg-yellow-500',
                     )}>
                       {openConflictCount}
+                    </span>
+                  )}
+                  {showPendingBadge && (
+                    <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full text-xs font-bold text-white bg-purple-500">
+                      {pendingReviewCount}
                     </span>
                   )}
                 </Link>
@@ -153,7 +164,9 @@ export function Header({ onCreateAtom }: HeaderProps) {
                 ? pathname === '/'
                 : pathname.startsWith(item.href);
               const isConflicts = item.href === '/conflicts';
-              const showBadge = isConflicts && openConflictCount > 0;
+              const isPendingReview = item.href === '/atoms/pending';
+              const showConflictBadge = isConflicts && openConflictCount > 0;
+              const showPendingBadge = isPendingReview && pendingReviewCount > 0;
               return (
                 <Link
                   key={item.href}
@@ -168,12 +181,17 @@ export function Header({ onCreateAtom }: HeaderProps) {
                 >
                   {item.icon}
                   {item.label}
-                  {showBadge && (
+                  {showConflictBadge && (
                     <span className={cn(
                       'inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full text-xs font-bold text-white ml-auto',
                       hasContradictions ? 'bg-red-500' : 'bg-yellow-500',
                     )}>
                       {openConflictCount}
+                    </span>
+                  )}
+                  {showPendingBadge && (
+                    <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full text-xs font-bold text-white bg-purple-500 ml-auto">
+                      {pendingReviewCount}
                     </span>
                   )}
                 </Link>

@@ -8,10 +8,7 @@
  * @see docs/implementation-checklist-phase13.md (13.9.3)
  */
 
-import {
-  RunArtifact,
-  RunMetrics,
-} from '../../src/modules/agents/evaluation/run-artifact.types';
+import { RunArtifact, RunMetrics } from '../../src/modules/agents/evaluation/run-artifact.types';
 
 /**
  * Budget thresholds per agent and scenario size.

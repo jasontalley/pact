@@ -16,9 +16,7 @@ import {
 /**
  * Helper to create a minimal interview Run Artifact for testing.
  */
-function createMockArtifact(
-  overrides: Partial<InterviewRunOutput> = {},
-): RunArtifact<'interview'> {
+function createMockArtifact(overrides: Partial<InterviewRunOutput> = {}): RunArtifact<'interview'> {
   return {
     runId: 'test-run',
     agent: 'interview',

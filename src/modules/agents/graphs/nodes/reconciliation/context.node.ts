@@ -304,13 +304,16 @@ export function createContextNode(options: ContextNodeOptions = {}) {
       }
 
       // Check if tool is available (not in fixture mode - no filesystem access)
-      const hasTestAnalysisTool = !isFixtureMode && useTool && config.toolRegistry.hasTool('get_test_analysis');
+      const hasTestAnalysisTool =
+        !isFixtureMode && useTool && config.toolRegistry.hasTool('get_test_analysis');
       const contextBuilderService = isFixtureMode ? undefined : options.contextBuilderService;
       const contextPerTest = new Map<string, TestAnalysis>();
       let processedCount = 0;
 
       if (isFixtureMode) {
-        config.logger?.log('[ContextNode] Fixture mode: using fallback analysis (no filesystem access)');
+        config.logger?.log(
+          '[ContextNode] Fixture mode: using fallback analysis (no filesystem access)',
+        );
       }
 
       for (const test of orphanTests) {

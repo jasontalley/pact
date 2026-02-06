@@ -72,7 +72,9 @@ export class ArtifactCaptureService {
     // Generate a thread ID for the checkpointer if not provided
     const threadId = options.threadId || `eval-${runId}`;
 
-    this.logger.debug(`Starting artifact capture for ${options.agent} run ${runId} (thread: ${threadId})`);
+    this.logger.debug(
+      `Starting artifact capture for ${options.agent} run ${runId} (thread: ${threadId})`,
+    );
 
     // Compute input hash for deduplication
     const inputHash = this.hashInput(input);
@@ -329,15 +331,28 @@ export class ArtifactCaptureService {
     if (agent === 'reconciliation') {
       const state = result as ReconciliationGraphStateType;
       const phase = state.currentPhase || 'persist';
-      const phases: string[] = ['structure', 'discover', 'context', 'infer', 'synthesize', 'verify', 'persist'];
+      const phases: string[] = [
+        'structure',
+        'discover',
+        'context',
+        'infer',
+        'synthesize',
+        'verify',
+        'persist',
+      ];
       const reachedIndex = phases.indexOf(phase);
 
       return phases.slice(0, reachedIndex + 1).map((p) => ({
-        node: p === 'discover'
-          ? state.input?.reconciliationMode === 'delta' ? 'discover_delta' : 'discover_fullscan'
-          : p === 'infer' ? 'infer_atoms'
-          : p === 'synthesize' ? 'synthesize_molecules'
-          : p,
+        node:
+          p === 'discover'
+            ? state.input?.reconciliationMode === 'delta'
+              ? 'discover_delta'
+              : 'discover_fullscan'
+            : p === 'infer'
+              ? 'infer_atoms'
+              : p === 'synthesize'
+                ? 'synthesize_molecules'
+                : p,
         startedAt: now,
         completedAt: now,
         durationMs: 0, // Populated by graph-level instrumentation when available
@@ -350,14 +365,36 @@ export class ArtifactCaptureService {
       const state = result as InterviewGraphStateType;
       const transitions: NodeTransition[] = [
         { node: 'analyze_intent', startedAt: now, completedAt: now, durationMs: 0, success: true },
-        { node: 'generate_questions', startedAt: now, completedAt: now, durationMs: 0, success: true },
+        {
+          node: 'generate_questions',
+          startedAt: now,
+          completedAt: now,
+          durationMs: 0,
+          success: true,
+        },
       ];
 
-      if (state.currentPhase === 'extract_atoms' || state.currentPhase === 'compose_molecule' || state.currentPhase === 'complete') {
-        transitions.push({ node: 'extract_atoms', startedAt: now, completedAt: now, durationMs: 0, success: true });
+      if (
+        state.currentPhase === 'extract_atoms' ||
+        state.currentPhase === 'compose_molecule' ||
+        state.currentPhase === 'complete'
+      ) {
+        transitions.push({
+          node: 'extract_atoms',
+          startedAt: now,
+          completedAt: now,
+          durationMs: 0,
+          success: true,
+        });
       }
       if (state.currentPhase === 'compose_molecule' || state.currentPhase === 'complete') {
-        transitions.push({ node: 'compose_molecule', startedAt: now, completedAt: now, durationMs: 0, success: true });
+        transitions.push({
+          node: 'compose_molecule',
+          startedAt: now,
+          completedAt: now,
+          durationMs: 0,
+          success: true,
+        });
       }
 
       return transitions;
@@ -461,7 +498,10 @@ export class ArtifactCaptureService {
     if (agent === 'reconciliation') {
       return {
         rootDirectory: raw.rootDirectory || '',
-        mode: (raw.input as Record<string, unknown>)?.reconciliationMode || raw.reconciliationMode || 'full-scan',
+        mode:
+          (raw.input as Record<string, unknown>)?.reconciliationMode ||
+          raw.reconciliationMode ||
+          'full-scan',
         options: (raw.input as Record<string, unknown>)?.options || raw.options || {},
       };
     }

@@ -141,6 +141,138 @@ This creates traceable links between intent, validation, and evidence.
 
 ---
 
+## 🚀 Recent Achievements (Phases 15-17)
+
+### Phase 17: Local/Remote Split ✓
+
+**The Problem**: Pact was tightly coupled to filesystem access, preventing remote deployment and limiting integration options.
+
+**The Solution**: Decoupled content access via ContentProvider abstraction and created a standalone client SDK.
+
+**What Was Built**:
+
+1. **ContentProvider Abstraction Layer**
+   - Refactored 40+ direct `fs.*` calls across 13 source files
+   - Three implementations: Filesystem, PreRead (in-memory), WriteProvider
+   - Zero behavioral changes — existing tests pass with no regressions
+
+2. **@pact/client-sdk Package** (99 passing tests)
+   - Zero NestJS dependencies (Node.js built-ins + fetch only)
+   - Full TypeScript support with typed API clients
+   - Modules: PactClient, FileReader, GitClient, CoverageCollector, PatchApplicator
+   - Commands: `pull()` (cache Main state), `check()` (local plausibility report)
+
+3. **Pre-Read Reconciliation API**
+   - `POST /agents/reconciliation/analyze/pre-read` endpoint
+   - Submit file contents as JSON payload (no filesystem required)
+   - Creates PreReadContentProvider for reconciliation pipeline
+   - Identical results to filesystem-based reconciliation
+
+4. **Main State Caching** (Local = Plausible, Canonical = True)
+   - Minimal local state: `.pact/main-cache.json` (read-only) + `.pact/local-report.json`
+   - `pull()` replaces cache entirely (no merge, no conflicts)
+   - Local reconciliation produces advisory plausibility reports
+   - CI attestation is the single promotion gate from plausible to true
+
+5. **Scope Middleware** (23 passing tests)
+   - Extracts `x-pact-project-id` and `x-pact-scope` headers
+   - Default scope: `'main'` (agents see Main by default)
+   - Two scopes: `'main'` (canonical) and `'local'` (plausibility)
+
+6. **Integration Examples**
+   - VSCode extension pattern (pull, check, apply patches)
+   - CLI tool pattern (pact pull, pact check, pact drift)
+   - CI/CD pipeline pattern (CI-attested canonical updates)
+
+**Deployment Models Enabled**:
+- Co-located (current) - Same machine, direct filesystem
+- Local Client + Remote - VSCode/CLI reads files, sends via API
+- CI/CD Pipeline - GitHub Action uploads content, CI-attested updates
+- PactHub (future) - Multi-tenant shared remote
+
+### Phase 16: Drift Management ✓
+
+**The Problem**: Gaps between committed intent and implementation reality were invisible and unbounded.
+
+**The Solution**: Make drift visible, time-bounded, and actionable with CI attestation as the canonical truth gate.
+
+**What Was Built**:
+
+1. **Drift Debt Tracking**
+   - DriftDebt entity with 4 types: `orphan_test`, `commitment_backlog`, `stale_coupling`, `uncovered_code`
+   - Status: `open`, `acknowledged`, `resolved`, `waived`
+   - Severity: `critical`, `high`, `medium`, `low` (auto-escalates with age)
+   - Migration: `1738569600000-CreateDriftDebt.ts`
+
+2. **CI Attestation Gate**
+   - ReconciliationRun extended with `attestationType`: `'local'` (advisory) or `'ci-attested'` (canonical)
+   - **Only CI-attested runs create/update drift debt records**
+   - Local runs produce plausibility reports, no server state changes
+   - Migration: `1738656000000-AddExceptionAndAttestation.ts`
+
+3. **Exception Lanes & Convergence Policies**
+   - Three lanes: `'normal'` (14d), `'hotfix-exception'` (3d), `'spike-exception'` (7d)
+   - Justification required for hotfix/spike
+   - Project-level policy overrides (configurable deadlines)
+   - `blockOnOverdueDrift` - Optional build blocker
+
+4. **Drift API & Metrics**
+   - DriftController with 9 endpoints (list, summary, overdue, aging, convergence, acknowledge, waive, resolve)
+   - DriftMetricsService for dashboard metrics
+   - Integration with MetricsSnapshot (daily drift tracking)
+
+5. **Dashboard Components**
+   - DriftDebtCard (total, by type, overdue count, convergence score)
+   - CommitmentBacklogCard (committed atoms needing tests)
+   - DriftTrendChart (time-series: new, resolved, net)
+   - Drift management page (`/drift`) with filters and bulk actions
+   - Drift detail page (`/drift/[id]`) with timeline
+
+### Phase 15: Pact Main Governance ✓
+
+**The Problem**: All atoms were equally "canonical" — no distinction between experimental and production-ready intent.
+
+**The Solution**: Introduce "Pact Main" — a governed subset promoted through change set approval.
+
+**What Was Built**:
+
+1. **Pact Main State Machine**
+   - Extended atom lifecycle: `proposed` → (change set approval) → `draft` → `committed` → `superseded`
+   - `promotedToMainAt` timestamp marks atoms "on Main"
+   - `changeSetId` links atoms to governed change sets
+   - Migration: `1738483200000-AddPactMainGovernance.ts` with backfill (existing committed atoms grandfathered)
+
+2. **Governance Service Layer**
+   - `propose(dto, changeSetId)` - Create proposed atom in change set
+   - `convertToDraft(id)` - Escape hatch to remove from governance
+   - Modified `commit()` - Sets `promotedToMainAt`, rejects proposed atoms
+   - Proposed atoms are mutable (same as drafts) until change set commit
+
+3. **Scope Filtering**
+   - `?scope=main` - Only atoms where `promotedToMainAt IS NOT NULL`
+   - `?scope=proposed` - Only `status='proposed'` atoms
+   - `?scope=all` - All atoms (backward-compatible default)
+
+4. **Reconciliation Integration**
+   - `POST /agents/reconciliation/runs/:runId/create-change-set`
+   - Route recommendations into governed change sets (atoms as `proposed`)
+   - Direct apply path still works (atoms as `draft`)
+   - Frontend offers both "Apply" and "Create Change Set" options
+
+5. **API & Frontend**
+   - `POST /atoms/propose`, `PATCH /atoms/:id/convert-to-draft`
+   - Scope toggle on atoms page (All Atoms | Main | Proposed)
+   - Proposed status badge (amber/orange styling)
+   - WebSocket events: `atom:proposed`, `atom:promotedToMain`
+
+**Architecture Decisions**:
+- **Backward compatible** - Existing committed atoms grandfathered as "on Main"
+- **Governance is additive** - Direct commit path still works; governance is opt-in
+- **Scope filtering is read-only** - `?scope=main` is a filter, not a separate data store
+- **Proposed atoms are mutable** - Same rules as draft until change set commit
+
+---
+
 ## 🛠️ Development Workflow
 
 ### Running the Application
@@ -298,47 +430,105 @@ Enforces 7 quality dimensions on tests before implementation (Red phase gate).
 
 ## 📊 Current Status
 
-**Phase 0 (Weeks 1-4)**: Foundation infrastructure and core agents
+**Phase 17 (Local/Remote Split)**: ✅ **Complete** (2026-02-05)
 
-- ✅ **Complete**: Development infrastructure (Docker, NestJS, PostgreSQL)
-- ✅ **Complete**: Atomization Agent
-- ✅ **Complete**: Atom Quality Validator
-- 🔨 **In Progress**: Test-Atom Coupling Agent
-- ⏳ **Pending**: Test Quality Analyzer Integration
+- ✅ ContentProvider abstraction (40+ fs.* calls refactored)
+- ✅ @pact/client-sdk npm package (99 passing tests)
+- ✅ Pre-read reconciliation API
+- ✅ Main state cache (Local = plausible, Canonical = true)
+- ✅ Scope middleware (23 passing tests)
+- ✅ Examples: VSCode, CLI, CI/CD integration
 
-**Test Coverage**: 88.46% (117 tests passing)
+**Phase 16 (Drift Management)**: ✅ **Complete** (2026-02-05)
 
-**See**: [docs/implementation-checklist.md](./docs/implementation-checklist.md) for detailed status.
+- ✅ Drift debt tracking (4 types: orphan_test, commitment_backlog, stale_coupling, uncovered_code)
+- ✅ CI attestation gate (local = advisory, CI = canonical)
+- ✅ Exception lanes (normal, hotfix, spike) with convergence policies
+- ✅ Drift API & metrics (summary, overdue, aging, convergence)
+- ✅ Dashboard components (DriftDebtCard, CommitmentBacklogCard, DriftTrendChart)
+
+**Phase 15 (Pact Main Governance)**: ✅ **Complete** (2026-02-05)
+
+- ✅ Pact Main state machine (proposed → draft → committed)
+- ✅ Governance service layer (propose, convertToDraft, scope filtering)
+- ✅ API endpoints (?scope=main|proposed|all)
+- ✅ Reconciliation integration (create change sets from runs)
+- ✅ Frontend scope toggle and proposed status badges
+
+**Earlier Phases**: ✅ **Complete**
+
+- ✅ Phase 14: Epistemic Intelligence (test quality + coverage)
+- ✅ Phase 13: Molecule lens system
+- ✅ Phase 8-12: Foundation (database, atoms, LLM, agents)
+
+**Test Coverage**: 88%+ backend, 99 client SDK tests, 23 scope middleware tests
+
+**See**: [CHANGELOG.md](./CHANGELOG.md) for complete release notes.
 
 ---
 
 ## 🗺️ Development Roadmap
 
-### Phase 0: Foundation (Weeks 1-4) - Current
+### ✅ Phase 17: Local/Remote Split (Complete - 2026-02-05)
 
-Core infrastructure and first 4 agents operational.
+Decoupled Pact from filesystem, enabling remote deployment via client SDK.
 
-### Phase 1: Core Intent System (Weeks 5-8)
+**Key Achievements**:
+- ContentProvider abstraction layer (40+ fs.* calls refactored)
+- @pact/client-sdk npm package (99 tests passing)
+- Pre-read reconciliation API (submit content via JSON payload)
+- Main state caching (read-only pull, no push/pull sync)
+- Scope middleware for project isolation
+- Deployment models: Co-located, Local+Remote, CI/CD, PactHub (future)
 
-Intent Atom CRUD API, Canvas UI, Commitment ceremony.
+### ✅ Phase 16: Drift Management (Complete - 2026-02-05)
 
-### Phase 2: Validators & Commitment (Weeks 9-12)
+Made drift between Pact Main and reality visible, time-bounded, and actionable.
 
-Validator definition, format translation, Commitment ceremony UI.
+**Key Achievements**:
+- Drift debt tracking (4 types with severity auto-escalation)
+- CI attestation gate (local = plausible, CI = canonical)
+- Exception lanes (normal/hotfix/spike) with convergence policies
+- Drift API & metrics (summary, overdue, aging, convergence score)
+- Dashboard components for visualization
 
-### Phase 3: Commitment Boundary (Weeks 13-16)
+### ✅ Phase 15: Pact Main Governance (Complete - 2026-02-05)
 
-Explicit commitment ceremony, global invariant checking, Commitment Artifact generation.
+Introduced "Pact Main" — governed subset of atoms promoted through change sets.
 
-### Phase 4: Agent-Driven Realization (Weeks 17-20)
+**Key Achievements**:
+- Atom state machine extended with `proposed` status
+- `promotedToMainAt` timestamp marking atoms "on Main"
+- Scope filtering (?scope=main|proposed|all)
+- Change set governance integration with reconciliation
+- Frontend scope toggle and proposed status badges
 
-Test generation from validators, code generation from Intent Atoms.
+### ✅ Phase 8-14: Foundation (Complete - 2026-01-XX)
 
-### Phase 5: Evidence Collection (Weeks 21-24)
+Core infrastructure, atoms, molecules, epistemic intelligence.
 
-Evidence Artifact generation, real-time stream, timeline view.
+**Key Achievements**:
+- Database schema (21 tables across 5 categories)
+- Atom CRUD with quality scoring (5 dimensions, 0-100)
+- LLM service abstraction (OpenAI, Anthropic)
+- Atomization agent + reconciliation pipeline
+- Molecule lens system with hierarchical nesting
+- Test quality as Red phase gate
+- Coverage as epistemic intelligence
 
-**See**: [docs/implementation-guide-2026-01-12.md](./docs/implementation-guide-2026-01-12.md) for full roadmap.
+### 🔜 Phase 18: PactHub Multi-Tenant (Planned)
+
+Multi-instance collaboration with bidirectional sync (deferred from Phase 17).
+
+### 🔜 Phase 19: Advanced Analytics (Planned)
+
+Epistemic certainty trends, drift correlation analysis, predictive quality scoring.
+
+### 🔜 Phase 20: Self-Hosting Completion (Planned)
+
+Pact validates Pact, bootstrap scaffolding demolished.
+
+**See**: [CHANGELOG.md](./CHANGELOG.md) for detailed release notes and [docs/](./docs/) for implementation guides.
 
 ---
 

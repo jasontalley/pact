@@ -15,6 +15,8 @@ import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   AtomCategory,
+  AtomStatus,
+  AtomSource,
   CanvasPosition,
   ObservableOutcome,
   FalsifiabilityCriterion,
@@ -173,4 +175,63 @@ export class CreateAtomDto {
   @Type(() => FalsifiabilityCriterionDto)
   @IsOptional()
   falsifiabilityCriteria?: FalsifiabilityCriterionDto[];
+
+  // Phase 18: Agent-suggested atom fields
+
+  @ApiPropertyOptional({
+    description: 'Status of the atom',
+    enum: ['draft', 'proposed', 'committed', 'superseded', 'abandoned'],
+    example: 'proposed',
+  })
+  @IsString()
+  @IsOptional()
+  @IsEnum(['draft', 'proposed', 'committed', 'superseded', 'abandoned'])
+  status?: AtomStatus;
+
+  @ApiPropertyOptional({
+    description: 'Source of the atom',
+    enum: ['human', 'interview_agent', 'agent_inference', 'reconciliation_inference'],
+    example: 'agent_inference',
+  })
+  @IsString()
+  @IsOptional()
+  @IsEnum(['human', 'interview_agent', 'agent_inference', 'reconciliation_inference'])
+  source?: AtomSource;
+
+  @ApiPropertyOptional({
+    description: 'Confidence score for agent-suggested atoms (0.0-1.0)',
+    minimum: 0,
+    maximum: 1,
+    example: 0.85,
+  })
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Max(1)
+  confidence?: number;
+
+  @ApiPropertyOptional({
+    description: 'Rationale for why this atom was suggested',
+    example:
+      'Implementing password reset endpoint, but no atom exists for rate limiting to prevent abuse',
+  })
+  @IsString()
+  @IsOptional()
+  rationale?: string;
+
+  @ApiPropertyOptional({
+    description: 'UUID of a related or parent atom',
+    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+  })
+  @IsString()
+  @IsOptional()
+  relatedAtomId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Identifier of the agent or user who proposed this atom',
+    example: 'claude-code',
+  })
+  @IsString()
+  @IsOptional()
+  proposedBy?: string;
 }

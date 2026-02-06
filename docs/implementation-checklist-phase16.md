@@ -6,7 +6,8 @@
 |-------|-------|
 | **Phase** | 16 |
 | **Focus** | Make drift between Pact Main and implementation reality visible, time-bounded, and actionable |
-| **Status** | Not Started |
+| **Status** | Complete |
+| **Completed** | 2026-02-05 |
 | **Prerequisites** | Phase 15 (Pact Main Governance Model) |
 | **Related Docs** | [implementation-checklist-phase15.md](implementation-checklist-phase15.md), [ux.md](ux.md) |
 
@@ -48,7 +49,7 @@ Create the `drift_debt` table and the service that detects and manages drift ite
 
 ### Tasks
 
-- [ ] **16A.1** Create DriftDebt entity
+- [x] **16A.1** Create DriftDebt entity
   - **File**: `src/modules/drift/entities/drift-debt.entity.ts`
   - **Priority**: High | **Effort**: L
   - **Details**:
@@ -68,14 +69,14 @@ Create the `drift_debt` table and the service that detects and manages drift ite
   - Also define types in same file or separate `drift.types.ts`:
     - `DriftType`, `DriftDebtStatus`, `DriftDebtSeverity`, `ExceptionLane`
 
-- [ ] **16A.2** Create database migration
+- [x] **16A.2** Create database migration
   - **File**: `src/migrations/XXXXXXXXXX-CreateDriftDebt.ts`
   - **Priority**: High | **Effort**: M
   - **Details**:
     - Create `drift_debt` table with all columns from 16A.1
     - Create indexes for filtering and deduplication
 
-- [ ] **16A.3** Create DriftDebt repository
+- [x] **16A.3** Create DriftDebt repository
   - **File**: `src/modules/drift/repositories/drift-debt.repository.ts`
   - **Priority**: High | **Effort**: M
   - **Details**:
@@ -89,7 +90,7 @@ Create the `drift_debt` table and the service that detects and manages drift ite
     - `getAgingSummary(projectId?)` — aggregate counts by age buckets (0-3d, 3-7d, 7-14d, 14+d)
     - `getOverdueDrift(projectId?)` — items past `dueAt`
 
-- [ ] **16A.4** Create DriftDetectionService
+- [x] **16A.4** Create DriftDetectionService
   - **File**: `src/modules/drift/drift-detection.service.ts`
   - **Priority**: High | **Effort**: L
   - **Details**:
@@ -102,7 +103,7 @@ Create the `drift_debt` table and the service that detects and manages drift ite
     - `applyConvergencePolicies(projectId?)` — compute `dueAt` and update severity based on aging
     - Returns `DriftDetectionResult { newDriftCount, confirmedDriftCount, resolvedDriftCount, totalOpenDrift, byType, overdueDrift, attestationType }`
 
-- [ ] **16A.5** Integrate with reconciliation persist node
+- [x] **16A.5** Integrate with reconciliation persist node
   - **File**: `src/modules/agents/graphs/nodes/reconciliation/persist.node.ts`
   - **Priority**: High | **Effort**: S
   - **Dependencies**: 16A.4
@@ -112,7 +113,7 @@ Create the `drift_debt` table and the service that detects and manages drift ite
     - Use optional dependency pattern (same as other optional services in persist node)
     - Store `DriftDetectionResult` in run summary or as separate metadata
 
-- [ ] **16A.6** Create DriftModule
+- [x] **16A.6** Create DriftModule
   - **File**: `src/modules/drift/drift.module.ts`
   - **Priority**: High | **Effort**: S
   - **Details**:
@@ -142,7 +143,7 @@ Extend ReconciliationRun to support exception lanes and CI attestation. Exceptio
 
 ### Tasks
 
-- [ ] **16B.1** Extend ReconciliationRun entity
+- [x] **16B.1** Extend ReconciliationRun entity
   - **File**: `src/modules/agents/entities/reconciliation-run.entity.ts`
   - **Priority**: High | **Effort**: S
   - **Details**:
@@ -150,11 +151,11 @@ Extend ReconciliationRun to support exception lanes and CI attestation. Exceptio
     - Add `attestationType` (varchar 20, default `'local'`): `'local' | 'ci-attested'`
     - Add `exceptionJustification` (text, nullable)
 
-- [ ] **16B.2** Create migration for ReconciliationRun extension
+- [x] **16B.2** Create migration for ReconciliationRun extension
   - **File**: `src/migrations/XXXXXXXXXX-AddExceptionAndAttestation.ts`
   - **Priority**: High | **Effort**: S
 
-- [ ] **16B.3** Extend ReconciliationOptions and DTOs
+- [x] **16B.3** Extend ReconciliationOptions and DTOs
   - **Files**: `src/modules/agents/graphs/types/reconciliation-state.ts`, `src/modules/agents/reconciliation.controller.ts`
   - **Priority**: High | **Effort**: S
   - **Details**:
@@ -162,7 +163,7 @@ Extend ReconciliationRun to support exception lanes and CI attestation. Exceptio
     - Add to `StartAnalysisDto` / `ReconciliationOptionsDto` in controller
     - Pass through in `reconciliation.service.ts`
 
-- [ ] **16B.4** Extend ProjectSettings with convergence policies
+- [x] **16B.4** Extend ProjectSettings with convergence policies
   - **File**: `src/modules/projects/project.entity.ts`
   - **Priority**: Medium | **Effort**: S
   - **Details**:
@@ -178,7 +179,7 @@ Extend ReconciliationRun to support exception lanes and CI attestation. Exceptio
       }
       ```
 
-- [ ] **16B.5** Create DriftPolicyService
+- [x] **16B.5** Create DriftPolicyService
   - **File**: `src/modules/drift/drift-policy.service.ts`
   - **Priority**: Medium | **Effort**: M
   - **Details**:
@@ -209,7 +210,7 @@ Expose drift data through REST APIs and integrate with the metrics system.
 
 ### Tasks
 
-- [ ] **16C.1** Create DriftController
+- [x] **16C.1** Create DriftController
   - **File**: `src/modules/drift/drift.controller.ts`
   - **Priority**: High | **Effort**: M
   - **Dependencies**: 16A
@@ -225,7 +226,7 @@ Expose drift data through REST APIs and integrate with the metrics system.
     - `GET /drift/convergence` — convergence report (on-track vs overdue counts)
     - `POST /drift/detect/:runId` — manually trigger drift detection for a run
 
-- [ ] **16C.2** Create drift DTOs
+- [x] **16C.2** Create drift DTOs
   - **File**: `src/modules/drift/dto/drift.dto.ts`
   - **Priority**: High | **Effort**: M
   - **Details**:
@@ -236,7 +237,7 @@ Expose drift data through REST APIs and integrate with the metrics system.
     - `DriftAgingResponse` — buckets with counts
     - `ConvergenceReportResponse` — on-track, at-risk, overdue counts
 
-- [ ] **16C.3** Create DriftMetricsService
+- [x] **16C.3** Create DriftMetricsService
   - **File**: `src/modules/drift/drift-metrics.service.ts`
   - **Priority**: Medium | **Effort**: M
   - **Details**:
@@ -245,7 +246,7 @@ Expose drift data through REST APIs and integrate with the metrics system.
     - `getConvergenceScore()` — percentage of drift items on-track (0-100)
     - `getDriftTrend(period)` — time series of drift counts (new, resolved, net)
 
-- [ ] **16C.4** Extend MetricsSnapshot with drift data
+- [x] **16C.4** Extend MetricsSnapshot with drift data
   - **File**: `src/modules/metrics/metrics-history.service.ts`
   - **Priority**: Medium | **Effort**: S
   - **Dependencies**: 16C.3
@@ -257,20 +258,20 @@ Expose drift data through REST APIs and integrate with the metrics system.
       }
       ```
 
-- [ ] **16C.5** Extend metrics API
+- [x] **16C.5** Extend metrics API
   - **File**: `src/modules/metrics/metrics.controller.ts`
   - **Priority**: Low | **Effort**: S
   - **Details**:
     - `GET /metrics/drift` — current drift metrics summary
     - `GET /metrics/drift/trend` — drift trend over time
 
-- [ ] **16C.6** Create frontend API client
+- [x] **16C.6** Create frontend API client
   - **File**: `frontend/lib/api/drift.ts`
   - **Priority**: Medium | **Effort**: S
   - **Details**:
     - `driftApi.list(params?)`, `getSummary()`, `getItem(id)`, `acknowledge(id, comment?)`, `waive(id, justification)`, `resolve(id)`, `getOverdue()`, `getAging()`, `getConvergence()`
 
-- [ ] **16C.7** Create frontend hooks
+- [x] **16C.7** Create frontend hooks
   - **File**: `frontend/hooks/drift/use-drift.ts`
   - **Priority**: Medium | **Effort**: M
   - **Details**:
@@ -296,7 +297,7 @@ Build frontend dashboard components for drift visibility.
 
 ### Tasks
 
-- [ ] **16D.1** Create DriftDebtCard
+- [x] **16D.1** Create DriftDebtCard
   - **File**: `frontend/components/dashboard/DriftDebtCard.tsx`
   - **Priority**: High | **Effort**: M
   - **Details**:
@@ -306,7 +307,7 @@ Build frontend dashboard components for drift visibility.
     - Convergence score as percentage
     - Link to `/drift` management page
 
-- [ ] **16D.2** Create CommitmentBacklogCard
+- [x] **16D.2** Create CommitmentBacklogCard
   - **File**: `frontend/components/dashboard/CommitmentBacklogCard.tsx`
   - **Priority**: Medium | **Effort**: M
   - **Details**:
@@ -314,7 +315,7 @@ Build frontend dashboard components for drift visibility.
     - Top 5 atoms needing tests
     - Link to reconciliation wizard
 
-- [ ] **16D.3** Create DriftTrendChart
+- [x] **16D.3** Create DriftTrendChart
   - **File**: `frontend/components/dashboard/DriftTrendChart.tsx`
   - **Priority**: Medium | **Effort**: M
   - **Details**:
@@ -322,7 +323,7 @@ Build frontend dashboard components for drift visibility.
     - Lines: new, resolved, net drift
     - Optional overlay: epistemic certainty trend for correlation
 
-- [ ] **16D.4** Create drift management page
+- [x] **16D.4** Create drift management page
   - **File**: `frontend/app/drift/page.tsx`
   - **Priority**: High | **Effort**: L
   - **Details**:
@@ -332,7 +333,7 @@ Build frontend dashboard components for drift visibility.
     - Bulk actions (acknowledge, waive)
     - Exception lane filter
 
-- [ ] **16D.5** Create drift detail page
+- [x] **16D.5** Create drift detail page
   - **File**: `frontend/app/drift/[id]/page.tsx`
   - **Priority**: Medium | **Effort**: M
   - **Details**:
@@ -341,13 +342,13 @@ Build frontend dashboard components for drift visibility.
     - Related reconciliation runs
     - Action buttons: acknowledge, waive, resolve
 
-- [ ] **16D.6** Update dashboard page
+- [x] **16D.6** Update dashboard page
   - **File**: `frontend/app/page.tsx`
   - **Priority**: Medium | **Effort**: S
   - **Details**:
     - Add DriftDebtCard and CommitmentBacklogCard to layout (new row after Epistemic + Coupling)
 
-- [ ] **16D.7** Add exception lane UI to ReconciliationWizard
+- [x] **16D.7** Add exception lane UI to ReconciliationWizard
   - **File**: `frontend/components/agents/ReconciliationWizard.tsx`
   - **Priority**: Medium | **Effort**: M
   - **Details**:
@@ -428,3 +429,96 @@ Build frontend dashboard components for drift visibility.
 ```
 
 16A and 16B can be developed in parallel. 16C depends on both 16A and 16B. 16D depends on 16C (API must exist for frontend to call).
+
+---
+
+## Phase 16 Completion Summary
+
+**Completed**: 2026-02-05
+**Status**: All tasks complete (4 sub-phases, 24 tasks)
+
+### Key Achievements
+
+1. **Drift Debt Tracking Operational**
+   - DriftDebt entity with 4 drift types: `orphan_test`, `commitment_backlog`, `stale_coupling`, `uncovered_code`
+   - Status workflow: `open` → `acknowledged` → `resolved` (or `waived` with justification)
+   - Severity auto-escalation: `medium` (0d) → `high` (7d) → `critical` (14d)
+   - Time-bounded convergence with configurable `dueAt` deadlines
+   - Migration `1738569600000-CreateDriftDebt.ts` with deduplication indexes
+
+2. **CI Attestation as Canonical Truth Gate**
+   - ReconciliationRun extended with `attestationType`: `'local'` (advisory) or `'ci-attested'` (canonical)
+   - **Critical architectural decision**: Only CI-attested runs create/update drift debt records
+   - Local runs produce plausibility reports, zero server state modification
+   - This enforces "Local = plausible, Canonical = true" principle
+   - Migration `1738656000000-AddExceptionAndAttestation.ts`
+
+3. **Exception Lanes & Convergence Policies**
+   - Three exception lanes: `'normal'` (14d), `'hotfix-exception'` (3d), `'spike-exception'` (7d)
+   - Justification required for hotfix/spike exceptions
+   - Project-level policy overrides in `ProjectSettings.driftPolicies`
+   - `blockOnOverdueDrift` option for build-blocking enforcement
+   - DriftPolicyService computes deadlines and severity based on age + lane
+
+4. **Drift API Complete**
+   - DriftController with 9 REST endpoints (list, summary, overdue, aging, convergence, acknowledge, waive, resolve)
+   - DriftMetricsService for dashboard-ready metrics (commitment backlog, convergence score 0-100, trend)
+   - Integration with MetricsSnapshot for daily drift tracking
+   - Frontend API client (`frontend/lib/api/drift.ts`) and React Query hooks
+
+5. **Dashboard Components Functional**
+   - DriftDebtCard: Total open drift, breakdown by type, overdue count (red warning), convergence score
+   - CommitmentBacklogCard: Committed atoms without test evidence, top 5 list, link to reconciliation wizard
+   - DriftTrendChart: Time-series visualization (new, resolved, net drift)
+   - Drift management page (`/drift`): Filterable table, aging distribution, bulk actions
+   - Drift detail page (`/drift/[id]`): Full timeline, related runs, action buttons
+
+6. **Reconciliation Integration**
+   - Persist node calls `driftDetectionService.detectDriftFromRun(runId)` after run persistence
+   - Detection service respects attestation gate internally (local runs → no-op, advisory report only)
+   - DriftDetectionResult stored in run metadata for audit trail
+   - ReconciliationWizard UI: exception lane dropdown, justification text area, attestation indicator
+
+### Files Created/Modified
+
+- **2 migrations**: `1738569600000-CreateDriftDebt.ts`, `1738656000000-AddExceptionAndAttestation.ts`
+- **8 new backend files**: DriftDebt entity, repositories, services (detection, policy, metrics), controller, DTOs
+- **7 new frontend files**: API client, hooks, 3 dashboard components, 2 pages
+- **10 modified files**: ReconciliationRun entity, reconciliation service/controller, persist node, project settings, dashboard page, wizard
+
+### Architecture Impact
+
+- **Drift is always converging**: Time-bounded deadlines enforce resolution (not just tracking)
+- **CI attestation is the promotion gate**: Plausible → True transition happens exclusively through CI
+- **Local reconciliation is advisory**: No drift debt impact, no canonical state changes
+- **Exception lanes control deadlines**: Hotfix/spike get accelerated convergence timelines
+- **Drift metrics are epistemic signals**: Convergence score tracks system health over time
+
+### Metrics & Stats
+
+- **Drift types tracked**: 4 (orphan_test, commitment_backlog, stale_coupling, uncovered_code)
+- **Default convergence policies**: Normal 14d, Hotfix 3d, Spike 7d
+- **Severity escalation**: Medium → High @ 7d, High → Critical @ 14d
+- **Dashboard cards**: 3 (DriftDebtCard, CommitmentBacklogCard, DriftTrendChart)
+- **API endpoints**: 9 drift-specific + 2 metrics endpoints
+- **Test coverage**: All unit tests passing, drift detection verified
+
+### Lessons Learned
+
+1. **Attestation gate is non-negotiable**: Allowing local runs to create drift debt would pollute canonical truth
+2. **Time-bounding drives action**: Unbounded drift accumulates; deadlines force resolution
+3. **Exception lanes need justification**: Required text for hotfix/spike prevents abuse
+4. **Deduplication is critical**: `(filePath, testName, driftType)` index prevents duplicate drift entries
+5. **Auto-resolution matters**: When tests gain annotations or atoms gain tests, drift resolves automatically
+6. **Convergence score is a health metric**: 0-100 score makes drift trends visible at a glance
+
+### Integration with Phase 15
+
+- Drift is measured against **Pact Main** (atoms where `promotedToMainAt IS NOT NULL`)
+- Proposed atoms (in change sets) are not subject to drift tracking until promoted
+- Commitment backlog = committed atoms on Main without passing test evidence
+- Scope filtering (`?scope=main`) ensures drift calculations use canonical state only
+
+### Next Steps (Phase 17)
+
+With drift management tracking gaps between intent and reality, Phase 17 will decouple Pact from direct filesystem access, enabling remote deployment and local/remote split via ContentProvider abstraction and client SDK.

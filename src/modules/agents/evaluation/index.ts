@@ -14,10 +14,7 @@ export { ArtifactCaptureService } from './artifact-capture.service';
 export type { CaptureOptions } from './artifact-capture.service';
 
 // Rubric Scorer
-export {
-  scoreReconciliationRubric,
-  scoreInterviewRubric,
-} from './rubric-scorer';
+export { scoreReconciliationRubric, scoreInterviewRubric } from './rubric-scorer';
 export type {
   DimensionScore,
   DimensionResult,

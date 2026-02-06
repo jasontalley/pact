@@ -67,6 +67,8 @@ export type ExceptionLane = 'normal' | 'hotfix-exception' | 'spike-exception';
 export type AttestationType = 'local' | 'ci-attested';
 
 export interface ReconciliationOptions {
+  /** Project ID for policy lookups and atom creation (Phase 18) */
+  projectId?: string;
   /** Whether to analyze documentation for context enrichment */
   analyzeDocs?: boolean;
   /** Maximum number of tests to process (for large repos) */

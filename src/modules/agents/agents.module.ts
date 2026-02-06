@@ -39,6 +39,10 @@ import { RECONCILIATION_TOOLS } from './tools/reconciliation-tools.definitions';
 import { GraphRegistryService } from './graphs/graph-registry.service';
 import { ReconciliationSchedulerService } from './reconciliation-scheduler.service';
 import { ArtifactCaptureService } from './evaluation/artifact-capture.service';
+import { AtomInferenceService } from './atom-inference.service';
+import { ReconciliationAtomInferenceService } from './reconciliation-atom-inference.service';
+import { CIPolicyService } from './ci-policy.service';
+import { ReconciliationPolicy } from './entities/reconciliation-policy.entity';
 
 @Module({
   imports: [
@@ -51,6 +55,7 @@ import { ArtifactCaptureService } from './evaluation/artifact-capture.service';
       AtomRecommendation,
       MoleculeRecommendation,
       TestRecord,
+      ReconciliationPolicy,
     ]),
     ScheduleModule.forRoot(),
     forwardRef(() => AtomsModule),
@@ -85,6 +90,9 @@ import { ArtifactCaptureService } from './evaluation/artifact-capture.service';
     GraphRegistryService,
     ReconciliationSchedulerService,
     ArtifactCaptureService,
+    AtomInferenceService,
+    ReconciliationAtomInferenceService,
+    CIPolicyService,
   ],
   exports: [
     AtomizationService,
@@ -104,6 +112,8 @@ import { ArtifactCaptureService } from './evaluation/artifact-capture.service';
     GraphRegistryService,
     ReconciliationSchedulerService,
     ArtifactCaptureService,
+    AtomInferenceService,
+    ReconciliationAtomInferenceService,
   ],
 })
 export class AgentsModule implements OnModuleInit {

@@ -172,9 +172,7 @@ export const SCENARIOS: ScenarioEntry[] = [
  * Returns scenarios that match ALL provided tags.
  */
 export function filterScenariosByTags(tags: string[]): ScenarioEntry[] {
-  return SCENARIOS.filter((scenario) =>
-    tags.every((tag) => scenario.tags.includes(tag)),
-  );
+  return SCENARIOS.filter((scenario) => tags.every((tag) => scenario.tags.includes(tag)));
 }
 
 /**

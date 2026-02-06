@@ -14,12 +14,13 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   HttpCode,
   HttpStatus,
   Logger,
   Optional,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiQuery } from '@nestjs/swagger';
 import {
   IsOptional,
   IsString,
@@ -45,10 +46,8 @@ import {
   RecoveryResult,
 } from './reconciliation.service';
 import { ApplyService, ApplyRequest, ApplyResult } from './apply.service';
-import {
-  PreReadContentDto,
-  PreReadAnalysisStartResult,
-} from './dto/pre-read-reconciliation.dto';
+import { CIPolicyService, CIPolicyCheckResult } from './ci-policy.service';
+import { PreReadContentDto, PreReadAnalysisStartResult } from './dto/pre-read-reconciliation.dto';
 import {
   ReconciliationSchedulerService,
   ScheduleInfo,
@@ -224,6 +223,7 @@ export class ReconciliationController {
   constructor(
     private readonly reconciliationService: ReconciliationService,
     private readonly applyService: ApplyService,
+    private readonly ciPolicyService: CIPolicyService,
     @Optional() private readonly schedulerService?: ReconciliationSchedulerService,
   ) {}
 
@@ -735,5 +735,67 @@ export class ReconciliationController {
       return [];
     }
     return this.schedulerService.getHistory();
+  }
+
+  // ===========================================================================
+  // CI Policy Endpoints (Phase 18)
+  // ===========================================================================
+
+  /**
+   * Check CI policy for a project
+   */
+  @Get('ci-policy/check')
+  @ApiOperation({
+    summary: 'Check CI policy (Phase 18)',
+    description: 'Check if CI should be blocked due to pending proposed atoms requiring approval.',
+  })
+  @ApiQuery({ name: 'projectId', required: true, type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'CI policy check result',
+    schema: {
+      type: 'object',
+      properties: {
+        passed: { type: 'boolean' },
+        blocked: { type: 'boolean' },
+        reason: { type: 'string' },
+        proposedAtomsCount: { type: 'number' },
+        reviewUrl: { type: 'string' },
+      },
+    },
+  })
+  async checkCIPolicy(@Query('projectId') projectId: string): Promise<CIPolicyCheckResult> {
+    this.logger.log(`GET /agents/reconciliation/ci-policy/check?projectId=${projectId}`);
+    return this.ciPolicyService.checkCIPolicy(projectId);
+  }
+
+  /**
+   * Get policy status for a project
+   */
+  @Get('ci-policy/status')
+  @ApiOperation({
+    summary: 'Get CI policy status (Phase 18)',
+    description: 'Get the current policy settings and proposed atoms count for a project.',
+  })
+  @ApiQuery({ name: 'projectId', required: true, type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'Policy status',
+    schema: {
+      type: 'object',
+      properties: {
+        ciBlockOnProposedAtoms: { type: 'boolean' },
+        currentProposedCount: { type: 'number' },
+        wouldBlock: { type: 'boolean' },
+      },
+    },
+  })
+  async getPolicyStatus(@Query('projectId') projectId: string): Promise<{
+    ciBlockOnProposedAtoms: boolean;
+    currentProposedCount: number;
+    wouldBlock: boolean;
+  }> {
+    this.logger.log(`GET /agents/reconciliation/ci-policy/status?projectId=${projectId}`);
+    return this.ciPolicyService.getPolicyStatus(projectId);
   }
 }

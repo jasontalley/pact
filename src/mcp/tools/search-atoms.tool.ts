@@ -5,7 +5,8 @@ export const searchAtomsTool: ToolDefinition = {
   name: 'search_atoms',
   description:
     'Search atoms by description content, tags, or category. ' +
-    'Uses text matching on atom descriptions.',
+    'Uses text matching on atom descriptions. ' +
+    'Use scope="main" for committed atoms only, or scope="local" to include proposed atoms.',
   inputSchema: {
     type: 'object' as const,
     properties: {
@@ -19,8 +20,19 @@ export const searchAtomsTool: ToolDefinition = {
       },
       status: {
         type: 'string',
-        description: 'Filter by status: "draft", "committed", or "superseded"',
-        enum: ['draft', 'committed', 'superseded'],
+        description:
+          'Filter by status: "draft", "proposed", "committed", "superseded", or "abandoned"',
+        enum: ['draft', 'proposed', 'committed', 'superseded', 'abandoned'],
+      },
+      scope: {
+        type: 'string',
+        description:
+          'Scope filter: "main" (committed only), "local" (committed + proposed), or "all" (default)',
+        enum: ['main', 'local', 'all'],
+      },
+      includeProposed: {
+        type: 'boolean',
+        description: 'Include proposed atoms in results (default: false)',
       },
       limit: {
         type: 'number',
@@ -39,13 +51,30 @@ export const searchAtomsTool: ToolDefinition = {
     }
 
     try {
+      const scope = (args.scope as string) || 'all';
+      const includeProposed = args.includeProposed as boolean | undefined;
+      let status = args.status as string | undefined;
+
+      // Apply scope filtering
+      if (scope === 'main') {
+        status = 'committed';
+      }
+
       const result = await searchAtoms(query, {
         category: args.category as string | undefined,
-        status: args.status as string | undefined,
+        status,
         limit: (args.limit as number) || 10,
       });
 
-      const summary = result.items.map((a) => ({
+      // Client-side filtering for scope
+      let items = result.items;
+      if (scope === 'local') {
+        items = items.filter((a) => a.status === 'committed' || a.status === 'proposed');
+      } else if (!includeProposed && scope !== 'main') {
+        items = items.filter((a) => a.status !== 'proposed');
+      }
+
+      const summary = items.map((a) => ({
         id: a.id,
         atomId: a.atomId,
         description: a.description,
@@ -59,7 +88,7 @@ export const searchAtomsTool: ToolDefinition = {
         content: [
           {
             type: 'text' as const,
-            text: JSON.stringify({ results: summary, total: result.total }, null, 2),
+            text: JSON.stringify({ results: summary, total: summary.length }, null, 2),
           },
         ],
       };
