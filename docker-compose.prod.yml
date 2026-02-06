@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   postgres:
-    image: postgres:18
+    image: postgres:16-alpine
     container_name: pact-postgres-prod
     environment:
       POSTGRES_USER: ${DATABASE_USER}
@@ -24,14 +22,17 @@ services:
     container_name: pact-redis-prod
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
     networks:
       - pact-network
 
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: jasontalley/pact:${PACT_VERSION:-latest}
     container_name: pact-app-prod
     ports:
       - "${PORT:-3000}:3000"
@@ -42,6 +43,7 @@ services:
       DATABASE_USER: ${DATABASE_USER}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_SYNCHRONIZE: ${DATABASE_SYNCHRONIZE:-true}
       NODE_ENV: production
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -53,6 +55,8 @@ services:
       LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT:-pact-production}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
     networks:
