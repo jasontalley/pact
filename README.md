@@ -6,7 +6,7 @@ Pact is a system for capturing product intent and translating it into code, desi
 
 [![Test Coverage](https://img.shields.io/badge/coverage-88.46%25-brightgreen)](./coverage)
 [![Phase](https://img.shields.io/badge/phase-0%20%28Weeks%201--4%29-yellow)](./docs/implementation-checklist.md)
-[![License](https://img.shields.io/badge/license-UNLICENSED-red)](./LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
 ---
 
@@ -79,6 +79,39 @@ Pact recognizes that:
 
 6. **View API documentation**:
    Open <http://localhost:3000/api> in your browser for Swagger documentation.
+
+---
+
+## 📦 Production Deployment
+
+For production deployment, see the comprehensive [Deployment Guide](./docs/deployment-guide.md).
+
+### Quick Production Setup
+
+```bash
+# 1. Copy production environment template
+cp .env.production.example .env.production
+
+# 2. Edit .env.production with your production values
+nano .env.production
+
+# 3. Start production services
+docker-compose -f docker-compose.prod.yml --env-file .env.production up -d
+
+# 4. Run database migrations
+docker-compose -f docker-compose.prod.yml exec app npm run migration:run
+
+# 5. Check application health
+curl https://your-domain.com/health
+```
+
+### Deployment Options
+
+- **Docker Compose** - Recommended for self-hosting ([guide](./docs/deployment-guide.md#production-deployment-with-docker-compose))
+- **Manual Deployment** - Node.js + PostgreSQL ([guide](./docs/deployment-guide.md#manual-deployment-no-docker))
+- **Cloud Platforms** - AWS, GCP, Heroku, Render ([guide](./docs/deployment-guide.md#cloud-platform-deployments))
+
+See [docs/deployment-guide.md](./docs/deployment-guide.md) for detailed instructions, security considerations, backup strategies, and troubleshooting.
 
 ---
 

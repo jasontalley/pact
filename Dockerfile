@@ -3,17 +3,17 @@ FROM node:24-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 
 COPY . .
-RUN npm run build && npm run build:mcp
+RUN NODE_OPTIONS="--max-old-space-size=4096" npm run build && npm run build:mcp
 
 FROM node:24-alpine
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci --only=production --legacy-peer-deps --ignore-scripts
 
 COPY --from=builder /app/dist ./dist
 
