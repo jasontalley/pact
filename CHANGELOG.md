@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-02-06
+
+### Fixed
+- **Docker container startup**: Corrected CMD path from `dist/main` to `dist/src/main`
+  - NestJS build preserves source directory structure, so `src/main.ts` becomes `dist/src/main.js`
+  - Resolves MODULE_NOT_FOUND error when starting Docker containers from v0.1.0
+
+## [0.1.0] - 2026-02-06
+
 ### Phase 17: Local/Remote Split (2026-02-05)
 
 #### Added - ContentProvider Abstraction
