@@ -1,0 +1,79 @@
+{
+  "id": "stoch-002",
+  "name": "Payment processing — verbose solutions architect",
+  "scenarioVersion": "1.0",
+  "tags": ["payment", "processing", "verbose", "security"],
+  "context": {
+    "domain": "SaaS platform with subscription billing and one-time purchases",
+    "constraints": [
+      "PCI DSS compliance required",
+      "Must support international currencies",
+      "Integration with existing user account system"
+    ],
+    "persona": "solutions architect"
+  },
+  "initialIntent": "We need to add payment processing to our SaaS platform. Users need to subscribe to plans and make one-time purchases for add-ons.",
+  "groundTruth": [
+    {
+      "id": "gt-002-subscription",
+      "fact": "Users can subscribe to monthly or annual plans with automatic recurring billing",
+      "category": "functional",
+      "isDecided": true,
+      "keywords": ["subscription", "subscribe", "plan", "monthly", "annual", "recurring", "billing"]
+    },
+    {
+      "id": "gt-002-one-time",
+      "fact": "Users can make one-time purchases for add-on features without a subscription",
+      "category": "functional",
+      "isDecided": true,
+      "keywords": ["one-time", "purchase", "add-on", "buy", "single"]
+    },
+    {
+      "id": "gt-002-pci",
+      "fact": "Payment card data must never be stored on our servers; all card handling delegated to PCI-compliant payment processor",
+      "category": "security",
+      "isDecided": true,
+      "keywords": ["PCI", "card", "security", "token", "processor", "compliant", "stored"]
+    },
+    {
+      "id": "gt-002-currencies",
+      "fact": "System must support USD, EUR, and GBP with automatic currency conversion at checkout",
+      "category": "functional",
+      "isDecided": true,
+      "keywords": ["currency", "USD", "EUR", "GBP", "conversion", "international"]
+    },
+    {
+      "id": "gt-002-retry",
+      "fact": "Failed recurring payments are retried up to 3 times over 7 days before the subscription is suspended",
+      "category": "operational",
+      "isDecided": true,
+      "keywords": ["retry", "failed", "payment", "suspend", "dunning", "attempt"]
+    },
+    {
+      "id": "gt-002-refund",
+      "fact": "Refund policy and process have not been finalized — partial vs full refund rules are TBD",
+      "category": "functional",
+      "isDecided": false,
+      "keywords": ["refund", "return", "cancel", "money back"]
+    },
+    {
+      "id": "gt-002-upgrade",
+      "fact": "Plan upgrade/downgrade proration rules have not been decided yet",
+      "category": "functional",
+      "isDecided": false,
+      "keywords": ["upgrade", "downgrade", "prorate", "change plan", "switch"]
+    }
+  ],
+  "persona": {
+    "style": "verbose",
+    "styleInstructions": "Provide detailed answers with context and examples. Explain your reasoning. Use 3-5 sentences."
+  },
+  "numRuns": 3,
+  "maxRounds": 5,
+  "evaluation": {
+    "minimumPrecision": 0.30,
+    "minimumRecall": 0.40,
+    "minimumRubricScore": 7,
+    "maxRedundantQuestions": 2
+  }
+}

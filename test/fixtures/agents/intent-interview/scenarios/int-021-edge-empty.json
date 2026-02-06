@@ -1,0 +1,47 @@
+{
+  "id": "int-021",
+  "name": "Edge case: minimal input with near-zero context",
+  "scenarioVersion": "1.0",
+  "tags": ["edge-case", "minimal-input", "ambiguous"],
+  "context": {
+    "domain": "Unknown - user provides minimal context",
+    "persona": "unknown stakeholder"
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "Add a button."
+    },
+    {
+      "turn": 2,
+      "content": "A button that exports data to a spreadsheet. It's on our admin dashboard.",
+      "answersQuestionIds": ["what-button", "where"]
+    },
+    {
+      "turn": 3,
+      "content": "The dashboard shows a table of user activity logs. The button should export whatever is currently displayed - with any active filters applied. CSV format is fine.",
+      "answersQuestionIds": ["data-source", "export-format", "filter-behavior"]
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContains": "export",
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    },
+    {
+      "descriptionContains": "filter",
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "Is there a maximum number of rows that can be exported?",
+    "Should the export include all columns or a configurable subset?",
+    "Who has permission to use the export function?",
+    "What is the underlying intent - why do admins need this export?"
+  ],
+  "minimumRubricScore": 7
+}

@@ -1,0 +1,56 @@
+{
+  "id": "int-001",
+  "name": "Vague authentication request",
+  "scenarioVersion": "1.0",
+  "tags": ["vague", "ambiguous", "authentication"],
+  "context": {
+    "domain": "User authentication for a SaaS web application",
+    "persona": "product manager"
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "I want users to be able to log in."
+    },
+    {
+      "turn": 2,
+      "content": "Yeah, email and password should work. We might add social login later but not now.",
+      "answersQuestionIds": ["auth-method"]
+    },
+    {
+      "turn": 3,
+      "content": "Sessions should last a reasonable amount of time. We don't want people getting logged out too often but also need it to be secure. Maybe a few hours?",
+      "answersQuestionIds": ["session-duration", "security-requirements"]
+    },
+    {
+      "turn": 4,
+      "content": "I think that covers it for now. We can add more later.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContainsAny": ["email and password", "authenticate", "login", "credential"],
+      "categoryOneOf": ["security", "functional"],
+      "minOutcomes": 2,
+      "requiresEvidence": true
+    },
+    {
+      "descriptionContainsAny": ["session", "logged in", "timeout"],
+      "categoryOneOf": ["security", "functional"],
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "What happens after too many failed login attempts?",
+    "Is multi-factor authentication required?",
+    "What are the exact session timeout requirements?",
+    "How should password reset work?"
+  ],
+  "expectedNonGoals": [
+    "Social login (explicitly deferred)",
+    "Biometric authentication"
+  ],
+  "minimumRubricScore": 8
+}

@@ -1,0 +1,77 @@
+{
+  "id": "rec-002",
+  "name": "Perfect State with Molecules",
+  "fixtureVersion": "1.0",
+  "tags": ["perfect", "molecules", "baseline"],
+  "description": "A fully linked repository with atoms grouped into molecules. Tests all have @atom annotations, atoms are organized into feature and user_story molecules. The reconciliation agent should confirm the perfect state and produce no recommendations.",
+  "mode": "full-scan",
+  "repo": {
+    "files": {
+      "src/cart.service.ts": "export class CartService {\n  private items: Map<string, number> = new Map();\n\n  addItem(productId: string, quantity: number): void {\n    const current = this.items.get(productId) || 0;\n    this.items.set(productId, current + quantity);\n  }\n\n  removeItem(productId: string): boolean {\n    return this.items.delete(productId);\n  }\n\n  getTotal(): number {\n    let total = 0;\n    this.items.forEach((qty) => { total += qty * 10; });\n    return total;\n  }\n\n  clear(): void {\n    this.items.clear();\n  }\n}",
+      "src/checkout.service.ts": "import { CartService } from './cart.service';\n\nexport class CheckoutService {\n  constructor(private cart: CartService) {}\n\n  processPayment(amount: number): { success: boolean; transactionId?: string } {\n    if (amount <= 0) return { success: false };\n    return { success: true, transactionId: 'txn-' + Date.now() };\n  }\n\n  validateOrder(): boolean {\n    return this.cart.getTotal() > 0;\n  }\n}",
+      "test/cart.spec.ts": "import { CartService } from '../src/cart.service';\n\ndescribe('CartService', () => {\n  // @atom IA-010\n  it('should add item to cart', () => {\n    const cart = new CartService();\n    cart.addItem('prod-1', 2);\n    expect(cart.getTotal()).toBe(20);\n  });\n\n  // @atom IA-011\n  it('should remove item from cart', () => {\n    const cart = new CartService();\n    cart.addItem('prod-1', 1);\n    expect(cart.removeItem('prod-1')).toBe(true);\n    expect(cart.getTotal()).toBe(0);\n  });\n\n  // @atom IA-012\n  it('should calculate total correctly', () => {\n    const cart = new CartService();\n    cart.addItem('prod-1', 3);\n    cart.addItem('prod-2', 2);\n    expect(cart.getTotal()).toBe(50);\n  });\n\n  // @atom IA-013\n  it('should clear all items from cart', () => {\n    const cart = new CartService();\n    cart.addItem('prod-1', 1);\n    cart.clear();\n    expect(cart.getTotal()).toBe(0);\n  });\n});",
+      "test/checkout.spec.ts": "import { CartService } from '../src/cart.service';\nimport { CheckoutService } from '../src/checkout.service';\n\ndescribe('CheckoutService', () => {\n  // @atom IA-014\n  it('should process valid payment', () => {\n    const cart = new CartService();\n    cart.addItem('prod-1', 1);\n    const checkout = new CheckoutService(cart);\n    const result = checkout.processPayment(10);\n    expect(result.success).toBe(true);\n    expect(result.transactionId).toBeDefined();\n  });\n\n  // @atom IA-015\n  it('should reject payment with zero amount', () => {\n    const cart = new CartService();\n    const checkout = new CheckoutService(cart);\n    const result = checkout.processPayment(0);\n    expect(result.success).toBe(false);\n  });\n\n  // @atom IA-016\n  it('should validate order has items before checkout', () => {\n    const cart = new CartService();\n    const checkout = new CheckoutService(cart);\n    expect(checkout.validateOrder()).toBe(false);\n    cart.addItem('prod-1', 1);\n    expect(checkout.validateOrder()).toBe(true);\n  });\n});"
+    },
+    "testFiles": ["test/cart.spec.ts", "test/checkout.spec.ts"],
+    "sourceFiles": ["src/cart.service.ts", "src/checkout.service.ts"]
+  },
+  "registry": {
+    "atoms": [
+      { "id": "IA-010", "description": "User can add items to shopping cart", "status": "committed", "category": "cart" },
+      { "id": "IA-011", "description": "User can remove items from shopping cart", "status": "committed", "category": "cart" },
+      { "id": "IA-012", "description": "Cart calculates total price correctly", "status": "committed", "category": "cart" },
+      { "id": "IA-013", "description": "User can clear all items from cart", "status": "committed", "category": "cart" },
+      { "id": "IA-014", "description": "System processes valid payment successfully", "status": "committed", "category": "checkout" },
+      { "id": "IA-015", "description": "System rejects payment with zero or negative amount", "status": "committed", "category": "checkout" },
+      { "id": "IA-016", "description": "Order validation requires at least one item in cart", "status": "committed", "category": "checkout" }
+    ],
+    "molecules": [
+      {
+        "id": "M-001",
+        "name": "Shopping Cart Management",
+        "atomIds": ["IA-010", "IA-011", "IA-012", "IA-013"],
+        "lensType": "feature"
+      },
+      {
+        "id": "M-002",
+        "name": "Secure Checkout Flow",
+        "atomIds": ["IA-014", "IA-015", "IA-016"],
+        "lensType": "user_story"
+      },
+      {
+        "id": "M-003",
+        "name": "Complete Purchase Journey",
+        "atomIds": ["IA-010", "IA-012", "IA-014", "IA-016"],
+        "lensType": "journey"
+      }
+    ],
+    "annotations": [
+      { "testFilePath": "test/cart.spec.ts", "testName": "should add item to cart", "atomId": "IA-010" },
+      { "testFilePath": "test/cart.spec.ts", "testName": "should remove item from cart", "atomId": "IA-011" },
+      { "testFilePath": "test/cart.spec.ts", "testName": "should calculate total correctly", "atomId": "IA-012" },
+      { "testFilePath": "test/cart.spec.ts", "testName": "should clear all items from cart", "atomId": "IA-013" },
+      { "testFilePath": "test/checkout.spec.ts", "testName": "should process valid payment", "atomId": "IA-014" },
+      { "testFilePath": "test/checkout.spec.ts", "testName": "should reject payment with zero amount", "atomId": "IA-015" },
+      { "testFilePath": "test/checkout.spec.ts", "testName": "should validate order has items before checkout", "atomId": "IA-016" }
+    ]
+  },
+  "expected": {
+    "orphanTests": [],
+    "expectedAtomRecommendations": [],
+    "expectedMoleculeGroupings": [
+      { "minAtoms": 4, "containsAtomDescriptionPattern": "cart" },
+      { "minAtoms": 3, "containsAtomDescriptionPattern": "payment|checkout|order" }
+    ],
+    "notOrphanTests": [
+      { "filePath": "test/cart.spec.ts", "testName": "should add item to cart" },
+      { "filePath": "test/cart.spec.ts", "testName": "should remove item from cart" },
+      { "filePath": "test/cart.spec.ts", "testName": "should calculate total correctly" },
+      { "filePath": "test/cart.spec.ts", "testName": "should clear all items from cart" },
+      { "filePath": "test/checkout.spec.ts", "testName": "should process valid payment" },
+      { "filePath": "test/checkout.spec.ts", "testName": "should reject payment with zero amount" },
+      { "filePath": "test/checkout.spec.ts", "testName": "should validate order has items before checkout" }
+    ],
+    "maxErrors": 0
+  },
+  "minimumRubricScore": 10
+}

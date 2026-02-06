@@ -1,0 +1,69 @@
+{
+  "id": "int-009",
+  "name": "Conflicting constraints: thorough validation vs instant response",
+  "scenarioVersion": "1.0",
+  "tags": [
+    "conflicting-constraints",
+    "validation",
+    "performance",
+    "tradeoff"
+  ],
+  "context": {
+    "domain": "Insurance claim submission portal",
+    "constraints": [
+      "Claims involve uploaded documents (photos, PDFs)",
+      "Regulatory requirement to validate all supporting documents"
+    ],
+    "persona": "product manager"
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "Users submit insurance claims with photos and documents. We need to validate everything thoroughly - check document authenticity, verify claim amounts against policy limits, cross-reference previous claims. But users expect instant feedback. They don't want to wait around."
+    },
+    {
+      "turn": 2,
+      "content": "The initial submission should feel instant - acknowledge receipt and run basic checks like file format and required fields. The deep validation can happen in the background. Users should get a status update within 30 minutes for most claims.",
+      "answersQuestionIds": [
+        "response-time",
+        "validation-tiers"
+      ]
+    },
+    {
+      "turn": 3,
+      "content": "If basic validation fails, reject immediately with clear error messages. If deep validation finds issues, put the claim in a 'needs attention' state and notify the user. Don't auto-reject from background validation.",
+      "answersQuestionIds": [
+        "failure-handling"
+      ]
+    },
+    {
+      "turn": 4,
+      "content": "That captures the flow well.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContainsAny": [
+        "valid",
+        "check",
+        "verify",
+        "submit",
+        "claim"
+      ],
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "What constitutes document authenticity validation?",
+    "How should claims that fail deep validation be escalated internally?",
+    "What is the SLA for claims that require manual review?"
+  ],
+  "expectedNonGoals": [
+    "Auto-rejection from background validation",
+    "Synchronous deep document validation"
+  ],
+  "minimumRubricScore": 9
+}

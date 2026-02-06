@@ -1,0 +1,74 @@
+{
+  "id": "int-007",
+  "name": "Conflicting constraints: maximum security vs zero friction UX",
+  "scenarioVersion": "1.0",
+  "tags": [
+    "conflicting-constraints",
+    "security",
+    "ux",
+    "tradeoff"
+  ],
+  "context": {
+    "domain": "Mobile banking application",
+    "constraints": [
+      "PCI-DSS compliance required",
+      "Target demographic: ages 18-35"
+    ],
+    "persona": "product director",
+    "invariants": [
+      "All financial transactions must be authenticated",
+      "Sensitive data must be encrypted at rest and in transit"
+    ]
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "We need maximum security for our mobile banking app, but users should have zero friction. No one wants to enter passwords every time they check their balance."
+    },
+    {
+      "turn": 2,
+      "content": "Biometric unlock for read-only access like checking balances. For transactions over $500, require a PIN on top of biometrics. For anything under $500, biometrics alone should be enough.",
+      "answersQuestionIds": [
+        "auth-tiers",
+        "transaction-thresholds"
+      ]
+    },
+    {
+      "turn": 3,
+      "content": "If biometrics fail 3 times, fall back to PIN. If PIN fails 5 times, lock the account and require identity verification through customer support. Session timeout of 5 minutes for idle.",
+      "answersQuestionIds": [
+        "fallback-auth",
+        "lockout",
+        "session"
+      ]
+    },
+    {
+      "turn": 4,
+      "content": "That's the authentication flow covered.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContainsAny": [
+        "authent",
+        "biometric",
+        "unlock",
+        "login",
+        "PIN"
+      ],
+      "categoryOneOf": [
+        "security",
+        "functional"
+      ],
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "How should the app handle devices without biometric hardware?",
+    "Should there be a separate transaction limit for international transfers?",
+    "How is the identity verification through customer support conducted?"
+  ],
+  "minimumRubricScore": 9
+}

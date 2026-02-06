@@ -1,0 +1,76 @@
+{
+  "id": "rec-005",
+  "name": "Orphan Test with Rich Source Context",
+  "fixtureVersion": "1.0",
+  "tags": ["orphan-tests", "context-rich", "imports"],
+  "description": "An orphan test with rich source code context including multiple imports, helper functions, and domain types. Tests the agent's ability to use surrounding code to generate a precise atom recommendation.",
+  "mode": "full-scan",
+  "repo": {
+    "files": {
+      "src/types/order.ts": "export interface OrderItem {\n  productId: string;\n  name: string;\n  price: number;\n  quantity: number;\n}\n\nexport interface Order {\n  id: string;\n  customerId: string;\n  items: OrderItem[];\n  status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';\n  createdAt: Date;\n  totalAmount: number;\n}\n\nexport interface OrderDiscount {\n  code: string;\n  percentage: number;\n  minOrderAmount: number;\n}",
+      "src/order.service.ts": "import { Order, OrderItem, OrderDiscount } from './types/order';\n\nexport class OrderService {\n  private orders: Map<string, Order> = new Map();\n\n  createOrder(customerId: string, items: OrderItem[]): Order {\n    const totalAmount = items.reduce((sum, item) => sum + item.price * item.quantity, 0);\n    const order: Order = {\n      id: 'ord-' + Date.now(),\n      customerId,\n      items,\n      status: 'pending',\n      createdAt: new Date(),\n      totalAmount,\n    };\n    this.orders.set(order.id, order);\n    return order;\n  }\n\n  applyDiscount(orderId: string, discount: OrderDiscount): Order | null {\n    const order = this.orders.get(orderId);\n    if (!order) return null;\n    if (order.totalAmount < discount.minOrderAmount) return order;\n    order.totalAmount = order.totalAmount * (1 - discount.percentage / 100);\n    return order;\n  }\n\n  cancelOrder(orderId: string): boolean {\n    const order = this.orders.get(orderId);\n    if (!order || order.status === 'shipped' || order.status === 'delivered') return false;\n    order.status = 'cancelled';\n    return true;\n  }\n\n  getOrdersByCustomer(customerId: string): Order[] {\n    return Array.from(this.orders.values()).filter(o => o.customerId === customerId);\n  }\n}",
+      "src/helpers/order.helpers.ts": "import { OrderItem } from '../types/order';\n\nexport function calculateSubtotal(items: OrderItem[]): number {\n  return items.reduce((sum, item) => sum + item.price * item.quantity, 0);\n}\n\nexport function validateOrderItems(items: OrderItem[]): string[] {\n  const errors: string[] = [];\n  if (items.length === 0) errors.push('Order must have at least one item');\n  items.forEach((item, i) => {\n    if (item.quantity <= 0) errors.push(`Item ${i}: quantity must be positive`);\n    if (item.price < 0) errors.push(`Item ${i}: price cannot be negative`);\n  });\n  return errors;\n}",
+      "test/order.spec.ts": "import { OrderService } from '../src/order.service';\nimport { OrderItem, OrderDiscount } from '../src/types/order';\nimport { calculateSubtotal, validateOrderItems } from '../src/helpers/order.helpers';\n\ndescribe('OrderService', () => {\n  const sampleItems: OrderItem[] = [\n    { productId: 'p1', name: 'Widget', price: 25.00, quantity: 2 },\n    { productId: 'p2', name: 'Gadget', price: 15.50, quantity: 1 },\n  ];\n\n  // @atom IA-030\n  it('should create an order with correct total amount', () => {\n    const service = new OrderService();\n    const order = service.createOrder('cust-1', sampleItems);\n    expect(order.status).toBe('pending');\n    expect(order.totalAmount).toBe(65.50);\n    expect(order.items).toHaveLength(2);\n  });\n\n  it('should apply discount when order meets minimum amount', () => {\n    const service = new OrderService();\n    const order = service.createOrder('cust-1', sampleItems);\n    const discount: OrderDiscount = { code: 'SAVE10', percentage: 10, minOrderAmount: 50 };\n    const updated = service.applyDiscount(order.id, discount);\n    expect(updated).not.toBeNull();\n    expect(updated!.totalAmount).toBeCloseTo(58.95);\n  });\n\n  it('should not apply discount below minimum order amount', () => {\n    const service = new OrderService();\n    const smallItems: OrderItem[] = [{ productId: 'p3', name: 'Tiny', price: 5.00, quantity: 1 }];\n    const order = service.createOrder('cust-2', smallItems);\n    const discount: OrderDiscount = { code: 'SAVE10', percentage: 10, minOrderAmount: 50 };\n    const updated = service.applyDiscount(order.id, discount);\n    expect(updated!.totalAmount).toBe(5.00);\n  });\n\n  it('should prevent cancellation of shipped orders', () => {\n    const service = new OrderService();\n    const order = service.createOrder('cust-1', sampleItems);\n    // Simulate shipping\n    (order as any).status = 'shipped';\n    expect(service.cancelOrder(order.id)).toBe(false);\n  });\n});\n\ndescribe('Order Helpers', () => {\n  it('should calculate subtotal correctly', () => {\n    const items: OrderItem[] = [\n      { productId: 'p1', name: 'A', price: 10, quantity: 3 },\n      { productId: 'p2', name: 'B', price: 20, quantity: 1 },\n    ];\n    expect(calculateSubtotal(items)).toBe(50);\n  });\n\n  it('should validate order items and report errors', () => {\n    const badItems: OrderItem[] = [\n      { productId: 'p1', name: 'Bad', price: -5, quantity: 0 },\n    ];\n    const errors = validateOrderItems(badItems);\n    expect(errors).toContain('Item 0: quantity must be positive');\n    expect(errors).toContain('Item 0: price cannot be negative');\n  });\n});"
+    },
+    "testFiles": ["test/order.spec.ts"],
+    "sourceFiles": ["src/order.service.ts", "src/types/order.ts", "src/helpers/order.helpers.ts"]
+  },
+  "registry": {
+    "atoms": [
+      { "id": "IA-030", "description": "System creates order with calculated total from item prices and quantities", "status": "committed", "category": "orders" }
+    ],
+    "molecules": [],
+    "annotations": [
+      { "testFilePath": "test/order.spec.ts", "testName": "should create an order with correct total amount", "atomId": "IA-030" }
+    ]
+  },
+  "expected": {
+    "orphanTests": [
+      { "filePath": "test/order.spec.ts", "testName": "should apply discount when order meets minimum amount" },
+      { "filePath": "test/order.spec.ts", "testName": "should not apply discount below minimum order amount" },
+      { "filePath": "test/order.spec.ts", "testName": "should prevent cancellation of shipped orders" },
+      { "filePath": "test/order.spec.ts", "testName": "should calculate subtotal correctly" },
+      { "filePath": "test/order.spec.ts", "testName": "should validate order items and report errors" }
+    ],
+    "expectedAtomRecommendations": [
+      {
+        "sourceTestFile": "test/order.spec.ts",
+        "sourceTestName": "should apply discount when order meets minimum amount",
+        "descriptionContains": "discount",
+        "minConfidence": 0.8
+      },
+      {
+        "sourceTestFile": "test/order.spec.ts",
+        "sourceTestName": "should not apply discount below minimum order amount",
+        "descriptionContains": "discount",
+        "minConfidence": 0.8
+      },
+      {
+        "sourceTestFile": "test/order.spec.ts",
+        "sourceTestName": "should prevent cancellation of shipped orders",
+        "descriptionContains": "cancel",
+        "minConfidence": 0.8
+      },
+      {
+        "sourceTestFile": "test/order.spec.ts",
+        "sourceTestName": "should calculate subtotal correctly",
+        "descriptionContains": "subtotal",
+        "minConfidence": 0.7
+      },
+      {
+        "sourceTestFile": "test/order.spec.ts",
+        "sourceTestName": "should validate order items and report errors",
+        "descriptionContains": "validate",
+        "minConfidence": 0.7
+      }
+    ],
+    "expectedMoleculeGroupings": [
+      { "minAtoms": 3, "containsAtomDescriptionPattern": "order|discount|cancel" }
+    ],
+    "notOrphanTests": [
+      { "filePath": "test/order.spec.ts", "testName": "should create an order with correct total amount" }
+    ],
+    "maxErrors": 0
+  },
+  "minimumRubricScore": 9
+}

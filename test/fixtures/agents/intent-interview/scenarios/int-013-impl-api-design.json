@@ -1,0 +1,73 @@
+{
+  "id": "int-013",
+  "name": "Implementation detail pushback: API architecture choice",
+  "scenarioVersion": "1.0",
+  "tags": [
+    "implementation-detail",
+    "pushback",
+    "api",
+    "architecture"
+  ],
+  "context": {
+    "domain": "Analytics dashboard for IoT sensor data",
+    "constraints": [
+      "Thousands of sensors reporting every 5 seconds",
+      "Dashboard used by operations team"
+    ],
+    "persona": "solutions architect"
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "REST API with GraphQL for complex queries. We have IoT sensors sending data that needs to be queried flexibly - different users want different aggregations and time windows."
+    },
+    {
+      "turn": 2,
+      "content": "The operations team needs to build custom dashboards. They want to pick which sensors to monitor, choose time ranges from 1 hour to 90 days, and see aggregations like averages, min/max, and percentiles. Some queries span thousands of sensors over weeks of data.",
+      "answersQuestionIds": [
+        "query-flexibility",
+        "data-volume"
+      ]
+    },
+    {
+      "turn": 3,
+      "content": "Queries over recent data (last 24 hours) should return in under a second. Historical queries can take up to 10 seconds. Users should see a loading indicator for longer queries. They also need to set up threshold alerts.",
+      "answersQuestionIds": [
+        "response-times",
+        "alerting"
+      ]
+    },
+    {
+      "turn": 4,
+      "content": "Good summary. That's what we need.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContains": "sensor",
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    },
+    {
+      "descriptionContainsAny": ["query", "queries", "aggregat", "filter", "retriev", "dashboard", "time range", "time window"],
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "What happens when a sensor stops reporting data?",
+    "Should alert thresholds support complex conditions (e.g., rate of change)?",
+    "How long should sensor data be retained?"
+  ],
+  "expectedNonGoals": [
+    "Specific API style choice (REST vs GraphQL is an implementation detail)",
+    "Custom dashboard builder (may be inferred but not explicitly committed)"
+  ],
+  "expectedFailures": [
+    "agent-accepts-implementation-detail-as-requirement"
+  ],
+  "minimumRubricScore": 8
+}

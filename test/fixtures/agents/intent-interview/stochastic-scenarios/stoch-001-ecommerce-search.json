@@ -1,0 +1,71 @@
+{
+  "id": "stoch-001",
+  "name": "E-commerce product search — terse product manager",
+  "scenarioVersion": "1.0",
+  "tags": ["ecommerce", "search", "terse"],
+  "context": {
+    "domain": "E-commerce marketplace with 500K+ product catalog",
+    "constraints": [
+      "Mobile-first audience (70% mobile traffic)",
+      "Must support multiple languages"
+    ],
+    "persona": "product manager"
+  },
+  "initialIntent": "We need a product search feature for our marketplace. Users should be able to find products quickly across our entire catalog.",
+  "groundTruth": [
+    {
+      "id": "gt-001-text-search",
+      "fact": "Users can search products by entering text keywords that match product titles, descriptions, and tags",
+      "category": "functional",
+      "isDecided": true,
+      "keywords": ["search", "keyword", "text", "product", "title", "description", "query"]
+    },
+    {
+      "id": "gt-001-filters",
+      "fact": "Search results can be filtered by category, price range, rating, and availability",
+      "category": "functional",
+      "isDecided": true,
+      "keywords": ["filter", "category", "price", "rating", "availability", "refine"]
+    },
+    {
+      "id": "gt-001-response-time",
+      "fact": "Search results must return within 200 milliseconds for 95th percentile of queries",
+      "category": "performance",
+      "isDecided": true,
+      "keywords": ["response", "time", "latency", "milliseconds", "fast", "performance", "200ms"]
+    },
+    {
+      "id": "gt-001-autocomplete",
+      "fact": "Search input provides autocomplete suggestions as the user types, showing up to 5 suggestions",
+      "category": "ux",
+      "isDecided": true,
+      "keywords": ["autocomplete", "suggest", "typeahead", "suggestions", "type"]
+    },
+    {
+      "id": "gt-001-no-results",
+      "fact": "When no results match, the system shows related products and alternative spelling suggestions",
+      "category": "ux",
+      "isDecided": true,
+      "keywords": ["no results", "empty", "alternative", "spelling", "related", "fallback"]
+    },
+    {
+      "id": "gt-001-ranking",
+      "fact": "Search ranking algorithm has not been decided yet — relevance vs popularity vs recency weighting is TBD",
+      "category": "functional",
+      "isDecided": false,
+      "keywords": ["ranking", "relevance", "sort", "algorithm", "order"]
+    }
+  ],
+  "persona": {
+    "style": "terse",
+    "styleInstructions": "Answer in 1-2 short sentences. Be direct and minimal. No elaboration unless asked."
+  },
+  "numRuns": 3,
+  "maxRounds": 5,
+  "evaluation": {
+    "minimumPrecision": 0.10,
+    "minimumRecall": 0.15,
+    "minimumRubricScore": 7,
+    "maxRedundantQuestions": 2
+  }
+}

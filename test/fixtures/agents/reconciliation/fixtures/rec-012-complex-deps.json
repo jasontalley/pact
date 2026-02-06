@@ -1,0 +1,68 @@
+{
+  "id": "rec-012",
+  "name": "Tests with Deep Import Chains",
+  "fixtureVersion": "1.0",
+  "tags": ["edge-case", "deep-imports", "complex-deps"],
+  "description": "Tests that import from services with deep dependency chains (service -> repository -> connection -> config). The agent must follow imports to gather sufficient context for atom inference.",
+  "mode": "full-scan",
+  "repo": {
+    "files": {
+      "src/config/database.config.ts": "export interface DatabaseConfig {\n  host: string;\n  port: number;\n  database: string;\n  ssl: boolean;\n}\n\nexport function getDatabaseConfig(): DatabaseConfig {\n  return {\n    host: process.env.DB_HOST || 'localhost',\n    port: parseInt(process.env.DB_PORT || '5432'),\n    database: process.env.DB_NAME || 'app_db',\n    ssl: process.env.DB_SSL === 'true',\n  };\n}",
+      "src/database/connection.ts": "import { DatabaseConfig } from '../config/database.config';\n\nexport class DatabaseConnection {\n  private connected = false;\n\n  constructor(private config: DatabaseConfig) {}\n\n  async connect(): Promise<void> {\n    this.connected = true;\n  }\n\n  isConnected(): boolean {\n    return this.connected;\n  }\n\n  async query<T>(sql: string, params?: unknown[]): Promise<T[]> {\n    if (!this.connected) throw new Error('Not connected');\n    return [] as T[];\n  }\n}",
+      "src/repositories/article.repository.ts": "import { DatabaseConnection } from '../database/connection';\n\nexport interface Article {\n  id: string;\n  title: string;\n  content: string;\n  authorId: string;\n  publishedAt: Date | null;\n  tags: string[];\n}\n\nexport class ArticleRepository {\n  constructor(private db: DatabaseConnection) {}\n\n  async findById(id: string): Promise<Article | null> {\n    const results = await this.db.query<Article>('SELECT * FROM articles WHERE id = $1', [id]);\n    return results[0] || null;\n  }\n\n  async findByAuthor(authorId: string): Promise<Article[]> {\n    return this.db.query<Article>('SELECT * FROM articles WHERE author_id = $1', [authorId]);\n  }\n\n  async findPublished(): Promise<Article[]> {\n    return this.db.query<Article>('SELECT * FROM articles WHERE published_at IS NOT NULL');\n  }\n\n  async save(article: Omit<Article, 'id'>): Promise<Article> {\n    const id = 'art-' + Date.now();\n    return { id, ...article };\n  }\n}",
+      "src/services/article.service.ts": "import { ArticleRepository, Article } from '../repositories/article.repository';\n\nexport class ArticleService {\n  constructor(private repo: ArticleRepository) {}\n\n  async getArticle(id: string): Promise<Article | null> {\n    return this.repo.findById(id);\n  }\n\n  async publish(id: string): Promise<Article | null> {\n    const article = await this.repo.findById(id);\n    if (!article) return null;\n    article.publishedAt = new Date();\n    return article;\n  }\n\n  async getAuthorArticles(authorId: string): Promise<Article[]> {\n    return this.repo.findByAuthor(authorId);\n  }\n\n  async createDraft(title: string, content: string, authorId: string, tags: string[]): Promise<Article> {\n    return this.repo.save({ title, content, authorId, publishedAt: null, tags });\n  }\n}",
+      "test/article.spec.ts": "import { ArticleService } from '../src/services/article.service';\nimport { ArticleRepository } from '../src/repositories/article.repository';\nimport { DatabaseConnection } from '../src/database/connection';\nimport { getDatabaseConfig } from '../src/config/database.config';\n\ndescribe('ArticleService', () => {\n  let service: ArticleService;\n\n  beforeEach(async () => {\n    const config = getDatabaseConfig();\n    const connection = new DatabaseConnection(config);\n    await connection.connect();\n    const repo = new ArticleRepository(connection);\n    service = new ArticleService(repo);\n  });\n\n  // @atom IA-080\n  it('should create a draft article', async () => {\n    const article = await service.createDraft('Test Title', 'Content', 'author-1', ['test']);\n    expect(article.title).toBe('Test Title');\n    expect(article.publishedAt).toBeNull();\n  });\n\n  it('should retrieve article by id', async () => {\n    const article = await service.getArticle('art-1');\n    // Returns null in mock, but validates the chain works\n    expect(article).toBeNull();\n  });\n\n  it('should publish an existing article', async () => {\n    // In real test this would create then publish\n    const result = await service.publish('nonexistent');\n    expect(result).toBeNull();\n  });\n\n  it('should list articles by author', async () => {\n    const articles = await service.getAuthorArticles('author-1');\n    expect(Array.isArray(articles)).toBe(true);\n  });\n});"
+    },
+    "testFiles": ["test/article.spec.ts"],
+    "sourceFiles": [
+      "src/services/article.service.ts",
+      "src/repositories/article.repository.ts",
+      "src/database/connection.ts",
+      "src/config/database.config.ts"
+    ]
+  },
+  "registry": {
+    "atoms": [
+      { "id": "IA-080", "description": "System creates draft article with null publication date", "status": "committed", "category": "content" }
+    ],
+    "molecules": [],
+    "annotations": [
+      { "testFilePath": "test/article.spec.ts", "testName": "should create a draft article", "atomId": "IA-080" }
+    ]
+  },
+  "expected": {
+    "orphanTests": [
+      { "filePath": "test/article.spec.ts", "testName": "should retrieve article by id" },
+      { "filePath": "test/article.spec.ts", "testName": "should publish an existing article" },
+      { "filePath": "test/article.spec.ts", "testName": "should list articles by author" }
+    ],
+    "expectedAtomRecommendations": [
+      {
+        "sourceTestFile": "test/article.spec.ts",
+        "sourceTestName": "should retrieve article by id",
+        "descriptionContains": "retriev",
+        "minConfidence": 0.7
+      },
+      {
+        "sourceTestFile": "test/article.spec.ts",
+        "sourceTestName": "should publish an existing article",
+        "descriptionContains": "publish",
+        "minConfidence": 0.7
+      },
+      {
+        "sourceTestFile": "test/article.spec.ts",
+        "sourceTestName": "should list articles by author",
+        "descriptionContains": "author",
+        "minConfidence": 0.6
+      }
+    ],
+    "expectedMoleculeGroupings": [
+      { "minAtoms": 2, "containsAtomDescriptionPattern": "article|publish|retriev" }
+    ],
+    "notOrphanTests": [
+      { "filePath": "test/article.spec.ts", "testName": "should create a draft article" }
+    ],
+    "maxErrors": 0
+  },
+  "minimumRubricScore": 8
+}

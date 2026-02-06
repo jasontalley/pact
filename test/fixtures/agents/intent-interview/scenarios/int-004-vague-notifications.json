@@ -1,0 +1,62 @@
+{
+  "id": "int-004",
+  "name": "Vague notifications request",
+  "scenarioVersion": "1.0",
+  "tags": ["vague", "ambiguous", "notifications"],
+  "context": {
+    "domain": "Project management tool",
+    "persona": "product manager"
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "Users should get notifications."
+    },
+    {
+      "turn": 2,
+      "content": "When tasks are assigned to them, when deadlines are approaching, and when someone comments on their task. Email and in-app notifications.",
+      "answersQuestionIds": ["notification-triggers", "channels"]
+    },
+    {
+      "turn": 3,
+      "content": "Deadline reminders should be sent 24 hours before. Users should be able to turn off specific notification types. In-app notifications should appear in real time.",
+      "answersQuestionIds": ["timing", "preferences", "delivery"]
+    },
+    {
+      "turn": 4,
+      "content": "I think that's enough. Oh wait, there should also be a digest option where they get a daily summary instead of individual emails.",
+      "answersQuestionIds": ["digest"]
+    },
+    {
+      "turn": 5,
+      "content": "Yes, that covers it.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContains": "task",
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    },
+    {
+      "descriptionContains": "deadline",
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    },
+    {
+      "descriptionContains": "notification",
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "Should notifications be sent for tasks in projects the user is watching but not assigned to?",
+    "What is the maximum acceptable delay for in-app notifications?",
+    "Should push notifications (mobile) be supported?"
+  ],
+  "minimumRubricScore": 9
+}

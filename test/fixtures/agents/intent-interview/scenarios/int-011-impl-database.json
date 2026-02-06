@@ -1,0 +1,62 @@
+{
+  "id": "int-011",
+  "name": "Implementation detail pushback: database technology choice",
+  "scenarioVersion": "1.0",
+  "tags": [
+    "implementation-detail",
+    "pushback",
+    "database",
+    "technology-choice"
+  ],
+  "context": {
+    "domain": "Content management system",
+    "persona": "senior developer"
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "Use PostgreSQL with JSONB columns for storing article content. We need to be able to query nested fields in the JSON efficiently."
+    },
+    {
+      "turn": 2,
+      "content": "Right, the actual need is that articles have flexible metadata - tags, custom fields that vary by article type, embedded media references. We need to search and filter by any of these fields efficiently. Articles can have 50+ custom fields.",
+      "answersQuestionIds": [
+        "underlying-need",
+        "data-characteristics"
+      ]
+    },
+    {
+      "turn": 3,
+      "content": "Articles are read-heavy - probably 100:1 read to write ratio. Search needs to return results within 200ms. We have about 500,000 articles currently and expect to grow to 2 million over the next two years.",
+      "answersQuestionIds": [
+        "access-patterns",
+        "scale"
+      ]
+    },
+    {
+      "turn": 4,
+      "content": "Makes sense. The key thing is flexible metadata with fast querying at scale.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContains": "metadata",
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "Are there required fields that every article must have, regardless of type?",
+    "How frequently do article type schemas change?",
+    "Is full-text search across article content required?"
+  ],
+  "expectedNonGoals": [
+    "Specific database technology selection (PostgreSQL with JSONB is an implementation detail)"
+  ],
+  "expectedFailures": [
+    "agent-accepts-implementation-detail-as-requirement"
+  ],
+  "minimumRubricScore": 8
+}

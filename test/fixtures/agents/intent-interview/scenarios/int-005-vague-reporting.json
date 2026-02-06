@@ -1,0 +1,63 @@
+{
+  "id": "int-005",
+  "name": "Vague reporting request",
+  "scenarioVersion": "1.0",
+  "tags": ["vague", "ambiguous", "reporting", "analytics"],
+  "context": {
+    "domain": "B2B subscription platform",
+    "constraints": ["Multiple tenant organizations", "Data retention policy: 2 years"],
+    "persona": "VP of product"
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "We need better reporting."
+    },
+    {
+      "turn": 2,
+      "content": "Our customers keep asking for usage reports. They want to see how many users are active, which features are being used, and trends over time. Right now we have nothing.",
+      "answersQuestionIds": ["report-types", "current-state"]
+    },
+    {
+      "turn": 3,
+      "content": "Each organization should only see their own data obviously. They should be able to pick date ranges and export to CSV. Monthly and weekly granularity would work.",
+      "answersQuestionIds": ["access-control", "export", "granularity"]
+    },
+    {
+      "turn": 4,
+      "content": "That's a good start. Let's do that first and see what customers say.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContains": "user",
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    },
+    {
+      "descriptionContains": "report",
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    },
+    {
+      "descriptionContains": "organization",
+      "category": "security",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "Should reports be generated on-demand or pre-computed?",
+    "Are there specific KPIs or metrics the customers care about most?",
+    "Should reports be schedulable and auto-delivered via email?",
+    "What volume of data needs to be handled per report?"
+  ],
+  "expectedNonGoals": [
+    "Real-time analytics dashboards",
+    "Custom report builder"
+  ],
+  "minimumRubricScore": 8
+}

@@ -1,0 +1,66 @@
+{
+  "id": "int-008",
+  "name": "Conflicting constraints: offline-first vs always in sync",
+  "scenarioVersion": "1.0",
+  "tags": [
+    "conflicting-constraints",
+    "offline",
+    "sync",
+    "tradeoff"
+  ],
+  "context": {
+    "domain": "Field service management for utility workers",
+    "constraints": [
+      "Workers operate in areas with poor cellular coverage",
+      "Central dispatch needs real-time crew locations"
+    ],
+    "persona": "field operations director"
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "Our field crews need to use the app offline since they're often in areas with no signal. But dispatch needs to see where everyone is and what they're working on in real time."
+    },
+    {
+      "turn": 2,
+      "content": "Work orders, inspection checklists, and safety forms need to work offline. When they get signal back, everything should sync automatically. Location should beacon whenever there's connectivity.",
+      "answersQuestionIds": [
+        "offline-scope",
+        "sync-behavior"
+      ]
+    },
+    {
+      "turn": 3,
+      "content": "If two people edited the same work order offline, the most recent edit wins but we need to flag the conflict for a supervisor to review. Safety forms should never be silently merged - always flag.",
+      "answersQuestionIds": [
+        "conflict-resolution"
+      ]
+    },
+    {
+      "turn": 4,
+      "content": "GPS location should cache locally and batch-upload every time connectivity is available. Even partial uploads are fine - dispatch can interpolate positions.",
+      "answersQuestionIds": [
+        "location-strategy"
+      ]
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContainsAny": [
+        "offline",
+        "disconnected",
+        "sync",
+        "local"
+      ],
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "How long can crews operate offline before data staleness becomes a safety concern?",
+    "What is the maximum offline storage capacity required per device?",
+    "Should the app alert users when they're working offline?"
+  ],
+  "minimumRubricScore": 9
+}

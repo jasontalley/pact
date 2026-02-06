@@ -1,0 +1,74 @@
+{
+  "id": "int-022",
+  "name": "Edge case: complex multi-feature request in a single message",
+  "scenarioVersion": "1.0",
+  "tags": [
+    "edge-case",
+    "complex",
+    "multi-feature",
+    "overwhelming"
+  ],
+  "context": {
+    "domain": "Event management platform",
+    "constraints": [
+      "Must support events from 10 to 50,000 attendees",
+      "Multi-language support required"
+    ],
+    "persona": "founder and CEO"
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "We're building an event management platform. Event organizers create events with multiple sessions and tracks. Attendees register, pay, and build personalized schedules. We need ticketing with early bird pricing, promo codes, group discounts, and tiered ticket types (general, VIP, speaker). Sessions have capacity limits and waitlists. Speakers submit proposals that go through a review process. There's a mobile app for attendees with push notifications, interactive maps, networking features where attendees can message each other, and live polling during sessions. Organizers need analytics dashboards showing registration trends, revenue, session popularity, and attendee engagement. Also need check-in via QR codes at the door and badge printing integration."
+    },
+    {
+      "turn": 2,
+      "content": "Let's focus on the core flow first: event creation, ticketing, and attendee registration. The other features can come in later phases. For ticketing, early bird pricing has a date cutoff. Promo codes give percentage or fixed discounts. Group discounts kick in at 5+ tickets.",
+      "answersQuestionIds": [
+        "scope-reduction",
+        "ticketing-details"
+      ]
+    },
+    {
+      "turn": 3,
+      "content": "Registration collects name, email, company, dietary restrictions, and accessibility needs. Payment via Stripe. Confirmation email with a QR code ticket. Refunds allowed up to 7 days before the event, minus a 10% processing fee.",
+      "answersQuestionIds": [
+        "registration-fields",
+        "payment",
+        "refund-policy"
+      ]
+    },
+    {
+      "turn": 4,
+      "content": "Perfect, that's the Phase 1 scope.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContainsAny": [
+        "event",
+        "ticket",
+        "registration",
+        "attendee"
+      ],
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "How should the system handle sold-out ticket tiers?",
+    "Can ticket types be combined in a single order?",
+    "What happens to promo codes after the event date?"
+  ],
+  "expectedNonGoals": [
+    "Mobile app (deferred to later phase)",
+    "Speaker proposal management (deferred)",
+    "Live polling (deferred)",
+    "Analytics dashboards (deferred)",
+    "Badge printing integration (deferred)",
+    "Networking/messaging features (deferred)"
+  ],
+  "minimumRubricScore": 9
+}

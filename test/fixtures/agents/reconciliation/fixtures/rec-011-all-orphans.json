@@ -1,0 +1,101 @@
+{
+  "id": "rec-011",
+  "name": "All Tests Are Orphans (Stress Test)",
+  "fixtureVersion": "1.0",
+  "tags": ["edge-case", "all-orphans", "stress"],
+  "description": "A repository with multiple test files where every single test is an orphan (no @atom annotations exist). Stress tests the agent's ability to infer atoms and synthesize molecules from scratch for an entire codebase.",
+  "mode": "full-scan",
+  "repo": {
+    "files": {
+      "src/user.service.ts": "export interface User {\n  id: string;\n  email: string;\n  name: string;\n  role: 'admin' | 'user' | 'guest';\n  active: boolean;\n}\n\nexport class UserService {\n  private users: Map<string, User> = new Map();\n\n  create(email: string, name: string, role: 'admin' | 'user' | 'guest' = 'user'): User {\n    const user: User = { id: 'usr-' + Date.now(), email, name, role, active: true };\n    this.users.set(user.id, user);\n    return user;\n  }\n\n  findByEmail(email: string): User | undefined {\n    return Array.from(this.users.values()).find(u => u.email === email);\n  }\n\n  deactivate(id: string): boolean {\n    const user = this.users.get(id);\n    if (!user) return false;\n    user.active = false;\n    return true;\n  }\n\n  isAdmin(id: string): boolean {\n    return this.users.get(id)?.role === 'admin';\n  }\n}",
+      "src/permission.service.ts": "export class PermissionService {\n  private permissions: Map<string, Set<string>> = new Map();\n\n  grant(userId: string, permission: string): void {\n    if (!this.permissions.has(userId)) this.permissions.set(userId, new Set());\n    this.permissions.get(userId)!.add(permission);\n  }\n\n  revoke(userId: string, permission: string): boolean {\n    return this.permissions.get(userId)?.delete(permission) || false;\n  }\n\n  hasPermission(userId: string, permission: string): boolean {\n    return this.permissions.get(userId)?.has(permission) || false;\n  }\n\n  listPermissions(userId: string): string[] {\n    return Array.from(this.permissions.get(userId) || []);\n  }\n}",
+      "src/audit.service.ts": "export interface AuditEntry {\n  action: string;\n  userId: string;\n  resource: string;\n  timestamp: Date;\n}\n\nexport class AuditService {\n  private entries: AuditEntry[] = [];\n\n  record(action: string, userId: string, resource: string): void {\n    this.entries.push({ action, userId, resource, timestamp: new Date() });\n  }\n\n  getByUser(userId: string): AuditEntry[] {\n    return this.entries.filter(e => e.userId === userId);\n  }\n\n  getByResource(resource: string): AuditEntry[] {\n    return this.entries.filter(e => e.resource === resource);\n  }\n}",
+      "test/user.spec.ts": "import { UserService } from '../src/user.service';\n\ndescribe('UserService', () => {\n  it('should create a new user with default role', () => {\n    const service = new UserService();\n    const user = service.create('alice@test.com', 'Alice');\n    expect(user.email).toBe('alice@test.com');\n    expect(user.role).toBe('user');\n    expect(user.active).toBe(true);\n  });\n\n  it('should find user by email', () => {\n    const service = new UserService();\n    service.create('bob@test.com', 'Bob');\n    const found = service.findByEmail('bob@test.com');\n    expect(found).toBeDefined();\n    expect(found!.name).toBe('Bob');\n  });\n\n  it('should deactivate user account', () => {\n    const service = new UserService();\n    const user = service.create('carol@test.com', 'Carol');\n    expect(service.deactivate(user.id)).toBe(true);\n  });\n\n  it('should identify admin users', () => {\n    const service = new UserService();\n    const admin = service.create('admin@test.com', 'Admin', 'admin');\n    const regular = service.create('user@test.com', 'User');\n    expect(service.isAdmin(admin.id)).toBe(true);\n    expect(service.isAdmin(regular.id)).toBe(false);\n  });\n});",
+      "test/permission.spec.ts": "import { PermissionService } from '../src/permission.service';\n\ndescribe('PermissionService', () => {\n  it('should grant permission to user', () => {\n    const service = new PermissionService();\n    service.grant('usr-1', 'read:articles');\n    expect(service.hasPermission('usr-1', 'read:articles')).toBe(true);\n  });\n\n  it('should revoke permission from user', () => {\n    const service = new PermissionService();\n    service.grant('usr-1', 'write:articles');\n    expect(service.revoke('usr-1', 'write:articles')).toBe(true);\n    expect(service.hasPermission('usr-1', 'write:articles')).toBe(false);\n  });\n\n  it('should list all permissions for user', () => {\n    const service = new PermissionService();\n    service.grant('usr-1', 'read:articles');\n    service.grant('usr-1', 'write:articles');\n    const perms = service.listPermissions('usr-1');\n    expect(perms).toContain('read:articles');\n    expect(perms).toContain('write:articles');\n  });\n});",
+      "test/audit.spec.ts": "import { AuditService } from '../src/audit.service';\n\ndescribe('AuditService', () => {\n  it('should record audit entries', () => {\n    const service = new AuditService();\n    service.record('create', 'usr-1', 'article:42');\n    const entries = service.getByUser('usr-1');\n    expect(entries).toHaveLength(1);\n    expect(entries[0].action).toBe('create');\n  });\n\n  it('should filter audit entries by resource', () => {\n    const service = new AuditService();\n    service.record('create', 'usr-1', 'article:42');\n    service.record('read', 'usr-2', 'article:42');\n    service.record('create', 'usr-1', 'article:99');\n    const entries = service.getByResource('article:42');\n    expect(entries).toHaveLength(2);\n  });\n});"
+    },
+    "testFiles": ["test/user.spec.ts", "test/permission.spec.ts", "test/audit.spec.ts"],
+    "sourceFiles": ["src/user.service.ts", "src/permission.service.ts", "src/audit.service.ts"]
+  },
+  "registry": {
+    "atoms": [],
+    "molecules": [],
+    "annotations": []
+  },
+  "expected": {
+    "orphanTests": [
+      { "filePath": "test/user.spec.ts", "testName": "should create a new user with default role" },
+      { "filePath": "test/user.spec.ts", "testName": "should find user by email" },
+      { "filePath": "test/user.spec.ts", "testName": "should deactivate user account" },
+      { "filePath": "test/user.spec.ts", "testName": "should identify admin users" },
+      { "filePath": "test/permission.spec.ts", "testName": "should grant permission to user" },
+      { "filePath": "test/permission.spec.ts", "testName": "should revoke permission from user" },
+      { "filePath": "test/permission.spec.ts", "testName": "should list all permissions for user" },
+      { "filePath": "test/audit.spec.ts", "testName": "should record audit entries" },
+      { "filePath": "test/audit.spec.ts", "testName": "should filter audit entries by resource" }
+    ],
+    "expectedAtomRecommendations": [
+      {
+        "sourceTestFile": "test/user.spec.ts",
+        "sourceTestName": "should create a new user with default role",
+        "descriptionContains": "create",
+        "minConfidence": 0.7
+      },
+      {
+        "sourceTestFile": "test/user.spec.ts",
+        "sourceTestName": "should find user by email",
+        "descriptionContains": "email",
+        "minConfidence": 0.7
+      },
+      {
+        "sourceTestFile": "test/user.spec.ts",
+        "sourceTestName": "should deactivate user account",
+        "descriptionContains": "deactivat",
+        "minConfidence": 0.7
+      },
+      {
+        "sourceTestFile": "test/user.spec.ts",
+        "sourceTestName": "should identify admin users",
+        "descriptionContains": "admin",
+        "minConfidence": 0.6
+      },
+      {
+        "sourceTestFile": "test/permission.spec.ts",
+        "sourceTestName": "should grant permission to user",
+        "descriptionContains": "permission",
+        "minConfidence": 0.7
+      },
+      {
+        "sourceTestFile": "test/permission.spec.ts",
+        "sourceTestName": "should revoke permission from user",
+        "descriptionContains": "revoke",
+        "minConfidence": 0.7
+      },
+      {
+        "sourceTestFile": "test/permission.spec.ts",
+        "sourceTestName": "should list all permissions for user",
+        "descriptionContains": "permission",
+        "minConfidence": 0.6
+      },
+      {
+        "sourceTestFile": "test/audit.spec.ts",
+        "sourceTestName": "should record audit entries",
+        "descriptionContains": "audit",
+        "minConfidence": 0.7
+      },
+      {
+        "sourceTestFile": "test/audit.spec.ts",
+        "sourceTestName": "should filter audit entries by resource",
+        "descriptionContains": "audit",
+        "minConfidence": 0.6
+      }
+    ],
+    "expectedMoleculeGroupings": [
+      { "minAtoms": 3, "containsAtomDescriptionPattern": "user|create|email|deactivat" },
+      { "minAtoms": 2, "containsAtomDescriptionPattern": "permission|grant|revoke" },
+      { "minAtoms": 1, "containsAtomDescriptionPattern": "audit" }
+    ],
+    "maxErrors": 0
+  },
+  "minimumRubricScore": 7
+}

@@ -1,0 +1,81 @@
+{
+  "id": "int-025",
+  "name": "Edge case: comprehensive detail provided upfront",
+  "scenarioVersion": "1.0",
+  "tags": [
+    "edge-case",
+    "comprehensive",
+    "well-specified"
+  ],
+  "context": {
+    "domain": "Employee time-off request system",
+    "constraints": [
+      "50 employees across 3 departments",
+      "Integration with payroll system"
+    ],
+    "persona": "HR director",
+    "invariants": [
+      "Time-off balance must never go negative",
+      "Approved time off must be reflected in payroll by the next pay cycle"
+    ]
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "Employees submit time-off requests through a self-service portal. Each employee has an annual allocation: 20 days PTO, 10 sick days, 3 personal days. PTO rolls over up to 5 days to the next year; sick and personal days do not roll over. Requests specify the type, start date, end date, and an optional note. The system calculates business days automatically, excluding company holidays."
+    },
+    {
+      "turn": 2,
+      "content": "Requests go to the employee's direct manager for approval. Managers see a team calendar showing existing approved time off and pending requests. If approving would leave fewer than 2 team members available on any day, the system warns the manager but still allows approval. Managers must approve or deny within 3 business days or it auto-escalates to the department head.",
+      "answersQuestionIds": [
+        "approval-flow",
+        "team-calendar",
+        "coverage-rules",
+        "escalation"
+      ]
+    },
+    {
+      "turn": 3,
+      "content": "Employees see their current balances, request history, and upcoming approved time off on their dashboard. Email notifications at each stage: request submitted, approved, denied, or escalated. Cancellation allowed up to 24 hours before the start date. Cancelled approved requests restore the balance immediately.",
+      "answersQuestionIds": [
+        "employee-dashboard",
+        "notifications",
+        "cancellation"
+      ]
+    },
+    {
+      "turn": 4,
+      "content": "HR admins can adjust balances manually with a reason (for corrections or special grants). All balance changes are logged. End-of-year rollover runs automatically on January 1st. The system exports approved time off to our payroll system via API on the 15th and last day of each month.",
+      "answersQuestionIds": [
+        "admin-features",
+        "rollover",
+        "payroll-integration"
+      ]
+    },
+    {
+      "turn": 5,
+      "content": "I think I've covered everything comprehensively.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContainsAny": [
+        "request",
+        "time-off",
+        "PTO",
+        "leave",
+        "absence"
+      ],
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "How should half-day requests be handled?",
+    "What happens when an employee transfers between departments mid-year?",
+    "Should the system support time-off requests for dates in the past (retroactive)?"
+  ],
+  "minimumRubricScore": 9
+}

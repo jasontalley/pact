@@ -1,0 +1,74 @@
+{
+  "id": "int-015",
+  "name": "Implementation detail pushback: microservices with Kafka",
+  "scenarioVersion": "1.0",
+  "tags": [
+    "implementation-detail",
+    "pushback",
+    "microservices",
+    "architecture"
+  ],
+  "context": {
+    "domain": "Order processing system for e-commerce",
+    "constraints": [
+      "Current monolith handles 500 orders/minute",
+      "Team of 25 developers across 4 squads"
+    ],
+    "persona": "VP of engineering"
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "Split into microservices with Kafka for event streaming. We need order processing, inventory, payments, and shipping as separate services communicating through events."
+    },
+    {
+      "turn": 2,
+      "content": "The core problem is that our teams step on each other. A change to payment logic requires retesting the entire order flow. We want teams to deploy independently without breaking each other. We also need to handle order spikes during sales events - up to 5x normal traffic.",
+      "answersQuestionIds": [
+        "underlying-problem",
+        "team-autonomy",
+        "scale"
+      ]
+    },
+    {
+      "turn": 3,
+      "content": "Order processing must be exactly-once. If payment succeeds, the order must be fulfilled. If any step fails, the whole order should roll back gracefully and the customer should be notified. No lost orders, no double charges.",
+      "answersQuestionIds": [
+        "consistency-requirements",
+        "failure-handling"
+      ]
+    },
+    {
+      "turn": 4,
+      "content": "Those are the critical requirements. The architecture is up to the engineering team to figure out.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContains": "deploy",
+      "category": "operational",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    },
+    {
+      "descriptionContains": "order",
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "What is the acceptable latency for end-to-end order processing?",
+    "How should partial failures be communicated to customers?",
+    "What monitoring and observability requirements exist across services?"
+  ],
+  "expectedNonGoals": [
+    "Specific architectural style (microservices is an implementation detail)",
+    "Specific messaging technology (Kafka is an implementation detail)"
+  ],
+  "expectedFailures": [
+    "agent-accepts-implementation-detail-as-requirement"
+  ],
+  "minimumRubricScore": 8
+}

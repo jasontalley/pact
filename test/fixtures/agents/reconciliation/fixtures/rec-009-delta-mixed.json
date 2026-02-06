@@ -1,0 +1,78 @@
+{
+  "id": "rec-009",
+  "name": "Delta Mode - Mixed New and Changed Tests",
+  "fixtureVersion": "1.0",
+  "tags": ["delta", "mixed", "new-and-changed"],
+  "description": "Delta mode with a mix of changed files: one already-linked test file (should be skipped per INV-R001), one existing test file with a newly added orphan test, and one entirely new test file. Tests the agent's ability to filter delta correctly.",
+  "mode": "delta",
+  "repo": {
+    "files": {
+      "src/config.service.ts": "export class ConfigService {\n  private config: Record<string, string> = {};\n\n  set(key: string, value: string): void {\n    this.config[key] = value;\n  }\n\n  get(key: string): string | undefined {\n    return this.config[key];\n  }\n\n  getRequired(key: string): string {\n    const value = this.config[key];\n    if (!value) throw new Error(`Missing required config: ${key}`);\n    return value;\n  }\n}",
+      "src/health.service.ts": "export interface HealthStatus {\n  status: 'healthy' | 'degraded' | 'unhealthy';\n  checks: Record<string, boolean>;\n}\n\nexport class HealthService {\n  checkDatabase(): boolean { return true; }\n  checkRedis(): boolean { return true; }\n\n  getHealth(): HealthStatus {\n    const db = this.checkDatabase();\n    const redis = this.checkRedis();\n    return {\n      status: db && redis ? 'healthy' : db || redis ? 'degraded' : 'unhealthy',\n      checks: { database: db, redis },\n    };\n  }\n}",
+      "src/rate-limiter.service.ts": "export class RateLimiterService {\n  private requests: Map<string, number[]> = new Map();\n\n  isAllowed(clientId: string, maxRequests: number, windowMs: number): boolean {\n    const now = Date.now();\n    const timestamps = (this.requests.get(clientId) || []).filter(t => now - t < windowMs);\n    if (timestamps.length >= maxRequests) return false;\n    timestamps.push(now);\n    this.requests.set(clientId, timestamps);\n    return true;\n  }\n\n  getRemainingRequests(clientId: string, maxRequests: number, windowMs: number): number {\n    const now = Date.now();\n    const timestamps = (this.requests.get(clientId) || []).filter(t => now - t < windowMs);\n    return Math.max(0, maxRequests - timestamps.length);\n  }\n}",
+      "test/config.spec.ts": "import { ConfigService } from '../src/config.service';\n\ndescribe('ConfigService', () => {\n  // @atom IA-070\n  it('should set and get config values', () => {\n    const service = new ConfigService();\n    service.set('DB_HOST', 'localhost');\n    expect(service.get('DB_HOST')).toBe('localhost');\n  });\n\n  // @atom IA-071\n  it('should throw on missing required config', () => {\n    const service = new ConfigService();\n    expect(() => service.getRequired('MISSING')).toThrow('Missing required config: MISSING');\n  });\n});",
+      "test/health.spec.ts": "import { HealthService } from '../src/health.service';\n\ndescribe('HealthService', () => {\n  // @atom IA-072\n  it('should report healthy when all checks pass', () => {\n    const service = new HealthService();\n    const health = service.getHealth();\n    expect(health.status).toBe('healthy');\n  });\n\n  it('should report degraded when one check fails', () => {\n    const service = new HealthService();\n    jest.spyOn(service, 'checkRedis').mockReturnValue(false);\n    const health = service.getHealth();\n    expect(health.status).toBe('degraded');\n    expect(health.checks.redis).toBe(false);\n  });\n});",
+      "test/rate-limiter.spec.ts": "import { RateLimiterService } from '../src/rate-limiter.service';\n\ndescribe('RateLimiterService', () => {\n  it('should allow requests within rate limit', () => {\n    const limiter = new RateLimiterService();\n    expect(limiter.isAllowed('client-1', 5, 60000)).toBe(true);\n  });\n\n  it('should block requests exceeding rate limit', () => {\n    const limiter = new RateLimiterService();\n    for (let i = 0; i < 5; i++) limiter.isAllowed('client-1', 5, 60000);\n    expect(limiter.isAllowed('client-1', 5, 60000)).toBe(false);\n  });\n\n  it('should report remaining request quota', () => {\n    const limiter = new RateLimiterService();\n    limiter.isAllowed('client-1', 10, 60000);\n    expect(limiter.getRemainingRequests('client-1', 10, 60000)).toBe(9);\n  });\n});"
+    },
+    "testFiles": ["test/config.spec.ts", "test/health.spec.ts", "test/rate-limiter.spec.ts"],
+    "sourceFiles": ["src/config.service.ts", "src/health.service.ts", "src/rate-limiter.service.ts"],
+    "changedFiles": ["test/config.spec.ts", "test/health.spec.ts", "test/rate-limiter.spec.ts", "src/rate-limiter.service.ts"]
+  },
+  "registry": {
+    "atoms": [
+      { "id": "IA-070", "description": "System stores and retrieves configuration values", "status": "committed", "category": "config" },
+      { "id": "IA-071", "description": "System throws error for missing required configuration", "status": "committed", "category": "config" },
+      { "id": "IA-072", "description": "Health check reports healthy when all subsystems pass", "status": "committed", "category": "monitoring" }
+    ],
+    "molecules": [],
+    "annotations": [
+      { "testFilePath": "test/config.spec.ts", "testName": "should set and get config values", "atomId": "IA-070" },
+      { "testFilePath": "test/config.spec.ts", "testName": "should throw on missing required config", "atomId": "IA-071" },
+      { "testFilePath": "test/health.spec.ts", "testName": "should report healthy when all checks pass", "atomId": "IA-072" }
+    ]
+  },
+  "expected": {
+    "orphanTests": [
+      { "filePath": "test/health.spec.ts", "testName": "should report degraded when one check fails" },
+      { "filePath": "test/rate-limiter.spec.ts", "testName": "should allow requests within rate limit" },
+      { "filePath": "test/rate-limiter.spec.ts", "testName": "should block requests exceeding rate limit" },
+      { "filePath": "test/rate-limiter.spec.ts", "testName": "should report remaining request quota" }
+    ],
+    "expectedAtomRecommendations": [
+      {
+        "sourceTestFile": "test/health.spec.ts",
+        "sourceTestName": "should report degraded when one check fails",
+        "descriptionContains": "degraded",
+        "minConfidence": 0.7
+      },
+      {
+        "sourceTestFile": "test/rate-limiter.spec.ts",
+        "sourceTestName": "should allow requests within rate limit",
+        "descriptionContains": "rate",
+        "minConfidence": 0.7
+      },
+      {
+        "sourceTestFile": "test/rate-limiter.spec.ts",
+        "sourceTestName": "should block requests exceeding rate limit",
+        "descriptionContains": "block",
+        "minConfidence": 0.7
+      },
+      {
+        "sourceTestFile": "test/rate-limiter.spec.ts",
+        "sourceTestName": "should report remaining request quota",
+        "descriptionContains": "remaining",
+        "minConfidence": 0.6
+      }
+    ],
+    "expectedMoleculeGroupings": [
+      { "minAtoms": 2, "containsAtomDescriptionPattern": "rate|limit|request" }
+    ],
+    "notOrphanTests": [
+      { "filePath": "test/config.spec.ts", "testName": "should set and get config values" },
+      { "filePath": "test/config.spec.ts", "testName": "should throw on missing required config" },
+      { "filePath": "test/health.spec.ts", "testName": "should report healthy when all checks pass" }
+    ],
+    "maxErrors": 0
+  },
+  "minimumRubricScore": 8
+}
