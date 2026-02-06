@@ -1,0 +1,64 @@
+{
+  "id": "stoch-003",
+  "name": "User authentication — technical engineer",
+  "scenarioVersion": "1.0",
+  "tags": ["authentication", "security", "technical"],
+  "context": {
+    "domain": "Internal enterprise application for employee workflow management",
+    "constraints": [
+      "Must integrate with corporate Active Directory",
+      "Accessed from both desktop and mobile devices"
+    ],
+    "persona": "senior engineer"
+  },
+  "initialIntent": "We need user authentication for our internal enterprise app. Employees should be able to log in securely and access the workflow tools.",
+  "groundTruth": [
+    {
+      "id": "gt-003-sso",
+      "fact": "Users authenticate via corporate SSO using SAML 2.0 integration with Active Directory",
+      "category": "functional",
+      "isDecided": true,
+      "keywords": ["SSO", "SAML", "Active Directory", "login", "authenticate", "corporate", "single sign-on"]
+    },
+    {
+      "id": "gt-003-session",
+      "fact": "User sessions expire after 8 hours of inactivity and require re-authentication",
+      "category": "security",
+      "isDecided": true,
+      "keywords": ["session", "expire", "timeout", "inactivity", "re-authenticate", "8 hours"]
+    },
+    {
+      "id": "gt-003-roles",
+      "fact": "Three access roles exist: viewer, editor, and admin, each with progressively more permissions",
+      "category": "functional",
+      "isDecided": true,
+      "keywords": ["role", "permission", "viewer", "editor", "admin", "access", "authorization"]
+    },
+    {
+      "id": "gt-003-audit",
+      "fact": "All authentication events are logged with timestamp, user ID, IP address, and outcome for audit compliance",
+      "category": "security",
+      "isDecided": true,
+      "keywords": ["audit", "log", "event", "timestamp", "compliance", "track"]
+    },
+    {
+      "id": "gt-003-mfa",
+      "fact": "Multi-factor authentication requirements have not been decided — whether MFA is mandatory or optional is TBD",
+      "category": "security",
+      "isDecided": false,
+      "keywords": ["MFA", "multi-factor", "two-factor", "2FA", "second factor"]
+    }
+  ],
+  "persona": {
+    "style": "technical",
+    "styleInstructions": "Use precise technical language. Reference specific technologies, protocols, or patterns where relevant. Be exact about constraints."
+  },
+  "numRuns": 3,
+  "maxRounds": 5,
+  "evaluation": {
+    "minimumPrecision": 0.25,
+    "minimumRecall": 0.35,
+    "minimumRubricScore": 7,
+    "maxRedundantQuestions": 2
+  }
+}

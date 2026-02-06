@@ -1,0 +1,11 @@
+{
+  "pact": {
+    "command": "node",
+    "args": [
+      "/Users/jasontalley/code/pact/dist/mcp/pact-mcp-server.js"
+    ],
+    "env": {
+      "PACT_API_URL": "http://localhost:3000"
+    }
+  }
+}

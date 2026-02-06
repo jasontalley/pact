@@ -1,0 +1,19 @@
+FROM node:24-slim
+
+WORKDIR /app
+
+# Install procps for NestJS hot-reload (needs 'ps' command)
+RUN apt-get update && apt-get install -y procps && rm -rf /var/lib/apt/lists/*
+
+# Install dependencies
+COPY package*.json ./
+RUN npm install
+
+# Copy source code
+COPY . .
+
+# Expose port
+EXPOSE 3000
+
+# Default command (can be overridden in docker-compose)
+CMD ["npm", "run", "start:dev"]

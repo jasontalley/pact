@@ -1,0 +1,84 @@
+{
+  "id": "int-017",
+  "name": "Domain-specific: healthcare records with privacy invariants",
+  "scenarioVersion": "1.0",
+  "tags": [
+    "domain-specific",
+    "healthcare",
+    "privacy",
+    "invariants",
+    "hipaa"
+  ],
+  "context": {
+    "domain": "Patient health record portal for a multi-clinic network",
+    "constraints": [
+      "HIPAA compliance mandatory",
+      "Integration with existing EHR system (Epic)",
+      "500+ providers across 30 clinics"
+    ],
+    "persona": "clinical informatics director",
+    "invariants": [
+      "Protected health information (PHI) must be encrypted at rest and in transit",
+      "Every access to patient records must be logged with viewer identity and reason",
+      "Patients must be able to revoke data sharing consent at any time",
+      "Break-the-glass access requires documented justification within 24 hours"
+    ]
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "Patients need to view their health records, lab results, and visit summaries through a web portal. They should also be able to share records with other providers."
+    },
+    {
+      "turn": 2,
+      "content": "Records come from our Epic EHR system via FHIR APIs. Patients see their data read-only. They can grant time-limited access to external providers by generating a sharing link that expires after 30 days. The link requires the receiving provider to authenticate.",
+      "answersQuestionIds": [
+        "data-source",
+        "sharing-mechanism"
+      ]
+    },
+    {
+      "turn": 3,
+      "content": "Patients can see who has viewed their records and when - a full audit trail visible to them. They can revoke any sharing link at any time. Mental health and substance abuse records have extra protections - they're excluded from sharing by default and require explicit patient opt-in.",
+      "answersQuestionIds": [
+        "audit-visibility",
+        "sensitive-records"
+      ]
+    },
+    {
+      "turn": 4,
+      "content": "Emergency access: any provider in our network can access any patient record in an emergency. But they must document the reason within 24 hours or their access is flagged for compliance review.",
+      "answersQuestionIds": [
+        "emergency-access"
+      ]
+    },
+    {
+      "turn": 5,
+      "content": "That covers the patient-facing requirements.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContainsAny": [
+        "record",
+        "health",
+        "patient",
+        "FHIR",
+        "portal"
+      ],
+      "categoryOneOf": [
+        "functional",
+        "security"
+      ],
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "How should the system handle EHR downtime or unavailability?",
+    "What notification should patients receive when their records are accessed?",
+    "Should the portal support proxy access (e.g., parents viewing children's records)?"
+  ],
+  "minimumRubricScore": 9
+}

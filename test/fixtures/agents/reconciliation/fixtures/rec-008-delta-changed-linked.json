@@ -1,0 +1,41 @@
+{
+  "id": "rec-008",
+  "name": "Delta Mode - Changed Linked Test (INV-R001)",
+  "fixtureVersion": "1.0",
+  "tags": ["delta", "inv-r001", "already-linked", "no-new-atoms"],
+  "description": "Delta mode where the only changed file is a test that already has @atom annotations. Per INV-R001, no new atoms should be inferred from already-linked tests. The agent should detect zero orphans and produce zero recommendations.",
+  "mode": "delta",
+  "repo": {
+    "files": {
+      "src/math.service.ts": "export class MathService {\n  add(a: number, b: number): number {\n    return a + b;\n  }\n\n  multiply(a: number, b: number): number {\n    return a * b;\n  }\n\n  divide(a: number, b: number): number {\n    if (b === 0) throw new Error('Division by zero');\n    return a / b;\n  }\n}",
+      "test/math.spec.ts": "import { MathService } from '../src/math.service';\n\ndescribe('MathService', () => {\n  // @atom IA-060\n  it('should add two numbers correctly', () => {\n    const service = new MathService();\n    expect(service.add(2, 3)).toBe(5);\n    expect(service.add(-1, 1)).toBe(0);\n    expect(service.add(0, 0)).toBe(0);\n  });\n\n  // @atom IA-061\n  it('should multiply two numbers correctly', () => {\n    const service = new MathService();\n    expect(service.multiply(3, 4)).toBe(12);\n    expect(service.multiply(0, 5)).toBe(0);\n  });\n\n  // @atom IA-062\n  it('should divide two numbers and throw on zero divisor', () => {\n    const service = new MathService();\n    expect(service.divide(10, 2)).toBe(5);\n    expect(() => service.divide(1, 0)).toThrow('Division by zero');\n  });\n});"
+    },
+    "testFiles": ["test/math.spec.ts"],
+    "sourceFiles": ["src/math.service.ts"],
+    "changedFiles": ["test/math.spec.ts"]
+  },
+  "registry": {
+    "atoms": [
+      { "id": "IA-060", "description": "System correctly adds two numbers", "status": "committed", "category": "math" },
+      { "id": "IA-061", "description": "System correctly multiplies two numbers", "status": "committed", "category": "math" },
+      { "id": "IA-062", "description": "System divides numbers and rejects division by zero", "status": "committed", "category": "math" }
+    ],
+    "molecules": [],
+    "annotations": [
+      { "testFilePath": "test/math.spec.ts", "testName": "should add two numbers correctly", "atomId": "IA-060" },
+      { "testFilePath": "test/math.spec.ts", "testName": "should multiply two numbers correctly", "atomId": "IA-061" },
+      { "testFilePath": "test/math.spec.ts", "testName": "should divide two numbers and throw on zero divisor", "atomId": "IA-062" }
+    ]
+  },
+  "expected": {
+    "orphanTests": [],
+    "expectedAtomRecommendations": [],
+    "notOrphanTests": [
+      { "filePath": "test/math.spec.ts", "testName": "should add two numbers correctly" },
+      { "filePath": "test/math.spec.ts", "testName": "should multiply two numbers correctly" },
+      { "filePath": "test/math.spec.ts", "testName": "should divide two numbers and throw on zero divisor" }
+    ],
+    "maxErrors": 0
+  },
+  "minimumRubricScore": 10
+}

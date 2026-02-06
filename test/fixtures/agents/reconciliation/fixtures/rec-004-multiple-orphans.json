@@ -1,0 +1,72 @@
+{
+  "id": "rec-004",
+  "name": "Multiple Orphan Tests",
+  "fixtureVersion": "1.0",
+  "tags": ["orphan-tests", "multiple", "multi-file"],
+  "description": "Five orphan tests spread across three test files with no existing atoms or annotations. The agent must discover all orphans, infer atoms for each, and potentially group them into molecules.",
+  "mode": "full-scan",
+  "repo": {
+    "files": {
+      "src/notification.service.ts": "export class NotificationService {\n  sendEmail(to: string, subject: string, body: string): boolean {\n    if (!to || !subject) return false;\n    return true;\n  }\n\n  sendSms(phone: string, message: string): boolean {\n    if (!phone || phone.length < 10) return false;\n    return true;\n  }\n}",
+      "src/logger.service.ts": "export type LogLevel = 'debug' | 'info' | 'warn' | 'error';\n\nexport class LoggerService {\n  private logs: Array<{ level: LogLevel; message: string; timestamp: Date }> = [];\n\n  log(level: LogLevel, message: string): void {\n    this.logs.push({ level, message, timestamp: new Date() });\n  }\n\n  getLogs(level?: LogLevel): Array<{ level: LogLevel; message: string }> {\n    if (level) return this.logs.filter(l => l.level === level);\n    return this.logs;\n  }\n}",
+      "src/cache.service.ts": "export class CacheService {\n  private store: Map<string, { value: unknown; expiresAt: number }> = new Map();\n\n  set(key: string, value: unknown, ttlMs: number): void {\n    this.store.set(key, { value, expiresAt: Date.now() + ttlMs });\n  }\n\n  get(key: string): unknown | null {\n    const entry = this.store.get(key);\n    if (!entry || entry.expiresAt < Date.now()) {\n      this.store.delete(key);\n      return null;\n    }\n    return entry.value;\n  }\n}",
+      "test/notification.spec.ts": "import { NotificationService } from '../src/notification.service';\n\ndescribe('NotificationService', () => {\n  it('should send email with valid recipient and subject', () => {\n    const service = new NotificationService();\n    expect(service.sendEmail('user@test.com', 'Hello', 'Body')).toBe(true);\n  });\n\n  it('should reject email without recipient', () => {\n    const service = new NotificationService();\n    expect(service.sendEmail('', 'Hello', 'Body')).toBe(false);\n  });\n\n  it('should send SMS to valid phone number', () => {\n    const service = new NotificationService();\n    expect(service.sendSms('1234567890', 'Hello')).toBe(true);\n  });\n});",
+      "test/logger.spec.ts": "import { LoggerService } from '../src/logger.service';\n\ndescribe('LoggerService', () => {\n  it('should record log entries with level and message', () => {\n    const logger = new LoggerService();\n    logger.log('info', 'test message');\n    const logs = logger.getLogs();\n    expect(logs).toHaveLength(1);\n    expect(logs[0].level).toBe('info');\n    expect(logs[0].message).toBe('test message');\n  });\n});",
+      "test/cache.spec.ts": "import { CacheService } from '../src/cache.service';\n\ndescribe('CacheService', () => {\n  it('should store and retrieve cached values', () => {\n    const cache = new CacheService();\n    cache.set('key1', { data: 'value' }, 60000);\n    expect(cache.get('key1')).toEqual({ data: 'value' });\n  });\n});"
+    },
+    "testFiles": ["test/notification.spec.ts", "test/logger.spec.ts", "test/cache.spec.ts"],
+    "sourceFiles": ["src/notification.service.ts", "src/logger.service.ts", "src/cache.service.ts"]
+  },
+  "registry": {
+    "atoms": [],
+    "molecules": [],
+    "annotations": []
+  },
+  "expected": {
+    "orphanTests": [
+      { "filePath": "test/notification.spec.ts", "testName": "should send email with valid recipient and subject" },
+      { "filePath": "test/notification.spec.ts", "testName": "should reject email without recipient" },
+      { "filePath": "test/notification.spec.ts", "testName": "should send SMS to valid phone number" },
+      { "filePath": "test/logger.spec.ts", "testName": "should record log entries with level and message" },
+      { "filePath": "test/cache.spec.ts", "testName": "should store and retrieve cached values" }
+    ],
+    "expectedAtomRecommendations": [
+      {
+        "sourceTestFile": "test/notification.spec.ts",
+        "sourceTestName": "should send email with valid recipient and subject",
+        "descriptionContains": "email",
+        "minConfidence": 0.7
+      },
+      {
+        "sourceTestFile": "test/notification.spec.ts",
+        "sourceTestName": "should reject email without recipient",
+        "descriptionContains": "reject",
+        "minConfidence": 0.7
+      },
+      {
+        "sourceTestFile": "test/notification.spec.ts",
+        "sourceTestName": "should send SMS to valid phone number",
+        "descriptionContains": "SMS",
+        "minConfidence": 0.6
+      },
+      {
+        "sourceTestFile": "test/logger.spec.ts",
+        "sourceTestName": "should record log entries with level and message",
+        "descriptionContains": "log",
+        "minConfidence": 0.7
+      },
+      {
+        "sourceTestFile": "test/cache.spec.ts",
+        "sourceTestName": "should store and retrieve cached values",
+        "descriptionContains": "cache",
+        "minConfidence": 0.7
+      }
+    ],
+    "expectedMoleculeGroupings": [
+      { "minAtoms": 2, "containsAtomDescriptionPattern": "email|notification|SMS" },
+      { "minAtoms": 1, "containsAtomDescriptionPattern": "log" }
+    ],
+    "maxErrors": 0
+  },
+  "minimumRubricScore": 8
+}

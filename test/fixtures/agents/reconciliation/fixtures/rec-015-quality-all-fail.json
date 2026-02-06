@@ -1,0 +1,63 @@
+{
+  "id": "rec-015",
+  "name": "Quality Gate - All Fail",
+  "fixtureVersion": "1.0",
+  "tags": ["quality-gate", "all-fail", "vacuous", "edge-case"],
+  "description": "All orphan tests are vacuous or have weak assertions (toBeDefined, toBeTruthy without meaningful checks). Every inferred atom should fail the quality gate. Tests the agent's ability to flag low-quality tests and produce low-confidence recommendations.",
+  "mode": "full-scan",
+  "repo": {
+    "files": {
+      "src/data.service.ts": "export class DataService {\n  private data: Record<string, unknown> = {};\n\n  setItem(key: string, value: unknown): void {\n    this.data[key] = value;\n  }\n\n  getItem(key: string): unknown {\n    return this.data[key];\n  }\n\n  hasItem(key: string): boolean {\n    return key in this.data;\n  }\n\n  deleteItem(key: string): boolean {\n    if (key in this.data) {\n      delete this.data[key];\n      return true;\n    }\n    return false;\n  }\n\n  getKeys(): string[] {\n    return Object.keys(this.data);\n  }\n\n  clear(): void {\n    this.data = {};\n  }\n}",
+      "test/data.spec.ts": "import { DataService } from '../src/data.service';\n\ndescribe('DataService', () => {\n  it('should exist', () => {\n    const service = new DataService();\n    expect(service).toBeDefined();\n  });\n\n  it('should set an item', () => {\n    const service = new DataService();\n    service.setItem('key', 'value');\n    expect(true).toBe(true);\n  });\n\n  it('should do something with items', () => {\n    const service = new DataService();\n    service.setItem('a', 1);\n    const result = service.getItem('a');\n    expect(result).toBeTruthy();\n  });\n\n  it('should handle deletion', () => {\n    const service = new DataService();\n    service.setItem('x', 'y');\n    service.deleteItem('x');\n    expect(service).toBeDefined();\n  });\n});"
+    },
+    "testFiles": ["test/data.spec.ts"],
+    "sourceFiles": ["src/data.service.ts"],
+    "coverage": {
+      "files": {
+        "src/data.service.ts": { "statements": 40, "branches": 25, "functions": 50, "lines": 40 }
+      },
+      "summary": { "statements": 40, "branches": 25, "functions": 50, "lines": 40 }
+    }
+  },
+  "registry": {
+    "atoms": [],
+    "molecules": [],
+    "annotations": []
+  },
+  "expected": {
+    "orphanTests": [
+      { "filePath": "test/data.spec.ts", "testName": "should exist" },
+      { "filePath": "test/data.spec.ts", "testName": "should set an item" },
+      { "filePath": "test/data.spec.ts", "testName": "should do something with items" },
+      { "filePath": "test/data.spec.ts", "testName": "should handle deletion" }
+    ],
+    "expectedAtomRecommendations": [
+      {
+        "sourceTestFile": "test/data.spec.ts",
+        "sourceTestName": "should exist",
+        "descriptionContains": "data",
+        "minConfidence": 0.2
+      },
+      {
+        "sourceTestFile": "test/data.spec.ts",
+        "sourceTestName": "should set an item",
+        "descriptionContains": "set",
+        "minConfidence": 0.2
+      },
+      {
+        "sourceTestFile": "test/data.spec.ts",
+        "sourceTestName": "should do something with items",
+        "descriptionContains": "item",
+        "minConfidence": 0.2
+      },
+      {
+        "sourceTestFile": "test/data.spec.ts",
+        "sourceTestName": "should handle deletion",
+        "descriptionContains": "delet",
+        "minConfidence": 0.2
+      }
+    ],
+    "maxErrors": 0
+  },
+  "minimumRubricScore": 6
+}

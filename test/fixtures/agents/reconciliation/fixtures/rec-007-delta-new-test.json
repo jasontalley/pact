@@ -1,0 +1,66 @@
+{
+  "id": "rec-007",
+  "name": "Delta Mode - New Test File Added",
+  "fixtureVersion": "1.0",
+  "tags": ["delta", "new-file", "incremental"],
+  "description": "Delta mode reconciliation where a new test file has been added to an otherwise fully reconciled repository. The agent should only process the new file and ignore existing annotated tests.",
+  "mode": "delta",
+  "repo": {
+    "files": {
+      "src/auth.service.ts": "export class AuthService {\n  authenticate(email: string, password: string): { success: boolean; token?: string } {\n    if (email && password === 'validpass') {\n      return { success: true, token: 'jwt-token-123' };\n    }\n    return { success: false };\n  }\n}",
+      "src/session.service.ts": "export class SessionService {\n  private sessions: Map<string, { userId: string; expiresAt: number }> = new Map();\n\n  createSession(userId: string, ttlMs: number): string {\n    const sessionId = 'sess-' + Date.now();\n    this.sessions.set(sessionId, { userId, expiresAt: Date.now() + ttlMs });\n    return sessionId;\n  }\n\n  getSession(sessionId: string): { userId: string } | null {\n    const session = this.sessions.get(sessionId);\n    if (!session || session.expiresAt < Date.now()) {\n      this.sessions.delete(sessionId);\n      return null;\n    }\n    return { userId: session.userId };\n  }\n\n  destroySession(sessionId: string): boolean {\n    return this.sessions.delete(sessionId);\n  }\n}",
+      "test/auth.spec.ts": "import { AuthService } from '../src/auth.service';\n\ndescribe('AuthService', () => {\n  // @atom IA-050\n  it('should authenticate with valid credentials', () => {\n    const service = new AuthService();\n    const result = service.authenticate('user@test.com', 'validpass');\n    expect(result.success).toBe(true);\n  });\n\n  // @atom IA-051\n  it('should reject invalid credentials', () => {\n    const service = new AuthService();\n    const result = service.authenticate('user@test.com', 'bad');\n    expect(result.success).toBe(false);\n  });\n});",
+      "test/session.spec.ts": "import { SessionService } from '../src/session.service';\n\ndescribe('SessionService', () => {\n  it('should create a new session with TTL', () => {\n    const service = new SessionService();\n    const sessionId = service.createSession('user-1', 60000);\n    expect(sessionId).toBeDefined();\n    expect(service.getSession(sessionId)).toEqual({ userId: 'user-1' });\n  });\n\n  it('should return null for expired session', () => {\n    const service = new SessionService();\n    const sessionId = service.createSession('user-1', -1);\n    expect(service.getSession(sessionId)).toBeNull();\n  });\n\n  it('should destroy an active session', () => {\n    const service = new SessionService();\n    const sessionId = service.createSession('user-1', 60000);\n    expect(service.destroySession(sessionId)).toBe(true);\n    expect(service.getSession(sessionId)).toBeNull();\n  });\n});"
+    },
+    "testFiles": ["test/auth.spec.ts", "test/session.spec.ts"],
+    "sourceFiles": ["src/auth.service.ts", "src/session.service.ts"],
+    "changedFiles": ["test/session.spec.ts", "src/session.service.ts"]
+  },
+  "registry": {
+    "atoms": [
+      { "id": "IA-050", "description": "User authenticates with valid credentials", "status": "committed", "category": "authentication" },
+      { "id": "IA-051", "description": "System rejects invalid credentials", "status": "committed", "category": "authentication" }
+    ],
+    "molecules": [],
+    "annotations": [
+      { "testFilePath": "test/auth.spec.ts", "testName": "should authenticate with valid credentials", "atomId": "IA-050" },
+      { "testFilePath": "test/auth.spec.ts", "testName": "should reject invalid credentials", "atomId": "IA-051" }
+    ]
+  },
+  "expected": {
+    "orphanTests": [
+      { "filePath": "test/session.spec.ts", "testName": "should create a new session with TTL" },
+      { "filePath": "test/session.spec.ts", "testName": "should return null for expired session" },
+      { "filePath": "test/session.spec.ts", "testName": "should destroy an active session" }
+    ],
+    "expectedAtomRecommendations": [
+      {
+        "sourceTestFile": "test/session.spec.ts",
+        "sourceTestName": "should create a new session with TTL",
+        "descriptionContains": "session",
+        "minConfidence": 0.7
+      },
+      {
+        "sourceTestFile": "test/session.spec.ts",
+        "sourceTestName": "should return null for expired session",
+        "descriptionContains": "expir",
+        "minConfidence": 0.7
+      },
+      {
+        "sourceTestFile": "test/session.spec.ts",
+        "sourceTestName": "should destroy an active session",
+        "descriptionContains": "destroy",
+        "minConfidence": 0.7
+      }
+    ],
+    "expectedMoleculeGroupings": [
+      { "minAtoms": 2, "containsAtomDescriptionPattern": "session" }
+    ],
+    "notOrphanTests": [
+      { "filePath": "test/auth.spec.ts", "testName": "should authenticate with valid credentials" },
+      { "filePath": "test/auth.spec.ts", "testName": "should reject invalid credentials" }
+    ],
+    "maxErrors": 0
+  },
+  "minimumRubricScore": 9
+}

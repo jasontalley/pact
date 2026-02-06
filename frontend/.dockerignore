@@ -1,0 +1,25 @@
+# Dependencies - installed fresh in container via npm ci
+node_modules
+
+# Build outputs
+.next
+out
+dist
+
+# Testing artifacts
+test-results
+playwright-report
+coverage
+*.tsbuildinfo
+
+# Development files
+.env*.local
+*.log
+
+# IDE
+.idea
+.vscode
+
+# OS files
+.DS_Store
+Thumbs.db

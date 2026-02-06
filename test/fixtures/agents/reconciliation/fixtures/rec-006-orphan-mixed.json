@@ -1,0 +1,63 @@
+{
+  "id": "rec-006",
+  "name": "Mixed Orphan and Annotated Tests",
+  "fixtureVersion": "1.0",
+  "tags": ["orphan-tests", "mixed", "same-file"],
+  "description": "A test file with interleaved @atom-annotated and unannotated tests. The agent must correctly classify each test and not confuse neighboring annotations.",
+  "mode": "full-scan",
+  "repo": {
+    "files": {
+      "src/inventory.service.ts": "export interface Product {\n  id: string;\n  name: string;\n  stock: number;\n  price: number;\n  minStock: number;\n}\n\nexport class InventoryService {\n  private products: Map<string, Product> = new Map();\n\n  addProduct(product: Product): void {\n    this.products.set(product.id, product);\n  }\n\n  getProduct(id: string): Product | undefined {\n    return this.products.get(id);\n  }\n\n  updateStock(id: string, quantity: number): boolean {\n    const product = this.products.get(id);\n    if (!product || product.stock + quantity < 0) return false;\n    product.stock += quantity;\n    return true;\n  }\n\n  getLowStockProducts(): Product[] {\n    return Array.from(this.products.values()).filter(p => p.stock <= p.minStock);\n  }\n\n  removeProduct(id: string): boolean {\n    return this.products.delete(id);\n  }\n\n  getTotalValue(): number {\n    return Array.from(this.products.values()).reduce((sum, p) => sum + p.stock * p.price, 0);\n  }\n}",
+      "test/inventory.spec.ts": "import { InventoryService, Product } from '../src/inventory.service';\n\ndescribe('InventoryService', () => {\n  const sampleProduct: Product = {\n    id: 'prod-1', name: 'Widget', stock: 50, price: 10.00, minStock: 10\n  };\n\n  // @atom IA-040\n  it('should add a new product to inventory', () => {\n    const service = new InventoryService();\n    service.addProduct(sampleProduct);\n    expect(service.getProduct('prod-1')).toEqual(sampleProduct);\n  });\n\n  it('should update stock quantity', () => {\n    const service = new InventoryService();\n    service.addProduct({ ...sampleProduct });\n    expect(service.updateStock('prod-1', -10)).toBe(true);\n    expect(service.getProduct('prod-1')!.stock).toBe(40);\n  });\n\n  // @atom IA-041\n  it('should prevent stock from going negative', () => {\n    const service = new InventoryService();\n    service.addProduct({ ...sampleProduct, stock: 5 });\n    expect(service.updateStock('prod-1', -10)).toBe(false);\n    expect(service.getProduct('prod-1')!.stock).toBe(5);\n  });\n\n  it('should identify low stock products', () => {\n    const service = new InventoryService();\n    service.addProduct({ ...sampleProduct, stock: 5, minStock: 10 });\n    service.addProduct({ id: 'prod-2', name: 'Gadget', stock: 100, price: 5, minStock: 10 });\n    const lowStock = service.getLowStockProducts();\n    expect(lowStock).toHaveLength(1);\n    expect(lowStock[0].id).toBe('prod-1');\n  });\n\n  // @atom IA-042\n  it('should remove product from inventory', () => {\n    const service = new InventoryService();\n    service.addProduct(sampleProduct);\n    expect(service.removeProduct('prod-1')).toBe(true);\n    expect(service.getProduct('prod-1')).toBeUndefined();\n  });\n\n  it('should calculate total inventory value', () => {\n    const service = new InventoryService();\n    service.addProduct({ ...sampleProduct, stock: 10, price: 5.00 });\n    service.addProduct({ id: 'prod-2', name: 'Gadget', stock: 20, price: 3.00, minStock: 5 });\n    expect(service.getTotalValue()).toBe(110);\n  });\n});"
+    },
+    "testFiles": ["test/inventory.spec.ts"],
+    "sourceFiles": ["src/inventory.service.ts"]
+  },
+  "registry": {
+    "atoms": [
+      { "id": "IA-040", "description": "System adds new product to inventory catalog", "status": "committed", "category": "inventory" },
+      { "id": "IA-041", "description": "System prevents stock from going below zero", "status": "committed", "category": "inventory" },
+      { "id": "IA-042", "description": "System removes product from inventory", "status": "committed", "category": "inventory" }
+    ],
+    "molecules": [],
+    "annotations": [
+      { "testFilePath": "test/inventory.spec.ts", "testName": "should add a new product to inventory", "atomId": "IA-040" },
+      { "testFilePath": "test/inventory.spec.ts", "testName": "should prevent stock from going negative", "atomId": "IA-041" },
+      { "testFilePath": "test/inventory.spec.ts", "testName": "should remove product from inventory", "atomId": "IA-042" }
+    ]
+  },
+  "expected": {
+    "orphanTests": [
+      { "filePath": "test/inventory.spec.ts", "testName": "should update stock quantity" },
+      { "filePath": "test/inventory.spec.ts", "testName": "should identify low stock products" },
+      { "filePath": "test/inventory.spec.ts", "testName": "should calculate total inventory value" }
+    ],
+    "expectedAtomRecommendations": [
+      {
+        "sourceTestFile": "test/inventory.spec.ts",
+        "sourceTestName": "should update stock quantity",
+        "descriptionContains": "stock",
+        "minConfidence": 0.7
+      },
+      {
+        "sourceTestFile": "test/inventory.spec.ts",
+        "sourceTestName": "should identify low stock products",
+        "descriptionContains": "low stock",
+        "minConfidence": 0.7
+      },
+      {
+        "sourceTestFile": "test/inventory.spec.ts",
+        "sourceTestName": "should calculate total inventory value",
+        "descriptionContains": "value",
+        "minConfidence": 0.6
+      }
+    ],
+    "notOrphanTests": [
+      { "filePath": "test/inventory.spec.ts", "testName": "should add a new product to inventory" },
+      { "filePath": "test/inventory.spec.ts", "testName": "should prevent stock from going negative" },
+      { "filePath": "test/inventory.spec.ts", "testName": "should remove product from inventory" }
+    ],
+    "maxErrors": 0
+  },
+  "minimumRubricScore": 9
+}

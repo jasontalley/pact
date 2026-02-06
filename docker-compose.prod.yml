@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:18
+    container_name: pact-postgres-prod
+    environment:
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - pact-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: pact-redis-prod
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - pact-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pact-app-prod
+    ports:
+      - "${PORT:-3000}:3000"
+      - "${MCP_PORT:-3002}:3002"
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_NAME: ${DATABASE_NAME}
+      NODE_ENV: production
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      LLM_DEFAULT_PROVIDER: ${LLM_DEFAULT_PROVIDER}
+      LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
+      LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
+      LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT:-pact-production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - pact-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  pact-network:
+    driver: bridge

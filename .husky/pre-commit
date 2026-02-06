@@ -1,0 +1,57 @@
+#!/usr/bin/env sh
+
+# Pre-commit hook for Pact
+# Enforces test quality gates before commits
+
+echo "=== Pre-commit Checks ==="
+
+# Check for bootstrap code importing from core
+echo "Checking bootstrap isolation..."
+if grep -r "from.*bootstrap" src/ 2>/dev/null; then
+    echo "ERROR: Core code depends on bootstrap scaffolding"
+    exit 1
+fi
+echo "Bootstrap isolation: OK"
+
+# Run linting
+echo ""
+echo "Running linter..."
+npm run lint
+if [ $? -ne 0 ]; then
+    echo "ERROR: Linting failed. Please fix lint errors before committing."
+    exit 1
+fi
+echo "Linting: OK"
+
+# Run test quality analyzer
+echo ""
+echo "Running test quality analyzer..."
+npm run test:quality
+if [ $? -ne 0 ]; then
+    echo "ERROR: Test quality check failed. Please improve test quality before committing."
+    exit 1
+fi
+echo "Test quality: OK"
+
+# Run test-atom coupling check
+echo ""
+echo "Running test-atom coupling check..."
+npm run test:coupling
+if [ $? -ne 0 ]; then
+    echo "ERROR: Test-atom coupling check failed. Please add @atom annotations to tests."
+    exit 1
+fi
+echo "Test-atom coupling: OK"
+
+# Run tests
+echo ""
+echo "Running tests..."
+npm test
+if [ $? -ne 0 ]; then
+    echo "ERROR: Tests failed. Please fix failing tests before committing."
+    exit 1
+fi
+echo "Tests: OK"
+
+echo ""
+echo "=== All pre-commit checks passed ==="

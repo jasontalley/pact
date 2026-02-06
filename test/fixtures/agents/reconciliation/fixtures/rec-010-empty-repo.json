@@ -1,0 +1,27 @@
+{
+  "id": "rec-010",
+  "name": "Empty Repository - No Test Files",
+  "fixtureVersion": "1.0",
+  "tags": ["edge-case", "empty", "no-tests"],
+  "description": "A repository with source files but no test files. The reconciliation agent should complete gracefully with zero orphans and zero recommendations, and produce no errors.",
+  "mode": "full-scan",
+  "repo": {
+    "files": {
+      "src/app.module.ts": "import { Module } from '@nestjs/common';\n\n@Module({\n  imports: [],\n  controllers: [],\n  providers: [],\n})\nexport class AppModule {}",
+      "src/main.ts": "import { NestFactory } from '@nestjs/core';\nimport { AppModule } from './app.module';\n\nasync function bootstrap() {\n  const app = await NestFactory.create(AppModule);\n  await app.listen(3000);\n}\nbootstrap();"
+    },
+    "testFiles": [],
+    "sourceFiles": ["src/app.module.ts", "src/main.ts"]
+  },
+  "registry": {
+    "atoms": [],
+    "molecules": [],
+    "annotations": []
+  },
+  "expected": {
+    "orphanTests": [],
+    "expectedAtomRecommendations": [],
+    "maxErrors": 0
+  },
+  "minimumRubricScore": 10
+}

@@ -1,0 +1,82 @@
+{
+  "id": "int-016",
+  "name": "Domain-specific: payment processing with security invariants",
+  "scenarioVersion": "1.0",
+  "tags": [
+    "domain-specific",
+    "payment",
+    "security",
+    "invariants",
+    "compliance"
+  ],
+  "context": {
+    "domain": "Online marketplace payment processing",
+    "constraints": [
+      "PCI-DSS Level 1 compliance required",
+      "Multi-currency support needed",
+      "Marketplace takes 15% commission"
+    ],
+    "persona": "payments product manager",
+    "invariants": [
+      "Payment card data must never be stored in plaintext",
+      "All transactions must be idempotent",
+      "Funds must not be released to sellers before buyer confirmation",
+      "Every financial state change must be auditable"
+    ]
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "Buyers pay for items, we hold the funds in escrow, and release to the seller once the buyer confirms delivery. We take a 15% cut. Need to handle USD, EUR, and GBP."
+    },
+    {
+      "turn": 2,
+      "content": "Payment methods: credit cards and PayPal initially. The buyer pays in their local currency, the seller receives in their preferred currency. We handle the conversion. Exchange rates should be locked at the time of purchase.",
+      "answersQuestionIds": [
+        "payment-methods",
+        "currency-handling"
+      ]
+    },
+    {
+      "turn": 3,
+      "content": "If the buyer doesn't confirm within 14 days, auto-release to the seller. Buyers can open a dispute within the 14-day window. If disputed, funds stay in escrow until resolved. Full refund if seller doesn't respond to dispute within 72 hours.",
+      "answersQuestionIds": [
+        "escrow-rules",
+        "disputes"
+      ]
+    },
+    {
+      "turn": 4,
+      "content": "Partial refunds should be supported too. And all payment events need to go into an audit log that's immutable.",
+      "answersQuestionIds": [
+        "refunds",
+        "audit"
+      ]
+    },
+    {
+      "turn": 5,
+      "content": "That covers the payment flow.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContainsAny": [
+        "payment",
+        "escrow",
+        "transaction",
+        "fund",
+        "pay"
+      ],
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "What happens to the commission if a full refund is issued?",
+    "How should currency conversion losses be handled?",
+    "What fraud detection measures are needed?"
+  ],
+  "minimumRubricScore": 9
+}

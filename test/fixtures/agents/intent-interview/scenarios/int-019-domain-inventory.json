@@ -1,0 +1,80 @@
+{
+  "id": "int-019",
+  "name": "Domain-specific: inventory management with integrity invariants",
+  "scenarioVersion": "1.0",
+  "tags": [
+    "domain-specific",
+    "inventory",
+    "integrity",
+    "invariants",
+    "warehouse"
+  ],
+  "context": {
+    "domain": "Multi-warehouse inventory management for a retail chain",
+    "constraints": [
+      "12 warehouses across 3 regions",
+      "Integration with 4 sales channels (web, mobile, in-store POS, wholesale)"
+    ],
+    "persona": "supply chain director",
+    "invariants": [
+      "Available inventory must never go negative",
+      "Inventory reserved for an order must be held until order completion or cancellation",
+      "Inter-warehouse transfers must maintain total inventory count",
+      "Stock count discrepancies above 2% must trigger an investigation"
+    ]
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "We need a unified inventory view across all our warehouses and sales channels. When someone buys online, the inventory should update across all channels instantly. No overselling."
+    },
+    {
+      "turn": 2,
+      "content": "When an order is placed, inventory is reserved immediately. If the order isn't confirmed within 30 minutes, the reservation expires. Each warehouse has its own stock levels. The system should automatically suggest the closest warehouse for fulfillment.",
+      "answersQuestionIds": [
+        "reservation-logic",
+        "fulfillment"
+      ]
+    },
+    {
+      "turn": 3,
+      "content": "We do physical inventory counts weekly. The system should support count entry and flag discrepancies. If counted stock differs from system stock by more than 2%, it should create an investigation task. Shrinkage tracking over time.",
+      "answersQuestionIds": [
+        "stock-counting",
+        "discrepancy-handling"
+      ]
+    },
+    {
+      "turn": 4,
+      "content": "Low stock alerts when any SKU at any warehouse drops below its reorder point. Reorder points should be configurable per SKU per warehouse.",
+      "answersQuestionIds": [
+        "alerts",
+        "reorder"
+      ]
+    },
+    {
+      "turn": 5,
+      "content": "That covers the core inventory requirements.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContainsAny": [
+        "inventory",
+        "stock",
+        "warehouse",
+        "SKU"
+      ],
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "How should the system handle simultaneous orders that would deplete the last unit?",
+    "What happens when a warehouse is temporarily offline?",
+    "Should the system support backorder functionality?"
+  ],
+  "minimumRubricScore": 9
+}

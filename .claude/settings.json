@@ -1,0 +1,10 @@
+{
+  "allowedCommands": ["*"],
+  "allowedDirectories": ["**"],
+  "excludeSensitiveFiles": [
+    ".env",
+    "*.key",
+    "*.pem",
+    "secrets.json"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "pact": {
+      "command": "node",
+      "args": ["<path-to-pact>/scripts/run-pact-mcp.js"],
+      "env": {
+        "PACT_API_URL": "http://localhost:3000"
+      }
+    }
+  }
+}

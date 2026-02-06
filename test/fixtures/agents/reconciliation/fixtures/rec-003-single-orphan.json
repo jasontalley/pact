@@ -1,0 +1,46 @@
+{
+  "id": "rec-003",
+  "name": "Single Orphan Test",
+  "fixtureVersion": "1.0",
+  "tags": ["orphan-tests", "single", "basic"],
+  "description": "A repository with one test lacking an @atom annotation alongside two properly annotated tests. The agent should identify exactly one orphan test and recommend a new atom for it.",
+  "mode": "full-scan",
+  "repo": {
+    "files": {
+      "src/validator.service.ts": "export class ValidatorService {\n  isValidEmail(email: string): boolean {\n    const regex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\n    return regex.test(email);\n  }\n\n  isStrongPassword(password: string): boolean {\n    return password.length >= 8 && /[A-Z]/.test(password) && /[0-9]/.test(password);\n  }\n\n  sanitizeInput(input: string): string {\n    return input.replace(/<[^>]*>/g, '').trim();\n  }\n}",
+      "test/validator.spec.ts": "import { ValidatorService } from '../src/validator.service';\n\ndescribe('ValidatorService', () => {\n  // @atom IA-020\n  it('should validate correct email format', () => {\n    const validator = new ValidatorService();\n    expect(validator.isValidEmail('user@example.com')).toBe(true);\n    expect(validator.isValidEmail('invalid')).toBe(false);\n  });\n\n  // @atom IA-021\n  it('should enforce strong password requirements', () => {\n    const validator = new ValidatorService();\n    expect(validator.isStrongPassword('Str0ngP@ss')).toBe(true);\n    expect(validator.isStrongPassword('weak')).toBe(false);\n  });\n\n  it('should sanitize HTML from user input', () => {\n    const validator = new ValidatorService();\n    expect(validator.sanitizeInput('<script>alert(1)</script>hello')).toBe('alert(1)hello');\n    expect(validator.sanitizeInput('  normal text  ')).toBe('normal text');\n  });\n});"
+    },
+    "testFiles": ["test/validator.spec.ts"],
+    "sourceFiles": ["src/validator.service.ts"]
+  },
+  "registry": {
+    "atoms": [
+      { "id": "IA-020", "description": "System validates email address format", "status": "committed", "category": "validation" },
+      { "id": "IA-021", "description": "System enforces strong password policy", "status": "committed", "category": "validation" }
+    ],
+    "molecules": [],
+    "annotations": [
+      { "testFilePath": "test/validator.spec.ts", "testName": "should validate correct email format", "atomId": "IA-020" },
+      { "testFilePath": "test/validator.spec.ts", "testName": "should enforce strong password requirements", "atomId": "IA-021" }
+    ]
+  },
+  "expected": {
+    "orphanTests": [
+      { "filePath": "test/validator.spec.ts", "testName": "should sanitize HTML from user input" }
+    ],
+    "expectedAtomRecommendations": [
+      {
+        "sourceTestFile": "test/validator.spec.ts",
+        "sourceTestName": "should sanitize HTML from user input",
+        "descriptionContains": "sanitize",
+        "minConfidence": 0.7
+      }
+    ],
+    "notOrphanTests": [
+      { "filePath": "test/validator.spec.ts", "testName": "should validate correct email format" },
+      { "filePath": "test/validator.spec.ts", "testName": "should enforce strong password requirements" }
+    ],
+    "maxErrors": 0
+  },
+  "minimumRubricScore": 9
+}

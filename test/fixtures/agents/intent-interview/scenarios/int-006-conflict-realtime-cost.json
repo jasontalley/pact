@@ -1,0 +1,68 @@
+{
+  "id": "int-006",
+  "name": "Conflicting constraints: real-time updates vs cost minimization",
+  "scenarioVersion": "1.0",
+  "tags": [
+    "conflicting-constraints",
+    "real-time",
+    "cost",
+    "tradeoff"
+  ],
+  "context": {
+    "domain": "Collaborative document editing platform",
+    "constraints": [
+      "Startup budget constraints",
+      "Expected 10,000 concurrent users at launch"
+    ],
+    "persona": "CTO"
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "We need real-time collaborative editing, like Google Docs. Multiple users should see each other's changes instantly. But we're a startup, so we need to keep infrastructure costs as low as possible."
+    },
+    {
+      "turn": 2,
+      "content": "Ideally sub-100ms latency for edits to propagate. We want to use the cheapest cloud infrastructure available. No expensive managed services.",
+      "answersQuestionIds": [
+        "latency-target",
+        "cost-constraints"
+      ]
+    },
+    {
+      "turn": 3,
+      "content": "I see the tension. Okay, we could accept up to 500ms for non-critical updates like cursor positions, but actual text changes should still be near-instant. For cost, we can accept some degradation during off-peak hours.",
+      "answersQuestionIds": [
+        "priority-resolution"
+      ]
+    },
+    {
+      "turn": 4,
+      "content": "That works. Let's go with that tiered approach.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContainsAny": [
+        "edit",
+        "collaborative",
+        "document",
+        "change"
+      ],
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "How should conflicts be resolved when two users edit the same text simultaneously?",
+    "What is the maximum number of concurrent editors per document?",
+    "What happens when a user's connection drops during editing?"
+  ],
+  "expectedNonGoals": [
+    "Expensive managed real-time services",
+    "Guaranteed sub-100ms for all update types"
+  ],
+  "minimumRubricScore": 9
+}

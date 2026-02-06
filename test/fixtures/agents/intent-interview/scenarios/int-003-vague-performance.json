@@ -1,0 +1,63 @@
+{
+  "id": "int-003",
+  "name": "Vague performance improvement request",
+  "scenarioVersion": "1.0",
+  "tags": [
+    "vague",
+    "ambiguous",
+    "performance"
+  ],
+  "context": {
+    "domain": "Internal dashboard application",
+    "constraints": [
+      "Legacy system with 3+ years of data",
+      "Approximately 500 daily active users"
+    ],
+    "persona": "engineering manager"
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "Make it faster."
+    },
+    {
+      "turn": 2,
+      "content": "The dashboard takes forever to load. Users are complaining. Some pages take 10-15 seconds. The data tables are the worst part.",
+      "answersQuestionIds": [
+        "what-is-slow",
+        "current-performance"
+      ]
+    },
+    {
+      "turn": 3,
+      "content": "I'd say the main dashboard should load in under 2 seconds. The data tables should paginate and load incrementally. We can't change the database schema though, that's shared with other systems.",
+      "answersQuestionIds": [
+        "target-performance",
+        "constraints"
+      ]
+    },
+    {
+      "turn": 4,
+      "content": "That's the core of it. Let's focus on the dashboard first.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContains": "load",
+      "category": "performance",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "What specific dashboard widgets are slowest?",
+    "What is the acceptable response time for filtered/sorted table queries?",
+    "Are there specific data volume thresholds that cause degradation?"
+  ],
+  "expectedNonGoals": [
+    "Database schema changes (explicitly excluded)",
+    "Backend infrastructure overhaul"
+  ],
+  "minimumRubricScore": 9
+}

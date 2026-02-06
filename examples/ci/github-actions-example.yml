@@ -1,0 +1,85 @@
+# ==============================================================================
+# GitHub Actions Example - Pact CI Policy Check (Phase 18)
+# ==============================================================================
+#
+# This workflow demonstrates how to integrate Pact's CI policy check into
+# your GitHub Actions pipeline to block deployments when proposed atoms
+# require human approval.
+#
+# Copy this to .github/workflows/pact-ci-check.yml in your repository.
+#
+# ==============================================================================
+
+name: Pact CI Policy Check
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  PACT_API_URL: ${{ secrets.PACT_API_URL || 'http://localhost:3000' }}
+  PACT_PROJECT_ID: ${{ secrets.PACT_PROJECT_ID }}
+  PACT_BLOCK_ON_PROPOSED_ATOMS: 'true'
+
+jobs:
+  pact-policy-check:
+    name: Check Pact CI Policy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Check for proposed atoms
+        id: pact-check
+        run: |
+          # Download the CI check script (or use from your repo)
+          curl -O https://raw.githubusercontent.com/your-org/pact/main/examples/ci/check-proposed-atoms.sh
+          chmod +x check-proposed-atoms.sh
+
+          # Run the check
+          ./check-proposed-atoms.sh "$PACT_PROJECT_ID"
+        continue-on-error: true
+
+      - name: Handle policy failure
+        if: steps.pact-check.outcome == 'failure'
+        run: |
+          echo "::error::Pact CI policy check failed - proposed atoms require approval"
+          echo "Please review pending atoms before proceeding with deployment"
+          exit 1
+
+      - name: Policy passed
+        if: steps.pact-check.outcome == 'success'
+        run: |
+          echo "✓ Pact CI policy check passed"
+
+  # Your other CI jobs can depend on this check
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    needs: pact-policy-check  # Wait for policy check to pass
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run tests
+        run: |
+          npm install
+          npm test
+
+      # ... rest of your build steps
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: [pact-policy-check, build]  # Requires policy check + build
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy to production
+        run: |
+          echo "Deploying to production..."
+          # Your deployment steps here

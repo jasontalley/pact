@@ -1,0 +1,43 @@
+{
+  "id": "int-024",
+  "name": "Edge case: user signals done after minimal interaction",
+  "scenarioVersion": "1.0",
+  "tags": ["edge-case", "early-termination", "incomplete"],
+  "context": {
+    "domain": "Task management application",
+    "persona": "developer"
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "Users create tasks with a title, description, due date, and priority (low, medium, high). Tasks can be assigned to other users. Tasks have statuses: to-do, in-progress, done."
+    },
+    {
+      "turn": 2,
+      "content": "That's all we need for now. Keep it simple.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContains": "task",
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    },
+    {
+      "descriptionContains": "status",
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "Can tasks be reassigned after creation?",
+    "Are there any restrictions on status transitions (e.g., can a task go from done back to to-do)?",
+    "Should users receive notifications when assigned a task?",
+    "Can tasks be deleted or only archived?",
+    "Is there a maximum length for task descriptions?"
+  ],
+  "minimumRubricScore": 7
+}

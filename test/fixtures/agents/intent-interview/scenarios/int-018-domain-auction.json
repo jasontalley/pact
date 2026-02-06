@@ -1,0 +1,77 @@
+{
+  "id": "int-018",
+  "name": "Domain-specific: auction bidding with consistency invariants",
+  "scenarioVersion": "1.0",
+  "tags": [
+    "domain-specific",
+    "auction",
+    "consistency",
+    "invariants",
+    "real-time"
+  ],
+  "context": {
+    "domain": "Live auction platform for collectibles and art",
+    "constraints": [
+      "Peak of 10,000 concurrent bidders per auction",
+      "Auctions run globally across time zones"
+    ],
+    "persona": "auction platform product owner",
+    "invariants": [
+      "A bid must be strictly greater than the current highest bid",
+      "Once a bid is accepted, it cannot be retracted",
+      "The auction end time must not change after the first bid is placed",
+      "The winning bidder must be notified within 5 seconds of auction close"
+    ]
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "Users bid on items in timed auctions. Bids need to be processed in real time with no double-acceptance. The last few seconds of an auction are the most critical."
+    },
+    {
+      "turn": 2,
+      "content": "Each auction has a start time, end time, starting price, and minimum bid increment. Bids placed in the last 2 minutes extend the auction by 2 minutes to prevent sniping. Users should see the current price update in real time.",
+      "answersQuestionIds": [
+        "auction-structure",
+        "anti-sniping"
+      ]
+    },
+    {
+      "turn": 3,
+      "content": "Maximum bid (proxy bidding): users set a max they're willing to pay, and the system autobids on their behalf up to that amount. If two proxy bids conflict, the earlier one wins at the second bidder's max plus one increment.",
+      "answersQuestionIds": [
+        "proxy-bidding"
+      ]
+    },
+    {
+      "turn": 4,
+      "content": "Bidders need to pre-authorize payment before bidding. After winning, they have 48 hours to complete payment or the item goes to the second-highest bidder.",
+      "answersQuestionIds": [
+        "payment-flow"
+      ]
+    },
+    {
+      "turn": 5,
+      "content": "That captures the bidding mechanics.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContainsAny": [
+        "bid",
+        "auction",
+        "price"
+      ],
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "How should the system handle network latency disputes for close bids?",
+    "Should there be a maximum number of bid extensions per auction?",
+    "How are reserve prices handled when the highest bid is below reserve?"
+  ],
+  "minimumRubricScore": 9
+}

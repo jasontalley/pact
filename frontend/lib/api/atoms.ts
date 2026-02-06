@@ -1,0 +1,189 @@
+import { apiClient } from './client';
+import type {
+  Atom,
+  CreateAtomDto,
+  UpdateAtomDto,
+  AtomFilters,
+  PaginatedResponse,
+  AnalyzeIntentDto,
+  AtomizationResult,
+  RefineAtomDto,
+  AcceptSuggestionDto,
+  RefinementEntry,
+} from '@/types/atom';
+
+export interface SemanticDiff {
+  atomA: { id: string; atomId: string; description: string; category: string; status: string; qualityScore: number | null; tags: string[] };
+  atomB: { id: string; atomId: string; description: string; category: string; status: string; qualityScore: number | null; tags: string[] };
+  descriptionDiff: { changeType: 'expanded' | 'narrowed' | 'reframed' | 'unchanged'; summary: string };
+  outcomesDiff: { added: { description: string }[]; removed: { description: string }[]; modified: { old: { description: string }; new: { description: string } }[]; unchanged: number };
+  falsifiabilityDiff: { added: { condition: string; expectedBehavior: string }[]; removed: { condition: string; expectedBehavior: string }[]; modified: { old: { condition: string; expectedBehavior: string }; new: { condition: string; expectedBehavior: string } }[]; unchanged: number };
+  categoryDiff: { old: string; new: string } | null;
+  qualityDiff: { old: number | null; new: number | null; delta: number } | null;
+  tagsDiff: { added: string[]; removed: string[] };
+  overallAssessment: string;
+}
+
+/**
+ * Atom API functions
+ */
+export const atomsApi = {
+  /**
+   * List atoms with optional filters
+   */
+  list: async (params?: AtomFilters): Promise<PaginatedResponse<Atom>> => {
+    const response = await apiClient.get<PaginatedResponse<Atom>>('/atoms', { params });
+    return response.data;
+  },
+
+  /**
+   * Get a single atom by ID
+   */
+  get: async (id: string): Promise<Atom> => {
+    const response = await apiClient.get<Atom>(`/atoms/${id}`);
+    return response.data;
+  },
+
+  /**
+   * Create a new atom
+   */
+  create: async (data: CreateAtomDto): Promise<Atom> => {
+    const response = await apiClient.post<Atom>('/atoms', data);
+    return response.data;
+  },
+
+  /**
+   * Update a draft atom
+   */
+  update: async (id: string, data: UpdateAtomDto): Promise<Atom> => {
+    const response = await apiClient.patch<Atom>(`/atoms/${id}`, data);
+    return response.data;
+  },
+
+  /**
+   * Delete a draft atom
+   */
+  delete: async (id: string): Promise<void> => {
+    await apiClient.delete(`/atoms/${id}`);
+  },
+
+  /**
+   * Commit a draft atom (makes it immutable)
+   */
+  commit: async (id: string): Promise<Atom> => {
+    const response = await apiClient.patch<Atom>(`/atoms/${id}/commit`);
+    return response.data;
+  },
+
+  /**
+   * Supersede a committed atom with a new atom
+   */
+  supersede: async (id: string, newAtomId: string): Promise<Atom> => {
+    const response = await apiClient.patch<Atom>(`/atoms/${id}/supersede`, { newAtomId });
+    return response.data;
+  },
+
+  /**
+   * Add a tag to an atom
+   */
+  addTag: async (id: string, tag: string): Promise<Atom> => {
+    const response = await apiClient.post<Atom>(`/atoms/${id}/tags`, { tag });
+    return response.data;
+  },
+
+  /**
+   * Remove a tag from an atom
+   */
+  removeTag: async (id: string, tag: string): Promise<Atom> => {
+    const response = await apiClient.delete<Atom>(`/atoms/${id}/tags/${tag}`);
+    return response.data;
+  },
+
+  /**
+   * Get all unique tags with counts
+   */
+  getTags: async (): Promise<{ tag: string; count: number }[]> => {
+    const response = await apiClient.get<{ tag: string; count: number }[]>('/atoms/tags');
+    return response.data;
+  },
+
+  /**
+   * Analyze raw intent for atomicity
+   */
+  analyze: async (data: AnalyzeIntentDto): Promise<AtomizationResult> => {
+    const response = await apiClient.post<AtomizationResult>('/atoms/analyze', data);
+    return response.data;
+  },
+
+  /**
+   * Refine an atom with feedback
+   */
+  refine: async (id: string, data: RefineAtomDto): Promise<Atom> => {
+    const response = await apiClient.post<Atom>(`/atoms/${id}/refine`, data);
+    return response.data;
+  },
+
+  /**
+   * Get refinement suggestions for an atom
+   */
+  suggestRefinements: async (id: string): Promise<AtomizationResult> => {
+    const response = await apiClient.post<AtomizationResult>(`/atoms/${id}/suggest-refinements`);
+    return response.data;
+  },
+
+  /**
+   * Accept a refinement suggestion
+   */
+  acceptSuggestion: async (id: string, data: AcceptSuggestionDto): Promise<Atom> => {
+    const response = await apiClient.post<Atom>(`/atoms/${id}/accept-suggestion`, data);
+    return response.data;
+  },
+
+  /**
+   * Get refinement history for an atom
+   */
+  getRefinementHistory: async (id: string): Promise<RefinementEntry[]> => {
+    const response = await apiClient.get<RefinementEntry[]>(`/atoms/${id}/refinement-history`);
+    return response.data;
+  },
+
+  /**
+   * Get semantic diff between two atoms
+   */
+  diff: async (idA: string, idB: string): Promise<SemanticDiff> => {
+    const response = await apiClient.get<SemanticDiff>(`/atoms/${idA}/diff/${idB}`);
+    return response.data;
+  },
+
+  /**
+   * Get atoms pending human review (Phase 18)
+   */
+  getPendingReview: async (): Promise<Atom[]> => {
+    const response = await apiClient.get<Atom[]>('/atoms/pending-review');
+    return response.data;
+  },
+
+  /**
+   * Approve a proposed atom (Phase 18)
+   */
+  approve: async (id: string, data: { approvedBy: string; description?: string; category?: string }): Promise<Atom> => {
+    const response = await apiClient.patch<Atom>(`/atoms/${id}/approve`, data);
+    return response.data;
+  },
+
+  /**
+   * Reject a proposed atom (Phase 18)
+   */
+  reject: async (id: string, data: { rejectedBy: string; reason?: string }): Promise<Atom> => {
+    const response = await apiClient.patch<Atom>(`/atoms/${id}/reject`, data);
+    return response.data;
+  },
+
+  /**
+   * Get count of atoms pending review (Phase 18)
+   */
+  getPendingCount: async (): Promise<number> => {
+    const response = await apiClient.get<{ count: number }>('/atoms/pending-review/count');
+    return response.data.count;
+  },
+};

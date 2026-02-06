@@ -1,0 +1,16 @@
+# Frontend Test Runner
+# Uses Playwright's official image which includes browsers and dependencies
+# Version must match @playwright/test in package.json (pinned for reproducibility)
+FROM mcr.microsoft.com/playwright:v1.51.1-noble
+
+WORKDIR /app
+
+# Install dependencies first for better caching
+COPY package*.json ./
+RUN npm ci
+
+# Copy the rest of the application
+COPY . .
+
+# Default command runs unit tests
+CMD ["npm", "test"]

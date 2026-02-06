@@ -1,0 +1,68 @@
+{
+  "id": "int-014",
+  "name": "Implementation detail pushback: caching technology and TTL",
+  "scenarioVersion": "1.0",
+  "tags": [
+    "implementation-detail",
+    "pushback",
+    "caching",
+    "technology-choice"
+  ],
+  "context": {
+    "domain": "Product catalog API for mobile apps",
+    "constraints": [
+      "Serves 15 mobile apps across different brands",
+      "Catalog updated daily by merchandising team"
+    ],
+    "persona": "platform engineer"
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "Use Redis for caching with 5-minute TTL. Product catalog data is read-heavy and we need to reduce database load. The catalog updates once a day."
+    },
+    {
+      "turn": 2,
+      "content": "The real problem is that our product API gets hammered during flash sales - up to 50,000 requests per second. The database can't handle it. We need responses under 50ms at the 99th percentile. The catalog only changes once per day through a batch import process.",
+      "answersQuestionIds": [
+        "underlying-problem",
+        "traffic-pattern",
+        "update-frequency"
+      ]
+    },
+    {
+      "turn": 3,
+      "content": "During flash sales, certain products get 80% of the traffic. Prices and availability change at the start of the sale and then remain stable. If a product goes out of stock, that needs to reflect within 60 seconds across all apps.",
+      "answersQuestionIds": [
+        "hot-spots",
+        "staleness-tolerance"
+      ]
+    },
+    {
+      "turn": 4,
+      "content": "That nails the requirements.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContains": "request",
+      "category": "performance",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "Should the system pre-warm caches before scheduled flash sales?",
+    "What fallback behavior is acceptable if the cache layer fails?",
+    "Do different mobile apps require different product views or is the data uniform?"
+  ],
+  "expectedNonGoals": [
+    "Specific caching technology (Redis is an implementation detail)",
+    "Specific TTL values (5-min TTL is an implementation detail)"
+  ],
+  "expectedFailures": [
+    "agent-accepts-implementation-detail-as-requirement"
+  ],
+  "minimumRubricScore": 8
+}

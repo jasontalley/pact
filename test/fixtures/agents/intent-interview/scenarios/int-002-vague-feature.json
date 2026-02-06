@@ -1,0 +1,62 @@
+{
+  "id": "int-002",
+  "name": "Underspecified search feature",
+  "scenarioVersion": "1.0",
+  "tags": [
+    "vague",
+    "ambiguous",
+    "search",
+    "feature"
+  ],
+  "context": {
+    "domain": "E-commerce product catalog",
+    "persona": "product owner"
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "Add a search feature."
+    },
+    {
+      "turn": 2,
+      "content": "Users need to find products. We have about 50,000 SKUs across various categories. They should be able to search by name or description.",
+      "answersQuestionIds": [
+        "search-scope",
+        "data-size"
+      ]
+    },
+    {
+      "turn": 3,
+      "content": "Autocomplete would be nice. Results should show the product image, name, price, and availability. Probably paginated, like 20 results per page.",
+      "answersQuestionIds": [
+        "result-display",
+        "pagination"
+      ]
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContains": "search",
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    },
+    {
+      "descriptionContains": "suggest",
+      "category": "ux",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "What is the acceptable search response time?",
+    "Should search support filters (category, price range)?",
+    "How should zero-result queries be handled?",
+    "Is typo tolerance or fuzzy matching required?"
+  ],
+  "expectedNonGoals": [
+    "Advanced analytics on search queries",
+    "Natural language search / AI-powered search"
+  ],
+  "minimumRubricScore": 8
+}

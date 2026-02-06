@@ -15,10 +15,31 @@ lerna-debug.log*
 
 # dotenv environment variable files
 .env
+.env.local
 .env.development
-.env.test
-.env.production
+.env.development.local
+.env.test.local
+.env.production.local
 
 # temp directory
 .temp
 .tmp
+
+# OS files
+.DS_Store
+
+# Test results (centralized)
+/test-results/**/*
+!/test-results/README.md
+
+# Legacy test result locations (kept for migration period)
+/coverage
+test/reports/*.html
+
+# Generated data exports
+.pact/
+*.csv
+
+# IDE
+.idea
+.vscode

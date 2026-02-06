@@ -1,0 +1,73 @@
+{
+  "id": "rec-013",
+  "name": "Quality Gate - All Pass",
+  "fixtureVersion": "1.0",
+  "tags": ["quality-gate", "pass", "high-quality"],
+  "description": "Orphan tests with clear, specific assertions and well-defined behavior. The inferred atoms should all pass the quality gate (score >= 80). Tests cover distinct, well-scoped behaviors with good coverage data.",
+  "mode": "full-scan",
+  "repo": {
+    "files": {
+      "src/token.service.ts": "export interface TokenPayload {\n  userId: string;\n  role: string;\n  exp: number;\n}\n\nexport class TokenService {\n  private secret = 'test-secret-key';\n\n  generate(userId: string, role: string, expiresInMs: number): string {\n    const payload: TokenPayload = {\n      userId,\n      role,\n      exp: Date.now() + expiresInMs,\n    };\n    return Buffer.from(JSON.stringify(payload)).toString('base64');\n  }\n\n  verify(token: string): TokenPayload | null {\n    try {\n      const payload = JSON.parse(Buffer.from(token, 'base64').toString()) as TokenPayload;\n      if (payload.exp < Date.now()) return null;\n      return payload;\n    } catch {\n      return null;\n    }\n  }\n\n  decode(token: string): TokenPayload | null {\n    try {\n      return JSON.parse(Buffer.from(token, 'base64').toString()) as TokenPayload;\n    } catch {\n      return null;\n    }\n  }\n\n  refresh(token: string, expiresInMs: number): string | null {\n    const payload = this.verify(token);\n    if (!payload) return null;\n    return this.generate(payload.userId, payload.role, expiresInMs);\n  }\n}",
+      "test/token.spec.ts": "import { TokenService } from '../src/token.service';\n\ndescribe('TokenService', () => {\n  it('should generate a valid base64 token with user payload', () => {\n    const service = new TokenService();\n    const token = service.generate('usr-1', 'admin', 60000);\n    expect(token).toBeDefined();\n    expect(typeof token).toBe('string');\n    const decoded = service.decode(token);\n    expect(decoded).not.toBeNull();\n    expect(decoded!.userId).toBe('usr-1');\n    expect(decoded!.role).toBe('admin');\n  });\n\n  it('should verify valid non-expired token and return payload', () => {\n    const service = new TokenService();\n    const token = service.generate('usr-1', 'user', 60000);\n    const payload = service.verify(token);\n    expect(payload).not.toBeNull();\n    expect(payload!.userId).toBe('usr-1');\n    expect(payload!.exp).toBeGreaterThan(Date.now());\n  });\n\n  it('should reject expired tokens during verification', () => {\n    const service = new TokenService();\n    const token = service.generate('usr-1', 'user', -1000);\n    const payload = service.verify(token);\n    expect(payload).toBeNull();\n  });\n\n  it('should reject malformed tokens during verification', () => {\n    const service = new TokenService();\n    expect(service.verify('not-a-valid-token!!!')).toBeNull();\n    expect(service.verify('')).toBeNull();\n  });\n\n  it('should refresh a valid token with new expiration', () => {\n    const service = new TokenService();\n    const original = service.generate('usr-1', 'editor', 60000);\n    const refreshed = service.refresh(original, 120000);\n    expect(refreshed).not.toBeNull();\n    const payload = service.decode(refreshed!);\n    expect(payload!.userId).toBe('usr-1');\n    expect(payload!.role).toBe('editor');\n  });\n});"
+    },
+    "testFiles": ["test/token.spec.ts"],
+    "sourceFiles": ["src/token.service.ts"],
+    "coverage": {
+      "files": {
+        "src/token.service.ts": { "statements": 95, "branches": 90, "functions": 100, "lines": 95 }
+      },
+      "summary": { "statements": 95, "branches": 90, "functions": 100, "lines": 95 }
+    }
+  },
+  "registry": {
+    "atoms": [],
+    "molecules": [],
+    "annotations": []
+  },
+  "expected": {
+    "orphanTests": [
+      { "filePath": "test/token.spec.ts", "testName": "should generate a valid base64 token with user payload" },
+      { "filePath": "test/token.spec.ts", "testName": "should verify valid non-expired token and return payload" },
+      { "filePath": "test/token.spec.ts", "testName": "should reject expired tokens during verification" },
+      { "filePath": "test/token.spec.ts", "testName": "should reject malformed tokens during verification" },
+      { "filePath": "test/token.spec.ts", "testName": "should refresh a valid token with new expiration" }
+    ],
+    "expectedAtomRecommendations": [
+      {
+        "sourceTestFile": "test/token.spec.ts",
+        "sourceTestName": "should generate a valid base64 token with user payload",
+        "descriptionContains": "generate",
+        "minConfidence": 0.8
+      },
+      {
+        "sourceTestFile": "test/token.spec.ts",
+        "sourceTestName": "should verify valid non-expired token and return payload",
+        "descriptionContains": "verify",
+        "minConfidence": 0.8
+      },
+      {
+        "sourceTestFile": "test/token.spec.ts",
+        "sourceTestName": "should reject expired tokens during verification",
+        "descriptionContains": "expir",
+        "minConfidence": 0.8
+      },
+      {
+        "sourceTestFile": "test/token.spec.ts",
+        "sourceTestName": "should reject malformed tokens during verification",
+        "descriptionContains": "malformed",
+        "minConfidence": 0.8
+      },
+      {
+        "sourceTestFile": "test/token.spec.ts",
+        "sourceTestName": "should refresh a valid token with new expiration",
+        "descriptionContains": "refresh",
+        "minConfidence": 0.8
+      }
+    ],
+    "expectedMoleculeGroupings": [
+      { "minAtoms": 3, "containsAtomDescriptionPattern": "token|verify|expir|refresh" }
+    ],
+    "maxErrors": 0
+  },
+  "minimumRubricScore": 10
+}

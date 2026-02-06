@@ -1,0 +1,70 @@
+{
+  "id": "rec-014",
+  "name": "Quality Gate - Mixed Pass and Fail",
+  "fixtureVersion": "1.0",
+  "tags": ["quality-gate", "mixed", "verification"],
+  "description": "A mix of high-quality and low-quality orphan tests. Some tests have clear behavioral intent (should pass quality gate) while others are vacuous or overly broad (should fail quality gate). Tests the verify node's ability to differentiate quality levels.",
+  "mode": "full-scan",
+  "repo": {
+    "files": {
+      "src/search.service.ts": "export interface SearchResult {\n  id: string;\n  title: string;\n  score: number;\n}\n\nexport class SearchService {\n  private documents: Array<{ id: string; title: string; content: string }> = [];\n\n  addDocument(id: string, title: string, content: string): void {\n    this.documents.push({ id, title, content });\n  }\n\n  search(query: string): SearchResult[] {\n    if (!query.trim()) return [];\n    const lowerQuery = query.toLowerCase();\n    return this.documents\n      .filter(doc => doc.title.toLowerCase().includes(lowerQuery) || doc.content.toLowerCase().includes(lowerQuery))\n      .map(doc => ({\n        id: doc.id,\n        title: doc.title,\n        score: doc.title.toLowerCase().includes(lowerQuery) ? 1.0 : 0.5,\n      }))\n      .sort((a, b) => b.score - a.score);\n  }\n\n  getDocumentCount(): number {\n    return this.documents.length;\n  }\n\n  clearIndex(): void {\n    this.documents = [];\n  }\n}",
+      "test/search.spec.ts": "import { SearchService } from '../src/search.service';\n\ndescribe('SearchService', () => {\n  it('should return results matching title with higher score than content matches', () => {\n    const service = new SearchService();\n    service.addDocument('1', 'TypeScript Guide', 'Learn TypeScript basics');\n    service.addDocument('2', 'JavaScript Basics', 'TypeScript is a superset of JavaScript');\n    const results = service.search('TypeScript');\n    expect(results).toHaveLength(2);\n    expect(results[0].id).toBe('1');\n    expect(results[0].score).toBe(1.0);\n    expect(results[1].score).toBe(0.5);\n  });\n\n  it('should return empty results for empty query', () => {\n    const service = new SearchService();\n    service.addDocument('1', 'Test', 'Content');\n    expect(service.search('')).toEqual([]);\n    expect(service.search('   ')).toEqual([]);\n  });\n\n  it('should work', () => {\n    const service = new SearchService();\n    expect(service).toBeDefined();\n  });\n\n  it('should do something with documents', () => {\n    const service = new SearchService();\n    service.addDocument('1', 'Title', 'Content');\n    const count = service.getDocumentCount();\n    expect(count).toBeDefined();\n  });\n\n  it('should handle clearing the search index', () => {\n    const service = new SearchService();\n    service.addDocument('1', 'Test', 'Content');\n    service.addDocument('2', 'Test2', 'Content2');\n    service.clearIndex();\n    expect(service.getDocumentCount()).toBe(0);\n    expect(service.search('Test')).toEqual([]);\n  });\n});"
+    },
+    "testFiles": ["test/search.spec.ts"],
+    "sourceFiles": ["src/search.service.ts"],
+    "coverage": {
+      "files": {
+        "src/search.service.ts": { "statements": 70, "branches": 60, "functions": 80, "lines": 70 }
+      },
+      "summary": { "statements": 70, "branches": 60, "functions": 80, "lines": 70 }
+    }
+  },
+  "registry": {
+    "atoms": [],
+    "molecules": [],
+    "annotations": []
+  },
+  "expected": {
+    "orphanTests": [
+      { "filePath": "test/search.spec.ts", "testName": "should return results matching title with higher score than content matches" },
+      { "filePath": "test/search.spec.ts", "testName": "should return empty results for empty query" },
+      { "filePath": "test/search.spec.ts", "testName": "should work" },
+      { "filePath": "test/search.spec.ts", "testName": "should do something with documents" },
+      { "filePath": "test/search.spec.ts", "testName": "should handle clearing the search index" }
+    ],
+    "expectedAtomRecommendations": [
+      {
+        "sourceTestFile": "test/search.spec.ts",
+        "sourceTestName": "should return results matching title with higher score than content matches",
+        "descriptionContains": "search",
+        "minConfidence": 0.8
+      },
+      {
+        "sourceTestFile": "test/search.spec.ts",
+        "sourceTestName": "should return empty results for empty query",
+        "descriptionContains": "empty",
+        "minConfidence": 0.8
+      },
+      {
+        "sourceTestFile": "test/search.spec.ts",
+        "sourceTestName": "should work",
+        "descriptionContains": "search",
+        "minConfidence": 0.3
+      },
+      {
+        "sourceTestFile": "test/search.spec.ts",
+        "sourceTestName": "should do something with documents",
+        "descriptionContains": "document",
+        "minConfidence": 0.3
+      },
+      {
+        "sourceTestFile": "test/search.spec.ts",
+        "sourceTestName": "should handle clearing the search index",
+        "descriptionContains": "clear",
+        "minConfidence": 0.7
+      }
+    ],
+    "maxErrors": 0
+  },
+  "minimumRubricScore": 7
+}

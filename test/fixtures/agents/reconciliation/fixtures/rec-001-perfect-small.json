@@ -1,0 +1,48 @@
+{
+  "id": "rec-001",
+  "name": "Perfect Small Repo",
+  "fixtureVersion": "1.0",
+  "tags": ["perfect", "small", "baseline"],
+  "description": "A small repository where every test has an @atom annotation and every atom has at least one test. The reconciliation agent should find zero orphan tests and produce zero atom recommendations.",
+  "mode": "full-scan",
+  "repo": {
+    "files": {
+      "src/auth.service.ts": "export class AuthService {\n  authenticate(email: string, password: string): { success: boolean; token?: string } {\n    if (email && password === 'validpass') {\n      return { success: true, token: 'jwt-token-123' };\n    }\n    return { success: false };\n  }\n\n  logout(token: string): boolean {\n    return !!token;\n  }\n}",
+      "src/user.service.ts": "export class UserService {\n  findById(id: string): { id: string; email: string } | null {\n    if (id === '1') {\n      return { id: '1', email: 'user@test.com' };\n    }\n    return null;\n  }\n}",
+      "test/auth.spec.ts": "import { AuthService } from '../src/auth.service';\n\ndescribe('AuthService', () => {\n  // @atom IA-001\n  it('should authenticate user with valid credentials', () => {\n    const service = new AuthService();\n    const result = service.authenticate('user@test.com', 'validpass');\n    expect(result.success).toBe(true);\n    expect(result.token).toBeDefined();\n  });\n\n  // @atom IA-002\n  it('should reject invalid credentials', () => {\n    const service = new AuthService();\n    const result = service.authenticate('user@test.com', 'wrongpass');\n    expect(result.success).toBe(false);\n  });\n\n  // @atom IA-003\n  it('should logout user and invalidate token', () => {\n    const service = new AuthService();\n    const result = service.logout('jwt-token-123');\n    expect(result).toBe(true);\n  });\n});",
+      "test/user.spec.ts": "import { UserService } from '../src/user.service';\n\ndescribe('UserService', () => {\n  // @atom IA-004\n  it('should find user by id', () => {\n    const service = new UserService();\n    const user = service.findById('1');\n    expect(user).not.toBeNull();\n    expect(user?.email).toBe('user@test.com');\n  });\n\n  // @atom IA-005\n  it('should return null for non-existent user', () => {\n    const service = new UserService();\n    const user = service.findById('999');\n    expect(user).toBeNull();\n  });\n});"
+    },
+    "testFiles": ["test/auth.spec.ts", "test/user.spec.ts"],
+    "sourceFiles": ["src/auth.service.ts", "src/user.service.ts"]
+  },
+  "registry": {
+    "atoms": [
+      { "id": "IA-001", "description": "User authenticates with valid credentials", "status": "committed", "category": "authentication" },
+      { "id": "IA-002", "description": "System rejects invalid credentials", "status": "committed", "category": "authentication" },
+      { "id": "IA-003", "description": "User can logout and invalidate session token", "status": "committed", "category": "authentication" },
+      { "id": "IA-004", "description": "System retrieves user by unique identifier", "status": "committed", "category": "user-management" },
+      { "id": "IA-005", "description": "System returns null for non-existent user lookup", "status": "committed", "category": "user-management" }
+    ],
+    "molecules": [],
+    "annotations": [
+      { "testFilePath": "test/auth.spec.ts", "testName": "should authenticate user with valid credentials", "atomId": "IA-001" },
+      { "testFilePath": "test/auth.spec.ts", "testName": "should reject invalid credentials", "atomId": "IA-002" },
+      { "testFilePath": "test/auth.spec.ts", "testName": "should logout user and invalidate token", "atomId": "IA-003" },
+      { "testFilePath": "test/user.spec.ts", "testName": "should find user by id", "atomId": "IA-004" },
+      { "testFilePath": "test/user.spec.ts", "testName": "should return null for non-existent user", "atomId": "IA-005" }
+    ]
+  },
+  "expected": {
+    "orphanTests": [],
+    "expectedAtomRecommendations": [],
+    "notOrphanTests": [
+      { "filePath": "test/auth.spec.ts", "testName": "should authenticate user with valid credentials" },
+      { "filePath": "test/auth.spec.ts", "testName": "should reject invalid credentials" },
+      { "filePath": "test/auth.spec.ts", "testName": "should logout user and invalidate token" },
+      { "filePath": "test/user.spec.ts", "testName": "should find user by id" },
+      { "filePath": "test/user.spec.ts", "testName": "should return null for non-existent user" }
+    ],
+    "maxErrors": 0
+  },
+  "minimumRubricScore": 10
+}

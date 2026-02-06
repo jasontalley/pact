@@ -1,0 +1,15 @@
+FROM node:24-alpine
+
+WORKDIR /app
+
+# Install dependencies first for better caching
+COPY package*.json ./
+RUN npm ci
+
+# Copy the rest of the application
+COPY . .
+
+EXPOSE 3000
+
+# Use Next.js development server with Turbopack
+CMD ["npm", "run", "dev"]

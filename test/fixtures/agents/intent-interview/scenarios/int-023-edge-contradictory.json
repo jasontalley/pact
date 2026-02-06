@@ -1,0 +1,75 @@
+{
+  "id": "int-023",
+  "name": "Edge case: user contradicts themselves across turns",
+  "scenarioVersion": "1.0",
+  "tags": [
+    "edge-case",
+    "contradictory",
+    "inconsistency",
+    "adversarial"
+  ],
+  "context": {
+    "domain": "Content publishing platform",
+    "persona": "product manager"
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "All content should be publicly visible. No login required to read anything. We want maximum reach."
+    },
+    {
+      "turn": 2,
+      "content": "Actually, premium articles should be behind a paywall. Only subscribers can read them. We have free and paid tiers.",
+      "answersQuestionIds": [
+        "access-model"
+      ]
+    },
+    {
+      "turn": 3,
+      "content": "Wait, I think a metered approach is better. Everyone can read 5 articles per month for free, then they hit the paywall. But some cornerstone articles should always be free to maximize SEO.",
+      "answersQuestionIds": [
+        "access-model-revision"
+      ]
+    },
+    {
+      "turn": 4,
+      "content": "Yes, the metered model with always-free cornerstone articles is what we want. Sorry for going back and forth. Authors should be able to flag articles as cornerstone.",
+      "answersQuestionIds": [
+        "final-model",
+        "cornerstone-flag"
+      ]
+    },
+    {
+      "turn": 5,
+      "content": "That's the access model sorted.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContainsAny": [
+        "article",
+        "content",
+        "metered",
+        "paywall",
+        "access"
+      ],
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "How is the 5-article monthly limit tracked (cookies, IP, account)?",
+    "Does the meter reset on a calendar month or rolling 30 days?",
+    "What content types count toward the meter (articles only, or also videos/podcasts)?"
+  ],
+  "expectedNonGoals": [
+    "Fully public access model (superseded by metered model)",
+    "Strict paywall for all premium content (superseded by metered model)"
+  ],
+  "expectedFailures": [
+    "agent-uses-superseded-requirements"
+  ],
+  "minimumRubricScore": 9
+}

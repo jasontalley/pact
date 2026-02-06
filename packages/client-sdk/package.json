@@ -1,0 +1,38 @@
+{
+  "name": "@pact/client-sdk",
+  "version": "0.1.0",
+  "description": "Client SDK for Pact - handles file reading, git operations, coverage collection, and API communication",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage",
+    "lint": "eslint \"src/**/*.ts\" --fix",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "pact",
+    "intent",
+    "testing",
+    "reconciliation",
+    "client-sdk"
+  ],
+  "author": "Jason Talley",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^24.0.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.0",
+    "typescript": "^5.7.0"
+  }
+}

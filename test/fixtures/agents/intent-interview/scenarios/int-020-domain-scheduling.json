@@ -1,0 +1,79 @@
+{
+  "id": "int-020",
+  "name": "Domain-specific: appointment scheduling with conflict invariants",
+  "scenarioVersion": "1.0",
+  "tags": [
+    "domain-specific",
+    "scheduling",
+    "conflict-resolution",
+    "invariants"
+  ],
+  "context": {
+    "domain": "Multi-provider appointment scheduling for a dental practice group",
+    "constraints": [
+      "15 locations with 60+ providers",
+      "Appointments range from 15 minutes to 3 hours",
+      "Multiple chair/room resources per location"
+    ],
+    "persona": "practice operations manager",
+    "invariants": [
+      "A provider cannot have overlapping appointments",
+      "A room/chair cannot be double-booked",
+      "Patient cannot have overlapping appointments at the same location",
+      "Cancelled appointments must free all associated resources immediately"
+    ]
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "Patients book appointments with specific providers. Each appointment needs a provider and a room. No double-booking for either. Patients should be able to book online or through our front desk."
+    },
+    {
+      "turn": 2,
+      "content": "Providers have availability templates - recurring weekly schedules with time-off overrides. Some procedures require specific equipment, so only certain rooms work. The system should only show available slots that match both provider availability and room suitability.",
+      "answersQuestionIds": [
+        "availability",
+        "room-matching"
+      ]
+    },
+    {
+      "turn": 3,
+      "content": "Patients get email and SMS reminders 48 hours and 2 hours before their appointment. If they don't confirm the 48-hour reminder, the appointment goes to a waitlist. Cancellations less than 24 hours before are flagged and count toward a no-show policy.",
+      "answersQuestionIds": [
+        "reminders",
+        "cancellation-policy"
+      ]
+    },
+    {
+      "turn": 4,
+      "content": "Waitlist: patients can join a waitlist for a specific provider and time range. When a slot opens, the first waitlisted patient gets a 2-hour window to claim it before it goes to the next person.",
+      "answersQuestionIds": [
+        "waitlist"
+      ]
+    },
+    {
+      "turn": 5,
+      "content": "Those are the booking mechanics we need.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContainsAny": [
+        "appointment",
+        "booking",
+        "schedule",
+        "slot"
+      ],
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "How should recurring appointments (e.g., every 6 months cleaning) be handled?",
+    "Can patients book appointments across multiple locations?",
+    "How should provider schedule conflicts (e.g., emergency absences) be resolved for existing appointments?"
+  ],
+  "minimumRubricScore": 9
+}

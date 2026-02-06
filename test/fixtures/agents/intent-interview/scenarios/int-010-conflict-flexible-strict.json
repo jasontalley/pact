@@ -1,0 +1,65 @@
+{
+  "id": "int-010",
+  "name": "Conflicting constraints: flexible schema vs strict validation",
+  "scenarioVersion": "1.0",
+  "tags": [
+    "conflicting-constraints",
+    "schema",
+    "validation",
+    "tradeoff"
+  ],
+  "context": {
+    "domain": "Multi-tenant form builder platform",
+    "constraints": [
+      "Each tenant defines custom form schemas",
+      "Forms collect regulated data (GDPR, CCPA applicable)"
+    ],
+    "persona": "technical product manager"
+  },
+  "userMessages": [
+    {
+      "turn": 1,
+      "content": "Tenants need to define their own form schemas - completely flexible, any field types, any validation rules. But we also need strict validation because some of this data is regulated. How do we let them be creative while ensuring compliance?"
+    },
+    {
+      "turn": 2,
+      "content": "There should be a set of base field types - text, number, date, email, phone, file upload. Tenants can compose these into any form structure. For regulated fields like PII, we enforce a 'sensitive' flag that automatically applies encryption and retention policies.",
+      "answersQuestionIds": [
+        "field-types",
+        "compliance-mechanism"
+      ]
+    },
+    {
+      "turn": 3,
+      "content": "Schema changes to published forms should be versioned. Old submissions remain valid against the schema version they were submitted with. New submissions use the latest schema. Breaking changes should require explicit migration.",
+      "answersQuestionIds": [
+        "schema-versioning"
+      ]
+    },
+    {
+      "turn": 4,
+      "content": "Good, let's go with that approach.",
+      "signalsDone": true
+    }
+  ],
+  "expectedAtoms": [
+    {
+      "descriptionContainsAny": [
+        "form",
+        "schema",
+        "field",
+        "template",
+        "tenant"
+      ],
+      "category": "functional",
+      "minOutcomes": 1,
+      "requiresEvidence": true
+    }
+  ],
+  "expectedOpenQuestions": [
+    "What data retention periods apply to sensitive fields?",
+    "How are schema migrations handled for forms with thousands of existing submissions?",
+    "Can tenants create custom validation rules beyond the base types?"
+  ],
+  "minimumRubricScore": 9
+}
