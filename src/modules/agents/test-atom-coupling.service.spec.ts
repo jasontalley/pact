@@ -10,25 +10,98 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import * as fs from 'fs';
 import { TestAtomCouplingService, CouplingAnalysisResult } from './test-atom-coupling.service';
+import { CONTENT_PROVIDER } from './context-builder.service';
 import { Atom } from '../atoms/atom.entity';
+import { ContentProvider, FileEntry } from './content';
 
-// Mock fs module
-jest.mock('fs');
+/**
+ * Mock ContentProvider for testing
+ */
+class MockContentProvider implements ContentProvider {
+  readonly providerType = 'filesystem' as const;
+
+  fileContents: Map<string, string> = new Map();
+  fileExists: Map<string, boolean> = new Map();
+  directoryEntries: Map<string, FileEntry[]> = new Map();
+  walkResults: Map<string, string[]> = new Map();
+  defaultContent: string | null = null;
+  defaultExists: boolean = false;
+
+  async readFile(filePath: string): Promise<string> {
+    if (this.fileContents.has(filePath)) {
+      return this.fileContents.get(filePath)!;
+    }
+    if (this.defaultContent !== null) {
+      return this.defaultContent;
+    }
+    throw new Error(`File not found: ${filePath}`);
+  }
+
+  async readFileOrNull(filePath: string): Promise<string | null> {
+    if (this.fileContents.has(filePath)) {
+      return this.fileContents.get(filePath)!;
+    }
+    return this.defaultContent;
+  }
+
+  async exists(filePath: string): Promise<boolean> {
+    if (this.fileExists.has(filePath)) {
+      return this.fileExists.get(filePath)!;
+    }
+    if (this.fileContents.has(filePath)) {
+      return true;
+    }
+    return this.defaultExists;
+  }
+
+  async listFiles(dir: string): Promise<FileEntry[]> {
+    return this.directoryEntries.get(dir) ?? [];
+  }
+
+  async walkDirectory(rootDir: string): Promise<string[]> {
+    return this.walkResults.get(rootDir) ?? [];
+  }
+
+  setDefaultContent(content: string): void {
+    this.defaultContent = content;
+  }
+
+  setDefaultExists(exists: boolean): void {
+    this.defaultExists = exists;
+  }
+
+  setFileContent(filePath: string, content: string): void {
+    this.fileContents.set(filePath, content);
+    this.fileExists.set(filePath, true);
+  }
+
+  setWalkResults(dir: string, files: string[]): void {
+    this.walkResults.set(dir, files);
+  }
+
+  reset(): void {
+    this.fileContents.clear();
+    this.fileExists.clear();
+    this.directoryEntries.clear();
+    this.walkResults.clear();
+    this.defaultContent = null;
+    this.defaultExists = false;
+  }
+}
 
 describe('TestAtomCouplingService', () => {
   let service: TestAtomCouplingService;
   let mockAtomRepository: {
     find: jest.Mock;
   };
-
-  const mockFs = fs as jest.Mocked<typeof fs>;
+  let mockContentProvider: MockContentProvider;
 
   beforeEach(async () => {
     mockAtomRepository = {
       find: jest.fn(),
     };
+    mockContentProvider = new MockContentProvider();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -37,12 +110,14 @@ describe('TestAtomCouplingService', () => {
           provide: getRepositoryToken(Atom),
           useValue: mockAtomRepository,
         },
+        {
+          provide: CONTENT_PROVIDER,
+          useValue: mockContentProvider,
+        },
       ],
     }).compile();
 
     service = module.get<TestAtomCouplingService>(TestAtomCouplingService);
-
-    jest.clearAllMocks();
   });
 
   // @atom IA-030
@@ -57,7 +132,7 @@ describe('TestAtomCouplingService', () => {
   // @atom IA-031
   describe('test file analysis', () => {
     // @atom IA-031
-    it('should detect annotated tests with @atom comments', () => {
+    it('should detect annotated tests with @atom comments', async () => {
       const testContent = `
 describe('UserService', () => {
   // @atom IA-001
@@ -72,9 +147,9 @@ describe('UserService', () => {
 });
 `;
 
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultContent(testContent);
 
-      const analysis = service.analyzeTestFile('/test/user.spec.ts');
+      const analysis = await service.analyzeTestFile('/test/user.spec.ts');
 
       // Should count all tests in the file
       expect(analysis.totalTests).toBe(2);
@@ -88,7 +163,7 @@ describe('UserService', () => {
     });
 
     // @atom IA-031
-    it('should detect orphan tests without @atom annotations', () => {
+    it('should detect orphan tests without @atom annotations', async () => {
       const testContent = `
 describe('PaymentService', () => {
   // @atom IA-003
@@ -106,9 +181,9 @@ describe('PaymentService', () => {
 });
 `;
 
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultContent(testContent);
 
-      const analysis = service.analyzeTestFile('/test/payment.spec.ts');
+      const analysis = await service.analyzeTestFile('/test/payment.spec.ts');
 
       // Should detect 3 total tests
       expect(analysis.totalTests).toBe(3);
@@ -122,7 +197,7 @@ describe('PaymentService', () => {
     });
 
     // @atom IA-031
-    it('should handle describe block context in orphan test names', () => {
+    it('should handle describe block context in orphan test names', async () => {
       const testContent = `
 describe('OuterContext', () => {
   it('orphan test', () => {
@@ -131,16 +206,16 @@ describe('OuterContext', () => {
 });
 `;
 
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultContent(testContent);
 
-      const analysis = service.analyzeTestFile('/test/context.spec.ts');
+      const analysis = await service.analyzeTestFile('/test/context.spec.ts');
 
       // Orphan test name should include describe context
       expect(analysis.orphanTests[0].testName).toBe('OuterContext > orphan test');
     });
 
     // @atom IA-031
-    it('should handle multiple @atom annotations on same test', () => {
+    it('should handle multiple @atom annotations on same test', async () => {
       const testContent = `
 describe('MultiAtom', () => {
   // @atom IA-010
@@ -151,9 +226,9 @@ describe('MultiAtom', () => {
 });
 `;
 
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultContent(testContent);
 
-      const analysis = service.analyzeTestFile('/test/multi.spec.ts');
+      const analysis = await service.analyzeTestFile('/test/multi.spec.ts');
 
       // Should count test once
       expect(analysis.totalTests).toBe(1);
@@ -165,7 +240,7 @@ describe('MultiAtom', () => {
     });
 
     // @atom IA-031
-    it('should track line numbers for orphan tests', () => {
+    it('should track line numbers for orphan tests', async () => {
       const testContent = `line1
 line2
 describe('Test', () => {
@@ -175,9 +250,9 @@ describe('Test', () => {
 });
 `;
 
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultContent(testContent);
 
-      const analysis = service.analyzeTestFile('/test/lines.spec.ts');
+      const analysis = await service.analyzeTestFile('/test/lines.spec.ts');
 
       // Line number should be accurate (4th line is the it() call)
       expect(analysis.orphanTests[0].lineNumber).toBe(4);
@@ -198,11 +273,9 @@ describe('Test', () => {
 });
 `;
 
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockReturnValue([
-        { name: 'test.spec.ts', isDirectory: () => false, isFile: () => true },
-      ] as any);
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultExists(true);
+      mockContentProvider.setWalkResults('/test', ['test.spec.ts']);
+      mockContentProvider.setDefaultContent(testContent);
 
       // Mock atoms in database - IA-001 and IA-002 are committed
       mockAtomRepository.find
@@ -232,11 +305,9 @@ describe('Test', () => {
 });
 `;
 
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockReturnValue([
-        { name: 'test.spec.ts', isDirectory: () => false, isFile: () => true },
-      ] as any);
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultExists(true);
+      mockContentProvider.setWalkResults('/test', ['test.spec.ts']);
+      mockContentProvider.setDefaultContent(testContent);
 
       // IA-002 is draft, not committed
       mockAtomRepository.find
@@ -268,11 +339,9 @@ describe('Test', () => {
 });
 `;
 
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockReturnValue([
-        { name: 'test.spec.ts', isDirectory: () => false, isFile: () => true },
-      ] as any);
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultExists(true);
+      mockContentProvider.setWalkResults('/test', ['test.spec.ts']);
+      mockContentProvider.setDefaultContent(testContent);
 
       // IA-999 does not exist in database
       mockAtomRepository.find
@@ -302,11 +371,9 @@ describe('Test', () => {
 });
 `;
 
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockReturnValue([
-        { name: 'test.spec.ts', isDirectory: () => false, isFile: () => true },
-      ] as any);
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultExists(true);
+      mockContentProvider.setWalkResults('/test', ['test.spec.ts']);
+      mockContentProvider.setDefaultContent(testContent);
 
       // IA-001 exists in database
       mockAtomRepository.find
@@ -337,11 +404,9 @@ describe('Test', () => {
 });
 `;
 
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockReturnValue([
-        { name: 'test.spec.ts', isDirectory: () => false, isFile: () => true },
-      ] as any);
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultExists(true);
+      mockContentProvider.setWalkResults('/test', ['test.spec.ts']);
+      mockContentProvider.setDefaultContent(testContent);
       mockAtomRepository.find.mockResolvedValue([]);
 
       const result = await service.analyzeCoupling({ testDirectory: '/test' });
@@ -363,11 +428,9 @@ describe('Test', () => {
 });
 `;
 
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockReturnValue([
-        { name: 'test.spec.ts', isDirectory: () => false, isFile: () => true },
-      ] as any);
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultExists(true);
+      mockContentProvider.setWalkResults('/test', ['test.spec.ts']);
+      mockContentProvider.setDefaultContent(testContent);
       mockAtomRepository.find.mockResolvedValue([]);
 
       const result = await service.analyzeCoupling({ testDirectory: '/test' });
@@ -378,8 +441,8 @@ describe('Test', () => {
 
     // @atom IA-034
     it('should handle empty test directories', async () => {
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockReturnValue([]);
+      mockContentProvider.setDefaultExists(true);
+      mockContentProvider.setWalkResults('/test', []);
       mockAtomRepository.find.mockResolvedValue([]);
 
       const result = await service.analyzeCoupling({ testDirectory: '/test' });
@@ -404,11 +467,9 @@ describe('Test', () => {
 });
 `;
 
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockReturnValue([
-        { name: 'test.spec.ts', isDirectory: () => false, isFile: () => true },
-      ] as any);
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultExists(true);
+      mockContentProvider.setWalkResults('/test', ['test.spec.ts']);
+      mockContentProvider.setDefaultContent(testContent);
       mockAtomRepository.find.mockResolvedValue([{ atomId: 'IA-001' }, { atomId: 'IA-002' }]);
 
       const result = await service.analyzeCoupling({
@@ -433,11 +494,9 @@ describe('Test', () => {
 };
 `;
 
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockReturnValue([
-        { name: 'test.spec.ts', isDirectory: () => false, isFile: () => true },
-      ] as any);
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultExists(true);
+      mockContentProvider.setWalkResults('/test', ['test.spec.ts']);
+      mockContentProvider.setDefaultContent(testContent);
       mockAtomRepository.find.mockResolvedValue([{ atomId: 'IA-001' }]);
 
       const result = await service.analyzeCoupling({
@@ -458,11 +517,9 @@ describe('Test', () => {
 });
 `;
 
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockReturnValue([
-        { name: 'test.spec.ts', isDirectory: () => false, isFile: () => true },
-      ] as any);
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultExists(true);
+      mockContentProvider.setWalkResults('/test', ['test.spec.ts']);
+      mockContentProvider.setDefaultContent(testContent);
       mockAtomRepository.find.mockResolvedValue([]); // IA-999 doesn't exist
 
       const result = await service.analyzeCoupling({
@@ -482,11 +539,9 @@ describe('Test', () => {
 });
 `;
 
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockReturnValue([
-        { name: 'test.spec.ts', isDirectory: () => false, isFile: () => true },
-      ] as any);
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultExists(true);
+      mockContentProvider.setWalkResults('/test', ['test.spec.ts']);
+      mockContentProvider.setDefaultContent(testContent);
       mockAtomRepository.find.mockResolvedValue([]);
 
       // checkCouplingGate should throw when gate fails
@@ -584,19 +639,10 @@ describe('Test', () => {
   describe('file filtering', () => {
     // @atom IA-037
     it('should exclude node_modules by default', async () => {
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockImplementation((dir: fs.PathLike) => {
-        const dirStr = dir.toString();
-        if (dirStr === '/test') {
-          return [
-            { name: 'valid.spec.ts', isDirectory: () => false, isFile: () => true },
-            { name: 'node_modules', isDirectory: () => true, isFile: () => false },
-          ] as any;
-        }
-        // node_modules should not be traversed
-        return [];
-      });
-      mockFs.readFileSync.mockReturnValue(`
+      mockContentProvider.setDefaultExists(true);
+      // walkDirectory already excludes node_modules, only returns test files
+      mockContentProvider.setWalkResults('/test', ['valid.spec.ts']);
+      mockContentProvider.setDefaultContent(`
 describe('Test', () => {
   // @atom IA-001
   it('test', () => {});
@@ -612,14 +658,10 @@ describe('Test', () => {
 
     // @atom IA-037
     it('should only include .spec.ts and .test.ts files', async () => {
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockReturnValue([
-        { name: 'valid.spec.ts', isDirectory: () => false, isFile: () => true },
-        { name: 'valid.test.ts', isDirectory: () => false, isFile: () => true },
-        { name: 'invalid.ts', isDirectory: () => false, isFile: () => true },
-        { name: 'readme.md', isDirectory: () => false, isFile: () => true },
-      ] as any);
-      mockFs.readFileSync.mockReturnValue(`
+      mockContentProvider.setDefaultExists(true);
+      // walkDirectory returns .ts files, service filters by pattern
+      mockContentProvider.setWalkResults('/test', ['valid.spec.ts', 'valid.test.ts']);
+      mockContentProvider.setDefaultContent(`
 describe('Test', () => {
   // @atom IA-001
   it('test', () => {});
@@ -638,7 +680,7 @@ describe('Test', () => {
   describe('boundary and negative cases', () => {
     // @atom IA-038
     it('should handle non-existent test directory gracefully', async () => {
-      mockFs.existsSync.mockReturnValue(false);
+      mockContentProvider.setDefaultExists(false);
       mockAtomRepository.find.mockResolvedValue([]);
 
       const result = await service.analyzeCoupling({ testDirectory: '/nonexistent' });
@@ -650,10 +692,10 @@ describe('Test', () => {
     });
 
     // @atom IA-038
-    it('should handle empty test files', () => {
-      mockFs.readFileSync.mockReturnValue('');
+    it('should handle empty test files', async () => {
+      mockContentProvider.setDefaultContent('');
 
-      const analysis = service.analyzeTestFile('/test/empty.spec.ts');
+      const analysis = await service.analyzeTestFile('/test/empty.spec.ts');
 
       // Empty file has no tests
       expect(analysis.totalTests).toBe(0);
@@ -664,23 +706,23 @@ describe('Test', () => {
     });
 
     // @atom IA-038
-    it('should handle files with only describe blocks and no tests', () => {
+    it('should handle files with only describe blocks and no tests', async () => {
       const testContent = `
 describe('Empty describe', () => {
   // Just comments, no tests
 });
 `;
 
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultContent(testContent);
 
-      const analysis = service.analyzeTestFile('/test/nodefs.spec.ts');
+      const analysis = await service.analyzeTestFile('/test/nodefs.spec.ts');
 
       // No it() calls means no tests
       expect(analysis.totalTests).toBe(0);
     });
 
     // @atom IA-038
-    it('should handle malformed atom annotations gracefully', () => {
+    it('should handle malformed atom annotations gracefully', async () => {
       const testContent = `
 describe('Test', () => {
   // @atom
@@ -692,9 +734,9 @@ describe('Test', () => {
 });
 `;
 
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultContent(testContent);
 
-      const analysis = service.analyzeTestFile('/test/malformed.spec.ts');
+      const analysis = await service.analyzeTestFile('/test/malformed.spec.ts');
 
       // Should detect 3 tests
       expect(analysis.totalTests).toBe(3);
@@ -730,11 +772,9 @@ describe('Test', () => {
 });
 `;
 
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockReturnValue([
-        { name: 'test.spec.ts', isDirectory: () => false, isFile: () => true },
-      ] as any);
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultExists(true);
+      mockContentProvider.setWalkResults('/test', ['test.spec.ts']);
+      mockContentProvider.setDefaultContent(testContent);
       mockAtomRepository.find.mockResolvedValue([
         { atomId: 'IA-001' },
         { atomId: 'IA-002' },
@@ -761,11 +801,9 @@ describe('Test', () => {
 });
 `;
 
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockReturnValue([
-        { name: 'test.spec.ts', isDirectory: () => false, isFile: () => true },
-      ] as any);
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultExists(true);
+      mockContentProvider.setWalkResults('/test', ['test.spec.ts']);
+      mockContentProvider.setDefaultContent(testContent);
       mockAtomRepository.find.mockResolvedValue([]);
 
       const result = await service.analyzeCoupling({ testDirectory: '/test' });
@@ -787,11 +825,9 @@ describe('Test', () => {
 });
 `;
 
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockReturnValue([
-        { name: 'test.spec.ts', isDirectory: () => false, isFile: () => true },
-      ] as any);
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultExists(true);
+      mockContentProvider.setWalkResults('/test', ['test.spec.ts']);
+      mockContentProvider.setDefaultContent(testContent);
 
       // IA-001 exists but is superseded
       mockAtomRepository.find
@@ -814,11 +850,9 @@ describe('Test', () => {
 });
 `;
 
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockReturnValue([
-        { name: 'test.spec.ts', isDirectory: () => false, isFile: () => true },
-      ] as any);
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultExists(true);
+      mockContentProvider.setWalkResults('/test', ['test.spec.ts']);
+      mockContentProvider.setDefaultContent(testContent);
       mockAtomRepository.find.mockResolvedValue([]);
 
       const result = await service.analyzeCoupling({ testDirectory: '/test' });
@@ -838,11 +872,9 @@ describe('Test', () => {
 });
 `;
 
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockReturnValue([
-        { name: 'test.spec.ts', isDirectory: () => false, isFile: () => true },
-      ] as any);
-      mockFs.readFileSync.mockReturnValue(testContent);
+      mockContentProvider.setDefaultExists(true);
+      mockContentProvider.setWalkResults('/test', ['test.spec.ts']);
+      mockContentProvider.setDefaultContent(testContent);
       mockAtomRepository.find.mockResolvedValue([{ atomId: 'IA-001' }]);
 
       const result = await service.analyzeCoupling({ testDirectory: '/test' });
@@ -855,7 +887,7 @@ describe('Test', () => {
 
     // @atom IA-038
     it('should reject invalid test directory path', async () => {
-      mockFs.existsSync.mockReturnValue(false);
+      mockContentProvider.setDefaultExists(false);
       mockAtomRepository.find.mockResolvedValue([]);
 
       const result = await service.analyzeCoupling({ testDirectory: '/invalid/path' });

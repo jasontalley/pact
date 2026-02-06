@@ -326,6 +326,8 @@ export class ChangeSetsController {
       description?: string;
       summary?: string;
       sourceRef?: string;
+      source?: 'manual' | 'reconciliation' | 'import';
+      reconciliationRunId?: string;
       tags?: string[];
     },
   ): Promise<Molecule> {

@@ -1,7 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'node:child_process';
 import { TestQualitySnapshot } from './test-quality-snapshot.entity';
@@ -17,6 +16,11 @@ import {
 } from '../agents/entities/test-record.entity';
 import { TestQualityResultDto, TestQualityBatchResultDto } from './dto/analyze-test.dto';
 import { QualityProfileResponseDto } from './dto/quality-profile.dto';
+import {
+  ContentProvider,
+  FilesystemContentProvider,
+} from '../agents/content';
+import { CONTENT_PROVIDER } from '../agents/context-builder.service';
 
 export interface QualityDimension {
   name: string;
@@ -103,13 +107,17 @@ export class TestQualityService {
   private readonly logger = new Logger(TestQualityService.name);
   private readonly defaultTestPatterns = ['**/*.spec.ts', '**/*.test.ts'];
   private readonly defaultExcludePatterns = ['**/node_modules/**', '**/dist/**'];
+  private readonly contentProvider: ContentProvider;
 
   constructor(
     @InjectRepository(TestQualitySnapshot)
     private snapshotRepository: Repository<TestQualitySnapshot>,
     @InjectRepository(QualityProfile)
     private readonly profileRepository: Repository<QualityProfile>,
-  ) {}
+    @Optional() @Inject(CONTENT_PROVIDER) contentProvider?: ContentProvider,
+  ) {
+    this.contentProvider = contentProvider || new FilesystemContentProvider();
+  }
 
   /**
    * Analyze test quality across the codebase
@@ -121,13 +129,13 @@ export class TestQualityService {
     this.logger.log(`Analyzing test quality in: ${testDirectory}`);
 
     // Find all test files
-    const testFiles = this.findTestFiles(testDirectory, options);
+    const testFiles = await this.findTestFiles(testDirectory, options);
     this.logger.log(`Found ${testFiles.length} test files`);
 
     // Analyze each file
     const fileResults: TestFileQualityResult[] = [];
     for (const filePath of testFiles) {
-      const result = this.analyzeTestFile(filePath, testDirectory);
+      const result = await this.analyzeTestFile(filePath, testDirectory);
       fileResults.push(result);
     }
 
@@ -162,8 +170,22 @@ export class TestQualityService {
   /**
    * Analyze a single test file
    */
-  analyzeTestFile(filePath: string, baseDir: string = process.cwd()): TestFileQualityResult {
-    const content = fs.readFileSync(filePath, 'utf-8');
+  async analyzeTestFile(filePath: string, baseDir: string = process.cwd()): Promise<TestFileQualityResult> {
+    const content = await this.contentProvider.readFileOrNull(filePath);
+    if (content === null) {
+      // Return empty result for unreadable files
+      return {
+        filePath,
+        relativePath: path.relative(baseDir, filePath),
+        overallScore: 0,
+        passed: false,
+        dimensions: {},
+        referencedAtoms: [],
+        orphanTests: [],
+        totalTests: 0,
+        annotatedTests: 0,
+      };
+    }
     const relativePath = path.relative(baseDir, filePath);
 
     // Extract atom annotations and test info
@@ -693,36 +715,33 @@ export class TestQualityService {
   /**
    * Find test files in directory
    */
-  private findTestFiles(directory: string, options: QualityCheckOptions): string[] {
+  private async findTestFiles(directory: string, options: QualityCheckOptions): Promise<string[]> {
     const includePatterns = options.includePatterns || this.defaultTestPatterns;
     const excludePatterns = options.excludePatterns || this.defaultExcludePatterns;
+
+    // Check if directory exists
+    if (!(await this.contentProvider.exists(directory))) {
+      return [];
+    }
+
+    // Use walkDirectory with include extensions derived from patterns
+    const includeExtensions = ['.spec.ts', '.test.ts'];
+    const relativeFiles = await this.contentProvider.walkDirectory(directory, {
+      excludePatterns,
+      includeExtensions,
+    });
+
+    // Filter by include patterns and convert to absolute paths
     const testFiles: string[] = [];
-
-    const walkDir = (dir: string) => {
-      if (!fs.existsSync(dir)) return;
-
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
-        const relativePath = path.relative(directory, fullPath);
-
-        if (this.matchesPatterns(relativePath, excludePatterns)) continue;
-
-        if (entry.isDirectory()) {
-          walkDir(fullPath);
-        } else if (entry.isFile()) {
-          if (
-            this.matchesPatterns(relativePath, includePatterns) ||
-            this.matchesPatterns(entry.name, includePatterns)
-          ) {
-            testFiles.push(fullPath);
-          }
-        }
+    for (const relativePath of relativeFiles) {
+      if (
+        this.matchesPatterns(relativePath, includePatterns) ||
+        this.matchesPatterns(path.basename(relativePath), includePatterns)
+      ) {
+        testFiles.push(path.join(directory, relativePath));
       }
-    };
+    }
 
-    walkDir(directory);
     return testFiles;
   }
 

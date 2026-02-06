@@ -16,18 +16,27 @@
 
 Phase 16 introduces **Drift Management** — the system for tracking the gap between committed intent (Pact Main) and implementation reality. Drift is not a failure state; it is an expected consequence of development velocity. The goal is to ensure drift is always **visible** and always **converging**.
 
+**Core truth model:** Local = plausible, Canonical = true. Drift is measured against canonical reality only.
+
 **Core concepts:**
 
-- **Drift Debt**: A tracked gap between Pact Main and the codebase. Four types:
+- **Drift Debt**: A tracked gap between Pact Main and the codebase, detected from **CI-attested reconciliation runs only**. Four types:
   - `orphan_test` — test without `@atom` link
   - `commitment_backlog` — committed atom without passing test evidence
   - `stale_coupling` — test changed but atom link may be stale
   - `uncovered_code` — source file without any atom coverage
-- **Exception Lanes**: Reconciliation runs labeled `normal`, `hotfix-exception`, or `spike-exception` with justification
-- **CI Attestation**: Reconciliation runs marked as `local` (advisory) or `ci-attested` (canonical)
+- **Exception Lanes**: CI-attested reconciliation runs labeled `normal`, `hotfix-exception`, or `spike-exception` with justification
+- **CI Attestation**: Reconciliation runs marked as `local` (advisory) or `ci-attested` (canonical). **Only CI-attested runs create or update drift debt records.** Local runs produce advisory reports but do not affect drift tracking.
 - **Time-Bounded Convergence**: Configurable policies requiring drift to be addressed within N days
 
-**How drift is detected:** During reconciliation, the persist node has a complete picture of orphan tests, commitment gaps, and stale links. After persistence, the DriftDetectionService creates or updates DriftDebt entries.
+**How drift is detected:** During CI-attested reconciliation, the persist node has a complete picture of orphan tests, commitment gaps, and stale links. After persistence, the DriftDetectionService creates or updates DriftDebt entries. Local reconciliation runs skip drift detection entirely — they produce plausibility reports only.
+
+**What local runs do NOT do:**
+
+- Create drift debt records
+- Update drift confirmation counts or ages
+- Resolve existing drift items
+- Affect convergence score calculations
 
 ---
 
@@ -85,19 +94,21 @@ Create the `drift_debt` table and the service that detects and manages drift ite
   - **Priority**: High | **Effort**: L
   - **Details**:
     - `detectDriftFromRun(runId)` — main entry point; returns `DriftDetectionResult`
+    - **Gate**: Check `run.attestationType === 'ci-attested'` before creating/updating drift records. If `run.attestationType === 'local'`, return early with an advisory-only result (no DB writes).
     - `detectOrphanTestDrift(runUuid, orphanTests)` — create/update drift for each orphan test; dedup by `(filePath, testName, 'orphan_test')`
     - `detectCommitmentBacklog()` — query committed atoms without accepted test linkage; reuse logic from `CouplingMetricsService.getAtomTestCoupling()`
     - `detectStaleCoupling(changedAtomLinkedTests)` — for delta-mode tests that changed but have existing @atom links
     - `resolveMatchedDrift(runUuid)` — check if previously-open drift items are now resolved (test gained annotation, atom gained test)
     - `applyConvergencePolicies(projectId?)` — compute `dueAt` and update severity based on aging
-    - Returns `DriftDetectionResult { newDriftCount, confirmedDriftCount, resolvedDriftCount, totalOpenDrift, byType, overdueDrift }`
+    - Returns `DriftDetectionResult { newDriftCount, confirmedDriftCount, resolvedDriftCount, totalOpenDrift, byType, overdueDrift, attestationType }`
 
 - [ ] **16A.5** Integrate with reconciliation persist node
   - **File**: `src/modules/agents/graphs/nodes/reconciliation/persist.node.ts`
   - **Priority**: High | **Effort**: S
   - **Dependencies**: 16A.4
   - **Details**:
-    - After run is persisted, optionally call `driftDetectionService.detectDriftFromRun(runId)`
+    - After run is persisted, call `driftDetectionService.detectDriftFromRun(runId)`
+    - The detection service handles the attestation gate internally — local runs get a no-op result
     - Use optional dependency pattern (same as other optional services in persist node)
     - Store `DriftDetectionResult` in run summary or as separate metadata
 
@@ -115,7 +126,8 @@ Create the `drift_debt` table and the service that detects and manages drift ite
 ### Verification
 
 - [ ] DriftDebt entity migrates cleanly
-- [ ] Detection identifies all four drift types from reconciliation run data
+- [ ] Detection identifies all four drift types from CI-attested reconciliation run data
+- [ ] Detection skips drift record creation for local (non-CI-attested) runs
 - [ ] Deduplication prevents duplicate entries for same `(filePath, testName, driftType)`
 - [ ] Resolution correctly marks drift items resolved when tests gain annotations or atoms gain tests
 - [ ] Age computation is accurate
@@ -126,7 +138,7 @@ Create the `drift_debt` table and the service that detects and manages drift ite
 
 ### Context
 
-Extend ReconciliationRun to support exception lanes and CI attestation. Add convergence policies to project settings.
+Extend ReconciliationRun to support exception lanes and CI attestation. Exception lanes are meaningful only for CI-attested runs (they control drift convergence deadlines). Local runs always have `attestationType: 'local'` and do not create drift. Add convergence policies to project settings.
 
 ### Tasks
 
@@ -180,6 +192,8 @@ Extend ReconciliationRun to support exception lanes and CI attestation. Add conv
 
 - [ ] ReconciliationRun entity gains exceptionLane, attestationType, exceptionJustification
 - [ ] API accepts exception lane and attestation in start/analyze requests
+- [ ] Exception lanes only affect drift deadlines for CI-attested runs
+- [ ] Local runs default to `attestationType: 'local'` and skip drift creation
 - [ ] Convergence deadlines computed correctly per lane (normal: 14d, hotfix: 3d, spike: 7d)
 - [ ] Severity auto-escalates: medium at 0d, high at 7d, critical at 14d
 - [ ] Custom project policies override defaults
@@ -339,7 +353,8 @@ Build frontend dashboard components for drift visibility.
   - **Details**:
     - Exception lane dropdown: Normal, Hotfix Exception, Spike Exception
     - Conditional justification text area (required for hotfix/spike)
-    - Attestation type indicator
+    - Attestation type indicator (local vs CI-attested)
+    - Note: Exception lanes are primarily relevant for CI-attested runs; local runs are advisory and produce no drift debt regardless of lane selection
 
 ### Verification
 

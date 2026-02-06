@@ -262,34 +262,72 @@ The drift model targets **convergence over time**, not zero-drift at every commi
 
 ---
 
-## 6. Local vs Canonical Truth (Phase 17)
+## 6. Local vs Canonical Reality (Phase 17)
 
 > **Note**: The local/remote split is target architecture for Phase 17. This section establishes vocabulary. Implementation details are in `docs/implementation-checklist-phase17.md`.
 
-### 6.1 Two Truth Layers
+### 6.1 The Core Rule: Local = Plausible, Canonical = True
 
-| Layer | Source | Authority |
-|-------|--------|-----------|
-| **Canonical** | Pact Main on remote server | Authoritative; updated via governed change sets |
-| **Local** | Developer's machine (IDE, CLI) | Advisory; a cached view of Main + local overlay |
+This is the Git mental model applied to intent:
 
-### 6.2 Local Overlay
+- **Local coupling proves plausibility.** "I can satisfy this atom in my working tree."
+- **Canonical reconciliation proves reality.** "This atom is realized on the organization's integration branch after CI-attested reconciliation."
 
-A local Pact instance maintains:
+A developer or coding agent can only ever claim: *"Atom X is locally satisfied for snapshot S."*
 
-- A cached snapshot of Pact Main (pulled from remote)
-- Locally discovered test-atom links (not yet pushed)
-- Local test execution results (local evidence)
-- Draft atoms and proposed changes
+The system can only ever claim: *"Atom X is canonically realized on integration@T after CI-attested reconciliation."*
 
-UX implications:
+Local reconciliation produces **plausibility evidence** only. Canonical reconciliation against the organization's integration target produces **truth**. This prevents local overlays from being treated as a secondary plane of truth. They are working copies, nothing more.
 
-- Local state is **never confused with canonical state**
-- UI clearly labels data as "local" vs "canonical"
-- Sync status is always visible (last pull time, pending pushes)
-- Conflicts between local and canonical are surfaced, not silently resolved
+### 6.2 Two Layers
 
-### 6.3 Deployment Models
+| Layer | What It Is | Authority |
+|-------|------------|-----------|
+| **Canonical** | Pact Main, updated by CI-attested reconciliation against the integration branch | Authoritative truth |
+| **Local** | A cached export of Pact Main + a local reconciliation report | Plausibility evidence only |
+
+### 6.3 Minimal Local State
+
+A local Pact client (CLI, IDE extension) needs only:
+
+- **Cached Pact Main export** -- the committed atoms and their realization status (pulled from server)
+- **Last local reconciliation report** -- a snapshot of which atoms are locally satisfied in the working tree (optional, ephemeral)
+- **Local report file** -- for tooling integration (pre-commit hooks, agent queries)
+
+A local client does **not** need:
+
+- Rich overlay data model with push/pull sync
+- Conflict resolution across multiple local overlays
+- "Merged scope" as a default concept
+
+### 6.4 CI Attestation as the Single Promotion Gate
+
+| Run Type | What It Produces | What It Updates |
+|----------|-----------------|-----------------|
+| **Local run** | Draft reconciliation report (plausibility) | Nothing canonical |
+| **CI-attested run** | Attested reconciliation report (truth) | Proven counts, commitment backlog, system health metrics |
+
+Only CI-attested runs update canonical realization status. Everything else is developer ergonomics.
+
+### 6.5 Integration Target
+
+Each project defines an **integration target** -- the branch where canonical reality is asserted:
+
+```
+project.integrationTarget = "main" | "develop" | <string>
+```
+
+Pact does not need to understand the organization's Git workflow. It only needs a consistent reference point where reality is asserted. CI-attested reconciliation runs against this branch produce canonical truth.
+
+### 6.6 Developer and Agent Command Loop
+
+The minimal command semantics that match this model:
+
+- `pact pull` -- cache commitments from Pact Main
+- `pact check` -- generate a local reconciliation report scoped to Pact Main atoms; output: locally satisfied / not locally satisfied
+- `pact ci submit` (run in CI) -- submit attested reconciliation; output: updates canonical realization + drift debt
+
+### 6.7 Deployment Models
 
 The same Pact server code supports three deployment models:
 
@@ -297,7 +335,7 @@ The same Pact server code supports three deployment models:
 |-------|-------------|-----------|
 | **Co-located** | Pact runs alongside the project (current) | Internal pipeline reads files |
 | **Client-Server** | Local client sends content to remote Pact | API-based ingestion |
-| **PactHub** | Multiple developers push to shared instance | Multi-instance sync |
+| **PactHub** | Multiple developers push to shared instance | CI-attested reconciliation sync |
 
 UX is identical across models. The difference is only in how data arrives.
 

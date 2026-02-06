@@ -191,7 +191,8 @@ export class ReconciliationRepository {
         sourceTestFilePath: atom.sourceTest.filePath,
         sourceTestName: atom.sourceTest.testName,
         sourceTestLineNumber: atom.sourceTest.lineNumber,
-        observableOutcomes: atom.observableOutcomes.map((o) =>
+        // Defensive check: observableOutcomes may be undefined if LLM doesn't return it
+        observableOutcomes: (atom.observableOutcomes || []).map((o) =>
           typeof o === 'string' ? { description: o } : o,
         ),
         relatedDocs: atom.relatedDocs || [],

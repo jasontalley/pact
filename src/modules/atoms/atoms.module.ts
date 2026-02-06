@@ -4,6 +4,7 @@ import { AtomsController } from './atoms.controller';
 import { AtomsService } from './atoms.service';
 import { AtomsRepository } from './atoms.repository';
 import { Atom } from './atom.entity';
+import { MoleculeAtom } from '../molecules/molecule-atom.entity';
 import { AgentsModule } from '../agents/agents.module';
 import { ValidatorsModule } from '../validators/validators.module';
 import { MoleculesModule } from '../molecules/molecules.module';
@@ -12,7 +13,7 @@ import { SemanticDiffService } from './semantic-diff.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Atom]),
+    TypeOrmModule.forFeature([Atom, MoleculeAtom]),
     forwardRef(() => AgentsModule),
     forwardRef(() => ValidatorsModule),
     forwardRef(() => MoleculesModule),

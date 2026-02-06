@@ -30,6 +30,8 @@ import {
 import { ReconciliationResult, ReconciliationStatus } from '../../types/reconciliation-result';
 import { ReconciliationRepository } from '../../../repositories/reconciliation.repository';
 import { getCurrentCommitHash } from '../../../utils/git-utils';
+import type { DriftDetectionService } from '../../../../drift/drift-detection.service';
+import type { DriftDetectionResult } from '../../../../drift/entities/drift-debt.entity';
 
 /**
  * Options for customizing persist node behavior
@@ -43,6 +45,8 @@ export interface PersistNodeOptions {
   repository?: ReconciliationRepository;
   /** Whether to persist to database (default: true if repository available) */
   persistToDatabase?: boolean;
+  /** Optional drift detection service for Phase 16 integration */
+  driftDetectionService?: DriftDetectionService;
 }
 
 /**
@@ -320,6 +324,26 @@ export function createPersistNode(options: PersistNodeOptions = {}) {
         }
       } else {
         config.logger?.log('[PersistNode] Skipping database persistence (no repository)');
+      }
+
+      // Phase 16: Drift detection (after persistence)
+      let driftDetectionResult: DriftDetectionResult | undefined;
+      if (options.driftDetectionService && runUuid) {
+        try {
+          config.logger?.log('[PersistNode] Running drift detection...');
+          driftDetectionResult = await options.driftDetectionService.detectDriftFromRun(runUuid);
+          config.logger?.log(
+            `[PersistNode] Drift detection complete: ` +
+              `new=${driftDetectionResult.newDriftCount}, ` +
+              `confirmed=${driftDetectionResult.confirmedDriftCount}, ` +
+              `resolved=${driftDetectionResult.resolvedDriftCount}, ` +
+              `totalOpen=${driftDetectionResult.totalOpenDrift}`,
+          );
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          config.logger?.warn(`[PersistNode] Drift detection failed: ${errorMessage}`);
+          // Continue even if drift detection fails
+        }
       }
 
       // Build result

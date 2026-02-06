@@ -54,6 +54,18 @@ export type ReconciliationDecision =
  * - includePaths/excludePaths: Filter tests by folder patterns
  * - includeFilePatterns/excludeFilePatterns: Filter tests by file patterns
  */
+/**
+ * Exception lanes control drift convergence deadlines
+ */
+export type ExceptionLane = 'normal' | 'hotfix-exception' | 'spike-exception';
+
+/**
+ * Attestation type determines whether drift debt is created
+ * - local: Advisory only, no drift records created (default for dev)
+ * - ci-attested: Canonical, creates/updates drift records (CI pipeline)
+ */
+export type AttestationType = 'local' | 'ci-attested';
+
 export interface ReconciliationOptions {
   /** Whether to analyze documentation for context enrichment */
   analyzeDocs?: boolean;
@@ -89,6 +101,28 @@ export interface ReconciliationOptions {
    * File name patterns to exclude (e.g., ["*.e2e-spec.ts"]).
    */
   excludeFilePatterns?: string[];
+
+  // Phase 16: Drift management options
+
+  /**
+   * Exception lane for drift convergence policy (default: 'normal')
+   * - normal: 14-day convergence window
+   * - hotfix-exception: 3-day expedited window
+   * - spike-exception: 7-day research window
+   */
+  exceptionLane?: ExceptionLane;
+
+  /**
+   * Attestation type (default: 'local')
+   * - local: Advisory only, no drift records created
+   * - ci-attested: Canonical, creates/updates drift debt
+   */
+  attestationType?: AttestationType;
+
+  /**
+   * Justification for exception lane (required for hotfix/spike)
+   */
+  exceptionJustification?: string;
 }
 
 /**
@@ -584,6 +618,46 @@ export const ReconciliationGraphState = Annotation.Root({
   llmCallCount: Annotation<number>({
     reducer: (current, update) => current + update,
     default: () => 0,
+  }),
+
+  // -------------------------------------------------------------------------
+  // Fixture Mode (Golden Test Evaluation)
+  // -------------------------------------------------------------------------
+
+  /** Whether running in fixture mode (golden tests) */
+  fixtureMode: Annotation<boolean>({
+    reducer: (_, update) => update,
+    default: () => false,
+  }),
+
+  /** File contents for fixture mode (key: relative path, value: content) */
+  fixtureFiles: Annotation<Record<string, string> | null>({
+    reducer: (_, update) => update,
+    default: () => null,
+  }),
+
+  /** Test file paths for fixture mode */
+  fixtureTestFiles: Annotation<string[] | null>({
+    reducer: (_, update) => update,
+    default: () => null,
+  }),
+
+  /** Source file paths for fixture mode */
+  fixtureSourceFiles: Annotation<string[] | null>({
+    reducer: (_, update) => update,
+    default: () => null,
+  }),
+
+  /** Existing annotations for fixture mode (key: "filePath:testName", value: atomId) */
+  fixtureAnnotations: Annotation<Record<string, string> | null>({
+    reducer: (_, update) => update,
+    default: () => null,
+  }),
+
+  /** Existing atoms for fixture mode */
+  fixtureAtoms: Annotation<Array<{ id: string; description: string }> | null>({
+    reducer: (_, update) => update,
+    default: () => null,
   }),
 });
 

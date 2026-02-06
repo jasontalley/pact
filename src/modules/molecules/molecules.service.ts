@@ -469,10 +469,12 @@ export class MoleculesService {
     }
 
     // Calculate realization status
-    const statusCounts = { draft: 0, committed: 0, superseded: 0 };
+    const statusCounts = { proposed: 0, draft: 0, committed: 0, superseded: 0 };
     for (const atom of atoms) {
-      const status = atom.status as 'draft' | 'committed' | 'superseded';
-      statusCounts[status]++;
+      const status = atom.status as 'proposed' | 'draft' | 'committed' | 'superseded';
+      if (status in statusCounts) {
+        statusCounts[status]++;
+      }
     }
 
     const committedRatio = statusCounts.committed / atomCount;
@@ -598,6 +600,8 @@ export class MoleculesService {
       description?: string;
       summary?: string;
       sourceRef?: string;
+      source?: 'manual' | 'reconciliation' | 'import';
+      reconciliationRunId?: string;
       tags?: string[];
     },
     userId: string,
@@ -609,6 +613,8 @@ export class MoleculesService {
       createdBy: userId,
       summary: dto.summary,
       sourceRef: dto.sourceRef,
+      source: dto.source,
+      reconciliationRunId: dto.reconciliationRunId,
       approvals: [],
       requiredApprovals: 1,
     };
@@ -714,9 +720,10 @@ export class MoleculesService {
   }
 
   /**
-   * Commit a change set — batch commits all draft atoms in the set.
+   * Commit a change set — batch commits all uncommitted atoms (draft + proposed) in the set.
    * Only allowed when the change set is in 'approved' status.
    * Atoms must meet quality gate (score >= 80).
+   * All committed atoms are promoted to Main (promotedToMainAt set).
    */
   async commitChangeSet(changeSetId: string, userId: string): Promise<Molecule> {
     const molecule = await this.findOne(changeSetId);
@@ -724,14 +731,16 @@ export class MoleculesService {
     this.assertChangeSetStatus(molecule, ['approved']);
 
     const atoms = await this.getAtoms(changeSetId, { activeOnly: true });
-    const draftAtoms = atoms.filter((a) => a.status === 'draft');
+    const uncommittedAtoms = atoms.filter(
+      (a) => a.status === 'draft' || a.status === 'proposed',
+    );
 
-    if (draftAtoms.length === 0) {
-      throw new BadRequestException('No draft atoms to commit in this change set');
+    if (uncommittedAtoms.length === 0) {
+      throw new BadRequestException('No uncommitted atoms to commit in this change set');
     }
 
-    // Quality gate check for all draft atoms
-    const failingAtoms = draftAtoms.filter((a) => (a.qualityScore ?? 0) < 80);
+    // Quality gate check for all uncommitted atoms
+    const failingAtoms = uncommittedAtoms.filter((a) => (a.qualityScore ?? 0) < 80);
     if (failingAtoms.length > 0) {
       const ids = failingAtoms.map((a) => a.atomId || a.id).join(', ');
       throw new BadRequestException(
@@ -739,21 +748,27 @@ export class MoleculesService {
       );
     }
 
-    // Batch commit all draft atoms
+    // Batch commit all uncommitted atoms and promote to Main
     const committedAtomIds: string[] = [];
-    for (const atom of draftAtoms) {
+    const promotedAtomIds: string[] = [];
+    const now = new Date();
+    for (const atom of uncommittedAtoms) {
       atom.status = 'committed';
-      atom.committedAt = new Date();
+      atom.committedAt = now;
+      atom.promotedToMainAt = now;
+      atom.changeSetId = null; // Clear change set membership after commit
       await this.atomRepository.save(atom);
       committedAtomIds.push(atom.id);
+      promotedAtomIds.push(atom.id);
     }
 
     // Update change set metadata
     molecule.changeSetMetadata = {
       ...molecule.changeSetMetadata!,
       status: 'committed' as ChangeSetStatus,
-      committedAt: new Date().toISOString(),
+      committedAt: now.toISOString(),
       committedAtomIds,
+      promotedAtomIds,
     };
 
     return this.moleculesRepository.baseRepository.save(molecule);

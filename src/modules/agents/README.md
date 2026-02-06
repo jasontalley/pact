@@ -177,6 +177,71 @@ ChatAgentService.chat()
     └─[general query]───→ ChatExplorationGraph
 ```
 
+## Evaluation (Phase 13)
+
+The evaluation harness provides contract-driven testing for LangGraph agents.
+
+### Running Evaluations
+
+```bash
+# Run all agent tests (contracts, properties, cost/latency)
+npm run test:agents
+
+# Run property tests only
+npm run test:agents:property
+
+# Run cost/latency budget tests
+npm run test:agents:cost
+
+# Run golden suite via evaluation CLI
+npm run evaluate:agents -- --suite=golden --agent=reconciliation
+
+# Update snapshots after intentional changes
+npm run evaluate:agents -- --suite=golden --update-snapshots
+```
+
+### Prompt Packages
+
+Prompts use a versioned, node-local policy pattern:
+
+```
+prompts/
+├── policies/
+│   ├── reconciliation/policies-v1.md   # Reconciliation node policies
+│   └── interview/policies-v1.md        # Interview node policies
+└── index.ts                            # Barrel exports
+```
+
+**To update a policy:**
+
+1. Edit the relevant `policies-v*.md` file.
+2. Run golden tests: `npm run evaluate:agents -- --suite=golden`
+3. If tests pass, commit the change.
+4. If tests fail, either fix the policy or update snapshots: `--update-snapshots`
+
+**To add a few-shot example:**
+
+1. Add the example to the relevant node's prompt (inline in the node file).
+2. Run the golden suite to verify the change doesn't regress other scenarios.
+3. Document the change in the commit message.
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `evaluation/run-artifact.types.ts` | Run Artifact schema, metrics, failure taxonomy |
+| `evaluation/artifact-capture.service.ts` | Instruments graph invocation |
+| `evaluation/rubric-scorer.ts` | Automated rubric scoring |
+| `evaluation/reconciliation-golden.runner.ts` | Reconciliation golden test runner |
+| `evaluation/intent-interview-golden.runner.ts` | Interview golden test runner |
+| `evaluation/index.ts` | Barrel exports |
+| `scripts/evaluate-agents.ts` | Evaluation CLI |
+
+### Related Docs
+
+- [Agent Contracts](../../../docs/architecture/agent-contracts.md)
+- [Evaluation Rubrics](../../../docs/architecture/agent-evaluation-rubrics.md)
+
 ## Testing
 
 All services have corresponding `.spec.ts` files. Run tests:

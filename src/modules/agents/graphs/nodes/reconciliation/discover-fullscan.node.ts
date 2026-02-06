@@ -6,16 +6,19 @@
  *
  * Uses the `discover_orphans_fullscan` tool via ToolRegistryService.
  *
+ * Phase 17: Refactored to use ContentProvider abstraction instead of direct fs calls.
+ *
  * @see docs/implementation-checklist-phase5.md Section 1.5
  * @see docs/implementation-checklist-phase5.md Section 2.3 (refactored to use tools)
+ * @see docs/implementation-checklist-phase17.md Section 17A.7
  */
 
-import * as fs from 'fs';
 import * as path from 'path';
 import { minimatch } from 'minimatch';
 import { NodeConfig } from '../types';
 import { ReconciliationGraphStateType, OrphanTestInfo } from '../../types/reconciliation-state';
 import { OrphanDiscoveryResult } from '../../../tools/reconciliation-tools.service';
+import { ContentProvider, FilesystemContentProvider } from '../../../content';
 
 /**
  * Filter options for test discovery
@@ -102,23 +105,22 @@ export interface DiscoverFullscanNodeOptions {
 }
 
 /**
- * Parse a test file and extract orphan tests (tests without @atom annotation)
+ * Get or create ContentProvider from config
  */
-function parseTestFile(
+function getContentProvider(config: NodeConfig, basePath?: string): ContentProvider {
+  return config.contentProvider || new FilesystemContentProvider(basePath);
+}
+
+/**
+ * Parse a test file and extract orphan tests (tests without @atom annotation)
+ * Uses provided content string (either from fixture or read via ContentProvider)
+ */
+function parseTestFileContent(
   filePath: string,
-  rootDirectory: string,
+  content: string,
   annotationLookback: number,
 ): OrphanTestInfo[] {
   const orphanTests: OrphanTestInfo[] = [];
-
-  let content: string;
-  try {
-    content = fs.readFileSync(path.join(rootDirectory, filePath), 'utf-8');
-  } catch {
-    // Skip files we can't read
-    return [];
-  }
-
   const lines = content.split('\n');
 
   // Regex patterns
@@ -172,16 +174,13 @@ function parseTestFile(
         // Extract the test code
         const testCode = extractTestCode(lines, i);
 
-        // Find related source files
-        const relatedSourceFiles = findRelatedSourceFiles(filePath, content, rootDirectory);
-
         orphanTests.push({
           filePath,
           testName:
             describeStack.length > 0 ? `${describeStack.join(' > ')} > ${testName}` : testName,
           lineNumber,
           testCode,
-          relatedSourceFiles,
+          relatedSourceFiles: [], // Will be populated later
           // Phase 14: Ingestion Boundary — store full file source for quality analysis
           testSourceCode: content,
         });
@@ -225,12 +224,13 @@ function extractTestCode(lines: string[], startLine: number): string {
 
 /**
  * Find source files that might be related to a test file
+ * Uses ContentProvider for async file existence checks
  */
-function findRelatedSourceFiles(
+async function findRelatedSourceFiles(
   testFilePath: string,
   testContent: string,
-  rootDirectory: string,
-): string[] {
+  contentProvider: ContentProvider,
+): Promise<string[]> {
   const relatedFiles: string[] = [];
 
   // The source file for this test (e.g., foo.spec.ts -> foo.ts)
@@ -240,8 +240,7 @@ function findRelatedSourceFiles(
     .replace(/\.e2e-spec\.ts$/, '.ts');
 
   if (sourcePath !== testFilePath) {
-    const fullSourcePath = path.join(rootDirectory, sourcePath);
-    if (fs.existsSync(fullSourcePath)) {
+    if (await contentProvider.exists(sourcePath)) {
       relatedFiles.push(sourcePath);
     }
   }
@@ -261,8 +260,7 @@ function findRelatedSourceFiles(
 
       // Try with .ts extension
       const withTs = resolvedPath + '.ts';
-      const fullPath = path.join(rootDirectory, withTs);
-      if (fs.existsSync(fullPath)) {
+      if (await contentProvider.exists(withTs)) {
         relatedFiles.push(withTs);
       }
     }
@@ -320,8 +318,14 @@ export function createDiscoverFullscanNode(options: DiscoverFullscanNodeOptions 
         );
       }
 
-      // Try to use the tool if available and enabled (only if no filters - tool doesn't support filters yet)
-      if (useTool && !hasFilters && config.toolRegistry.hasTool('discover_orphans_fullscan')) {
+      // Check for fixture mode FIRST (before tool usage)
+      // Fixture mode uses in-memory file contents instead of filesystem
+      const fixtureFiles = state.fixtureFiles;
+      const fixtureAnnotations = state.fixtureAnnotations;
+      const isFixtureMode = state.fixtureMode || !!(fixtureFiles && Object.keys(fixtureFiles).length > 0);
+
+      // Try to use the tool if available and enabled (only if no filters and NOT fixture mode)
+      if (useTool && !hasFilters && !isFixtureMode && config.toolRegistry.hasTool('discover_orphans_fullscan')) {
         try {
           config.logger?.log('[DiscoverFullscanNode] Using discover_orphans_fullscan tool');
 
@@ -355,7 +359,7 @@ export function createDiscoverFullscanNode(options: DiscoverFullscanNodeOptions 
         }
       }
 
-      // Fallback: Direct implementation (also used when filters are specified)
+      // Fallback: Direct implementation (also used when filters are specified or fixture mode)
       let testFiles = state.repoStructure?.testFiles || [];
 
       // Apply path filters to test files
@@ -367,9 +371,18 @@ export function createDiscoverFullscanNode(options: DiscoverFullscanNodeOptions 
         );
       }
 
-      config.logger?.log(
-        `[DiscoverFullscanNode] Scanning ${testFiles.length} test files for orphan tests`,
-      );
+      if (isFixtureMode) {
+        config.logger?.log(
+          `[DiscoverFullscanNode] Fixture mode: scanning ${testFiles.length} test files`,
+        );
+      } else {
+        config.logger?.log(
+          `[DiscoverFullscanNode] Scanning ${testFiles.length} test files for orphan tests`,
+        );
+      }
+
+      // Get ContentProvider for non-fixture mode file operations
+      const contentProvider = getContentProvider(config, rootDirectory);
 
       const allOrphanTests: OrphanTestInfo[] = [];
 
@@ -382,8 +395,43 @@ export function createDiscoverFullscanNode(options: DiscoverFullscanNodeOptions 
         }
 
         try {
-          const orphans = parseTestFile(testFile, rootDirectory, annotationLookback);
-          allOrphanTests.push(...orphans);
+          // Get file content - either from fixture or via ContentProvider
+          let content: string;
+          if (isFixtureMode && fixtureFiles?.[testFile] !== undefined) {
+            content = fixtureFiles[testFile];
+          } else {
+            const readContent = await contentProvider.readFileOrNull(testFile);
+            if (readContent === null) {
+              config.logger?.warn(`[DiscoverFullscanNode] Could not read ${testFile}, skipping`);
+              continue;
+            }
+            content = readContent;
+          }
+
+          // Parse the test file content
+          const orphans = parseTestFileContent(testFile, content, annotationLookback);
+
+          // Find related source files (only in non-fixture mode)
+          if (!isFixtureMode) {
+            for (const orphan of orphans) {
+              orphan.relatedSourceFiles = await findRelatedSourceFiles(
+                testFile,
+                content,
+                contentProvider,
+              );
+            }
+          }
+
+          // In fixture mode, filter out tests that have annotations in the fixture registry
+          if (isFixtureMode && fixtureAnnotations) {
+            const filteredOrphans = orphans.filter((orphan) => {
+              const annotationKey = `${orphan.filePath}:${orphan.testName}`;
+              return !fixtureAnnotations[annotationKey];
+            });
+            allOrphanTests.push(...filteredOrphans);
+          } else {
+            allOrphanTests.push(...orphans);
+          }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
           config.logger?.warn(

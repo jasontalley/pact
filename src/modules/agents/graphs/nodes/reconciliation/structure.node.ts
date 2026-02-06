@@ -7,15 +7,17 @@
  * Uses the `get_repo_structure` tool via ToolRegistryService for enhanced
  * dependency analysis and topological ordering.
  *
+ * Phase 17: Refactored to use ContentProvider abstraction instead of direct fs calls.
+ *
  * @see docs/implementation-checklist-phase5.md Section 1.4
  * @see docs/implementation-checklist-phase5.md Section 3.3 (dependency graph)
+ * @see docs/implementation-checklist-phase17.md Section 17A.6
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
 import { NodeConfig } from '../types';
 import { ReconciliationGraphStateType, RepoStructure } from '../../types/reconciliation-state';
 import { RepoStructureResult } from '../../../tools/reconciliation-tools.service';
+import { ContentProvider, FilesystemContentProvider } from '../../../content';
 
 /**
  * Options for customizing structure node behavior
@@ -75,50 +77,10 @@ function matchesAnyPattern(filePath: string, patterns: string[]): boolean {
 }
 
 /**
- * Check if a path should be excluded
+ * Get or create ContentProvider from config
  */
-function shouldExclude(filePath: string, excludePatterns: string[]): boolean {
-  return excludePatterns.some((pattern) => filePath.includes(pattern));
-}
-
-/**
- * Walk directory recursively and collect files
- */
-function walkDirectory(rootDir: string, excludePatterns: string[], maxFiles: number): string[] {
-  const files: string[] = [];
-
-  function walk(dir: string): void {
-    if (files.length >= maxFiles) return;
-
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      // Skip directories we can't read
-      return;
-    }
-
-    for (const entry of entries) {
-      if (files.length >= maxFiles) break;
-
-      const fullPath = path.join(dir, entry.name);
-      const relativePath = path.relative(rootDir, fullPath);
-
-      // Check exclusions
-      if (shouldExclude(relativePath, excludePatterns)) {
-        continue;
-      }
-
-      if (entry.isDirectory()) {
-        walk(fullPath);
-      } else if (entry.isFile()) {
-        files.push(relativePath);
-      }
-    }
-  }
-
-  walk(rootDir);
-  return files;
+function getContentProvider(config: NodeConfig, basePath?: string): ContentProvider {
+  return config.contentProvider || new FilesystemContentProvider(basePath);
 }
 
 /**
@@ -145,6 +107,34 @@ export function createStructureNode(options: StructureNodeOptions = {}) {
     async (state: ReconciliationGraphStateType): Promise<Partial<ReconciliationGraphStateType>> => {
       const rootDirectory = state.rootDirectory || state.input?.rootDirectory || process.cwd();
       const inputIncludeDeps = state.input?.options?.analyzeDocs ?? includeDependencies;
+
+      // Check for fixture mode (golden test evaluation)
+      const fixtureFiles = state.fixtureFiles;
+      const fixtureTestFiles = state.fixtureTestFiles;
+
+      if (fixtureFiles && fixtureTestFiles && fixtureTestFiles.length > 0) {
+        config.logger?.log(
+          `[StructureNode] Fixture mode: ${Object.keys(fixtureFiles).length} files, ${fixtureTestFiles.length} test files`,
+        );
+
+        const allFiles = Object.keys(fixtureFiles);
+
+        const repoStructure: RepoStructure = {
+          files: allFiles,
+          testFiles: fixtureTestFiles,
+          dependencyEdges: undefined,
+          topologicalOrder: undefined,
+        };
+
+        return {
+          rootDirectory,
+          repoStructure,
+          currentPhase: 'discover',
+          startTime: state.startTime || new Date(),
+          // Pass fixture data through for downstream nodes
+          fixtureMode: true,
+        } as Partial<ReconciliationGraphStateType>;
+      }
 
       config.logger?.log(
         `[StructureNode] Scanning repository: ${rootDirectory} (useTool=${useTool}, deps=${inputIncludeDeps})`,
@@ -198,9 +188,15 @@ export function createStructureNode(options: StructureNodeOptions = {}) {
         }
       }
 
-      // Fallback: Direct implementation
+      // Fallback: Direct implementation using ContentProvider
       try {
-        const allFiles = walkDirectory(rootDirectory, excludePatterns, maxFiles);
+        const contentProvider = getContentProvider(config, rootDirectory);
+
+        // Use ContentProvider to walk the directory
+        const allFiles = await contentProvider.walkDirectory(rootDirectory, {
+          excludePatterns,
+          maxFiles,
+        });
 
         const testFiles: string[] = [];
         const sourceFiles: string[] = [];

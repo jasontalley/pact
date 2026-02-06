@@ -1,7 +1,12 @@
 /**
  * Atom status enum matching backend
  */
-export type AtomStatus = 'draft' | 'committed' | 'superseded';
+export type AtomStatus = 'proposed' | 'draft' | 'committed' | 'superseded';
+
+/**
+ * Scope filter for Pact Main governance
+ */
+export type AtomScope = 'all' | 'main' | 'proposed';
 
 /**
  * Atom category enum matching backend
@@ -71,6 +76,8 @@ export interface Atom {
   createdAt: string;
   updatedAt: string;
   committedAt: string | null;
+  promotedToMainAt: string | null;
+  changeSetId: string | null;
 }
 
 /**
@@ -145,6 +152,7 @@ export interface AcceptSuggestionDto {
 export interface AtomFilters {
   search?: string;
   status?: AtomStatus;
+  scope?: AtomScope;
   category?: AtomCategory;
   tags?: string[];
   tagsAll?: string[];

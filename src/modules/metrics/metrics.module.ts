@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Atom } from '../atoms/atom.entity';
 import { TestRecord } from '../agents/entities/test-record.entity';
@@ -9,6 +9,7 @@ import { CouplingMetricsService } from './coupling-metrics.service';
 import { EpistemicMetricsService } from './epistemic-metrics.service';
 import { MetricsHistoryService } from './metrics-history.service';
 import { MetricsController } from './metrics.controller';
+import { DriftModule } from '../drift/drift.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { MetricsController } from './metrics.controller';
       MetricsSnapshot,
       CoverageReport,
     ]),
+    forwardRef(() => DriftModule),
   ],
   controllers: [MetricsController],
   providers: [CouplingMetricsService, EpistemicMetricsService, MetricsHistoryService],

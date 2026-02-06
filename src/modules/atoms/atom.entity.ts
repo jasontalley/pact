@@ -3,8 +3,13 @@ import type { Validator } from '../validators/validator.entity';
 
 /**
  * Atom status represents the lifecycle state of an Intent Atom
+ *
+ * proposed   → Atom is part of a governed change set, awaiting approval
+ * draft      → Atom is a local working copy, mutable
+ * committed  → Atom is immutable, part of the canonical intent surface
+ * superseded → Atom has been replaced by a newer version
  */
-export type AtomStatus = 'draft' | 'committed' | 'superseded';
+export type AtomStatus = 'proposed' | 'draft' | 'committed' | 'superseded';
 
 /**
  * Category classification for Intent Atoms
@@ -70,7 +75,7 @@ export class Atom {
   qualityScore: number | null;
 
   @Column({ length: 20, default: 'draft' })
-  status: string; // draft, committed, superseded
+  status: string; // proposed, draft, committed, superseded
 
   @Column({ type: 'uuid', nullable: true })
   supersededBy: string | null;
@@ -80,6 +85,22 @@ export class Atom {
 
   @Column({ type: 'timestamp', nullable: true })
   committedAt: Date | null;
+
+  /**
+   * Timestamp when atom was promoted to Pact Main.
+   * Non-null means the atom is part of the authoritative intent surface.
+   * Set automatically when an atom is committed (directly or via change set).
+   */
+  @Column({ type: 'timestamp', nullable: true })
+  promotedToMainAt: Date | null;
+
+  /**
+   * ID of the change set molecule this atom belongs to.
+   * Only set for atoms with status 'proposed'.
+   * FK to molecules.id (not enforced at ORM level to avoid circular deps).
+   */
+  @Column({ type: 'uuid', nullable: true })
+  changeSetId: string | null;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   createdBy: string | null;

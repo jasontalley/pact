@@ -7,6 +7,7 @@
 import { Logger } from '@nestjs/common';
 import { LLMService } from '../../../../common/llm/llm.service';
 import { ToolRegistryService } from '../../tools/tool-registry.service';
+import { ContentProvider, WriteProvider } from '../../content';
 
 /**
  * Configuration passed to all nodes via dependency injection
@@ -18,6 +19,10 @@ export interface NodeConfig {
   toolRegistry: ToolRegistryService;
   /** Optional logger instance */
   logger?: Logger;
+  /** Content provider for filesystem abstraction (optional for backward compatibility) */
+  contentProvider?: ContentProvider;
+  /** Write provider for file modifications (optional, used by apply service) */
+  writeProvider?: WriteProvider;
 }
 
 /**

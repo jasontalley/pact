@@ -10,6 +10,18 @@
 export type ReconciliationMode = 'full-scan' | 'delta';
 
 /**
+ * Exception lanes control drift convergence deadlines (Phase 16)
+ */
+export type ExceptionLane = 'normal' | 'hotfix-exception' | 'spike-exception';
+
+/**
+ * Attestation type determines whether drift debt is created (Phase 16)
+ * - local: Advisory only, no drift records created (default for dev)
+ * - ci-attested: Canonical, creates/updates drift records (CI pipeline)
+ */
+export type AttestationType = 'local' | 'ci-attested';
+
+/**
  * Run status
  */
 export type RunStatus =
@@ -82,6 +94,28 @@ export interface ReconciliationOptions {
    * Uses minimatch glob patterns.
    */
   excludeFilePatterns?: string[];
+
+  // Phase 16: Drift management options
+
+  /**
+   * Exception lane for drift convergence policy (default: 'normal')
+   * - normal: 14-day convergence window
+   * - hotfix-exception: 3-day expedited window
+   * - spike-exception: 7-day research window
+   */
+  exceptionLane?: ExceptionLane;
+
+  /**
+   * Attestation type (default: 'local')
+   * - local: Advisory only, no drift records created
+   * - ci-attested: Canonical, creates/updates drift debt
+   */
+  attestationType?: AttestationType;
+
+  /**
+   * Justification for exception lane (required for hotfix/spike)
+   */
+  exceptionJustification?: string;
 }
 
 /**

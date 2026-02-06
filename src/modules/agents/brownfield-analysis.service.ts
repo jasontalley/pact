@@ -1,21 +1,21 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
-import * as fs from 'fs';
 import * as path from 'path';
 import { Atom } from '../atoms/atom.entity';
 import { AgentAction } from './agent-action.entity';
 import { TestAtomCouplingService } from './test-atom-coupling.service';
 import { AtomQualityService } from '../validators/atom-quality.service';
 import { LLMService } from '../../common/llm/llm.service';
-import { ContextBuilderService } from './context-builder.service';
+import { ContextBuilderService, CONTENT_PROVIDER } from './context-builder.service';
 import {
   BrownfieldAnalysisDto,
   BrownfieldAnalysisResult,
   InferredAtom,
   OrphanTestInfo,
 } from './dto/brownfield-analysis.dto';
+import { ContentProvider, FilesystemContentProvider } from './content';
 
 /**
  * State for the brownfield analysis agent
@@ -64,6 +64,8 @@ export class BrownfieldAnalysisService {
     '**/dist/**',
   ];
 
+  private contentProvider: ContentProvider;
+
   constructor(
     @InjectRepository(Atom)
     private atomRepository: Repository<Atom>,
@@ -74,7 +76,17 @@ export class BrownfieldAnalysisService {
     private readonly testAtomCouplingService: TestAtomCouplingService,
     private readonly atomQualityService: AtomQualityService,
     private readonly contextBuilder: ContextBuilderService,
-  ) {}
+    @Optional() @Inject(CONTENT_PROVIDER) contentProvider?: ContentProvider,
+  ) {
+    this.contentProvider = contentProvider || new FilesystemContentProvider();
+  }
+
+  /**
+   * Set or replace the content provider
+   */
+  setContentProvider(provider: ContentProvider): void {
+    this.contentProvider = provider;
+  }
 
   /**
    * Main entry point for brownfield analysis
@@ -194,8 +206,8 @@ export class BrownfieldAnalysisService {
 
     const orphanTests: OrphanTestInfo[] = await Promise.all(
       couplingResult.orphanTests.map(async (orphan) => {
-        const testCode = this.extractTestCode(orphan.filePath, orphan.lineNumber);
-        const relatedSourceFile = this.findRelatedSourceFile(orphan.filePath);
+        const testCode = await this.extractTestCode(orphan.filePath, orphan.lineNumber);
+        const relatedSourceFile = await this.findRelatedSourceFile(orphan.filePath);
 
         return {
           filePath: orphan.filePath,
@@ -230,7 +242,7 @@ export class BrownfieldAnalysisService {
 
     this.logger.log('Analyzing documentation...');
 
-    const docFiles = this.findDocumentationFiles(state.rootDirectory);
+    const docFiles = await this.findDocumentationFiles(state.rootDirectory);
     const docContent = await this.readDocumentationFiles(docFiles);
 
     return {
@@ -573,9 +585,13 @@ If the test is too vague, implementation-specific, describes multiple behaviors,
   /**
    * Extract test code snippet from file
    */
-  private extractTestCode(filePath: string, lineNumber: number): string {
+  private async extractTestCode(filePath: string, lineNumber: number): Promise<string> {
     try {
-      const content = fs.readFileSync(filePath, 'utf-8');
+      const content = await this.contentProvider.readFileOrNull(filePath);
+      if (content === null) {
+        this.logger.warn(`File not found: ${filePath}`);
+        return '';
+      }
       const lines = content.split('\n');
 
       // Extract test and surrounding context (20 lines before, 50 lines after)
@@ -584,7 +600,8 @@ If the test is too vague, implementation-specific, describes multiple behaviors,
 
       return lines.slice(start, end).join('\n');
     } catch (error) {
-      this.logger.warn(`Failed to extract test code from ${filePath}: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Failed to extract test code from ${filePath}: ${errorMessage}`);
       return '';
     }
   }
@@ -695,14 +712,14 @@ If the test is too vague, implementation-specific, describes multiple behaviors,
   /**
    * Find related source file for a test file
    */
-  private findRelatedSourceFile(testFilePath: string): string | undefined {
+  private async findRelatedSourceFile(testFilePath: string): Promise<string | undefined> {
     // Common patterns: test.spec.ts -> test.ts, test.test.ts -> test.ts
     const sourcePath = testFilePath
       .replace(/\.spec\.ts$/, '.ts')
       .replace(/\.test\.ts$/, '.ts')
       .replace(/\.e2e-spec\.ts$/, '.ts');
 
-    if (fs.existsSync(sourcePath) && sourcePath !== testFilePath) {
+    if ((await this.contentProvider.exists(sourcePath)) && sourcePath !== testFilePath) {
       return sourcePath;
     }
 
@@ -712,41 +729,31 @@ If the test is too vague, implementation-specific, describes multiple behaviors,
   /**
    * Find documentation files in repository
    */
-  private findDocumentationFiles(rootDirectory: string): string[] {
-    const docFiles: string[] = [];
+  private async findDocumentationFiles(rootDirectory: string): Promise<string[]> {
+    try {
+      // Use ContentProvider to walk the directory
+      const allFiles = await this.contentProvider.walkDirectory(rootDirectory, {
+        excludePatterns: ['node_modules', 'dist', '.git', '.claude'],
+        maxFiles: 200,
+        includeExtensions: ['.md'],
+      });
 
-    const walkDir = (dir: string) => {
-      if (!fs.existsSync(dir)) {
-        return;
-      }
-
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
-        const relativePath = path.relative(rootDirectory, fullPath);
-
-        // Check exclusions
-        if (this.matchesPatterns(relativePath, this.defaultExcludePatterns)) {
+      // Filter to match doc patterns and exclude patterns
+      const docFiles: string[] = [];
+      for (const relativePath of allFiles) {
+        // Check exclusions first
+        if (this.matchesPatterns(relativePath, this.excludeDocPatterns)) {
           continue;
         }
-
-        if (entry.isDirectory()) {
-          walkDir(fullPath);
-        } else if (entry.isFile()) {
-          // Check exclusions first
-          if (this.matchesPatterns(relativePath, this.excludeDocPatterns)) {
-            continue;
-          }
-          if (this.matchesPatterns(relativePath, this.defaultDocPatterns)) {
-            docFiles.push(fullPath);
-          }
+        if (this.matchesPatterns(relativePath, this.defaultDocPatterns)) {
+          docFiles.push(path.join(rootDirectory, relativePath));
         }
       }
-    };
 
-    walkDir(rootDirectory);
-    return docFiles.slice(0, 50); // Limit to 50 files to avoid overwhelming context
+      return docFiles.slice(0, 50); // Limit to 50 files to avoid overwhelming context
+    } catch {
+      return [];
+    }
   }
 
   /**
@@ -757,11 +764,13 @@ If the test is too vague, implementation-specific, describes multiple behaviors,
 
     for (const filePath of filePaths) {
       try {
-        const content = fs.readFileSync(filePath, 'utf-8');
+        const content = await this.contentProvider.readFileOrNull(filePath);
+        if (content === null) continue;
         const relativePath = path.relative(process.cwd(), filePath);
         contents.push(`\n--- ${relativePath} ---\n${content.substring(0, 2000)}`);
       } catch (error) {
-        this.logger.warn(`Failed to read documentation file ${filePath}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`Failed to read documentation file ${filePath}: ${errorMessage}`);
       }
     }
 

@@ -1,3 +1,4 @@
+import { AxiosError } from 'axios';
 import { apiClient } from './client';
 
 export interface CoverageDimensionSummary {
@@ -43,10 +44,21 @@ export interface CoverageHistoryResponse {
 }
 
 export const coverageApi = {
-  getLatest: async (projectId?: string): Promise<CoverageReportResponse> => {
-    const params = projectId ? { projectId } : {};
-    const response = await apiClient.get<CoverageReportResponse>('/coverage/latest', { params });
-    return response.data;
+  /**
+   * Get the latest coverage report. Returns null if no reports exist (404).
+   */
+  getLatest: async (projectId?: string): Promise<CoverageReportResponse | null> => {
+    try {
+      const params = projectId ? { projectId } : {};
+      const response = await apiClient.get<CoverageReportResponse>('/coverage/latest', { params });
+      return response.data;
+    } catch (error) {
+      // 404 means no coverage reports exist yet - this is expected, not an error
+      if (error instanceof AxiosError && error.response?.status === 404) {
+        return null;
+      }
+      throw error;
+    }
   },
 
   getById: async (id: string): Promise<CoverageReportResponse> => {

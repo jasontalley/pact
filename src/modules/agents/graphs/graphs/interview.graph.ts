@@ -56,14 +56,20 @@ export interface InterviewGraphOptions {
 }
 
 /**
- * Routing function: after generate_questions, decide whether to
- * extract atoms (if done) or end (interrupt handles the loop).
+ * Routing function: after generate_questions, decide next step based on currentPhase.
+ *
+ * The generate-questions node sets currentPhase before returning:
+ * - 'extract_atoms': fixture/stochastic mode exhausted or user done → extract
+ * - 'generate_questions': more rounds needed (fixture/stochastic loop)
+ * - Otherwise: interactive mode ended via NodeInterrupt → END
  */
 function afterGenerateQuestions(state: InterviewGraphStateType): string {
   if (state.currentPhase === 'extract_atoms') {
     return 'extract_atoms';
   }
-  // If still in waiting_for_response, the NodeInterrupt will handle it
+  if (state.currentPhase === 'generate_questions') {
+    return 'generate_questions';
+  }
   return END;
 }
 
@@ -93,6 +99,7 @@ export function createInterviewGraph(config: NodeConfig, options?: InterviewGrap
     .addEdge('analyze_intent', 'generate_questions')
     .addConditionalEdges('generate_questions', afterGenerateQuestions, {
       extract_atoms: 'extract_atoms',
+      generate_questions: 'generate_questions', // Loop back for fixture/stochastic mode
       [END]: END,
     })
     .addEdge('extract_atoms', 'compose_molecule')

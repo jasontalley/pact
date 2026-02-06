@@ -12,6 +12,10 @@ const statusConfig: Record<
   AtomStatus,
   { label: string; className: string }
 > = {
+  proposed: {
+    label: 'Proposed',
+    className: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+  },
   draft: {
     label: 'Draft',
     className: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',

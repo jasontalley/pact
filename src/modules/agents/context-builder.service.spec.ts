@@ -9,24 +9,120 @@
  * - Focused context summary creation
  */
 import { Test, TestingModule } from '@nestjs/testing';
-import { ContextBuilderService, TestAnalysis } from './context-builder.service';
-import * as fs from 'fs';
+import { ContextBuilderService, TestAnalysis, CONTENT_PROVIDER } from './context-builder.service';
 import * as path from 'path';
+import { ContentProvider, FileEntry } from './content';
 
-// Mock fs module
-jest.mock('fs');
+/**
+ * Mock ContentProvider for testing
+ *
+ * Supports both path-specific content and "default" content that gets returned
+ * for any unspecified path (similar to how jest.mockReturnValue works).
+ */
+class MockContentProvider implements ContentProvider {
+  readonly providerType = 'filesystem' as const;
+
+  fileContents: Map<string, string> = new Map();
+  fileExists: Map<string, boolean> = new Map();
+  directoryEntries: Map<string, FileEntry[]> = new Map();
+  walkResults: Map<string, string[]> = new Map();
+
+  // Default values (applied when no specific path match)
+  defaultContent: string | null = null;
+  defaultExists: boolean = false;
+  defaultDirectoryEntries: FileEntry[] = [];
+
+  async readFile(filePath: string): Promise<string> {
+    if (this.fileContents.has(filePath)) {
+      return this.fileContents.get(filePath)!;
+    }
+    if (this.defaultContent !== null) {
+      return this.defaultContent;
+    }
+    throw new Error(`File not found: ${filePath}`);
+  }
+
+  async readFileOrNull(filePath: string): Promise<string | null> {
+    if (this.fileContents.has(filePath)) {
+      return this.fileContents.get(filePath)!;
+    }
+    return this.defaultContent;
+  }
+
+  async exists(filePath: string): Promise<boolean> {
+    if (this.fileExists.has(filePath)) {
+      return this.fileExists.get(filePath)!;
+    }
+    if (this.fileContents.has(filePath)) {
+      return true;
+    }
+    return this.defaultExists;
+  }
+
+  async listFiles(dir: string): Promise<FileEntry[]> {
+    return this.directoryEntries.get(dir) ?? this.defaultDirectoryEntries;
+  }
+
+  async walkDirectory(rootDir: string): Promise<string[]> {
+    return this.walkResults.get(rootDir) ?? [];
+  }
+
+  // Helper methods for setting up mocks
+  setFileContent(filePath: string, content: string): void {
+    this.fileContents.set(filePath, content);
+    this.fileExists.set(filePath, true);
+  }
+
+  setDirectoryEntries(dir: string, entries: FileEntry[]): void {
+    this.directoryEntries.set(dir, entries);
+  }
+
+  setWalkResults(dir: string, files: string[]): void {
+    this.walkResults.set(dir, files);
+  }
+
+  // Default mock behavior (like jest.mockReturnValue)
+  setDefaultContent(content: string): void {
+    this.defaultContent = content;
+  }
+
+  setDefaultExists(exists: boolean): void {
+    this.defaultExists = exists;
+  }
+
+  setDefaultDirectoryEntries(entries: FileEntry[]): void {
+    this.defaultDirectoryEntries = entries;
+  }
+
+  reset(): void {
+    this.fileContents.clear();
+    this.fileExists.clear();
+    this.directoryEntries.clear();
+    this.walkResults.clear();
+    this.defaultContent = null;
+    this.defaultExists = false;
+    this.defaultDirectoryEntries = [];
+  }
+}
 
 describe('ContextBuilderService', () => {
   let service: ContextBuilderService;
-  const mockFs = fs as jest.Mocked<typeof fs>;
+  let mockContentProvider: MockContentProvider;
 
   beforeEach(async () => {
+    mockContentProvider = new MockContentProvider();
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [ContextBuilderService],
+      providers: [
+        ContextBuilderService,
+        {
+          provide: CONTENT_PROVIDER,
+          useValue: mockContentProvider,
+        },
+      ],
     }).compile();
 
     service = module.get<ContextBuilderService>(ContextBuilderService);
-    jest.clearAllMocks();
   });
 
   describe('service instantiation', () => {
@@ -64,9 +160,8 @@ describe('UserService', () => {
 `;
 
     beforeEach(() => {
-      mockFs.readFileSync.mockReturnValue(sampleTestCode);
-      mockFs.existsSync.mockReturnValue(false);
-      mockFs.readdirSync.mockReturnValue([]);
+      mockContentProvider.reset();
+      mockContentProvider.setFileContent('/test/user.service.spec.ts', sampleTestCode);
     });
 
     it('should analyze test and return TestAnalysis', async () => {
@@ -149,10 +244,7 @@ describe('UserService', () => {
     });
 
     it('should handle missing file gracefully', async () => {
-      mockFs.readFileSync.mockImplementation(() => {
-        throw new Error('File not found');
-      });
-
+      // Don't set any file content for nonexistent file
       const result = await service.analyzeTest(
         '/test/nonexistent.spec.ts',
         'test name',
@@ -182,67 +274,67 @@ describe('UserService', () => {
       technicalConcepts: ['validation'],
     };
 
-    it('should build focused context from analysis', () => {
-      const context = service.buildFocusedContext(mockAnalysis);
+    it('should build focused context from analysis', async () => {
+      const context = await service.buildFocusedContext(mockAnalysis);
 
       expect(context).toContain('## Test: should authenticate user with valid credentials');
       expect(context).toContain('### Assertions');
       expect(typeof context).toBe('string');
     });
 
-    it('should include expected behavior section', () => {
-      const context = service.buildFocusedContext(mockAnalysis);
+    it('should include expected behavior section', async () => {
+      const context = await service.buildFocusedContext(mockAnalysis);
 
       expect(context).toContain('### Expected Behavior');
       expect(context).toContain('Function is invoked');
     });
 
-    it('should include domain concepts', () => {
-      const context = service.buildFocusedContext(mockAnalysis);
+    it('should include domain concepts', async () => {
+      const context = await service.buildFocusedContext(mockAnalysis);
 
       expect(context).toContain('### Domain Concepts');
       expect(context).toContain('user');
       expect(context).toContain('authentication');
     });
 
-    it('should include documentation snippets', () => {
-      const context = service.buildFocusedContext(mockAnalysis);
+    it('should include documentation snippets', async () => {
+      const context = await service.buildFocusedContext(mockAnalysis);
 
       expect(context).toContain('### Relevant Documentation');
       expect(context).toContain('docs/auth.md');
     });
 
-    it('should handle empty domain concepts', () => {
+    it('should handle empty domain concepts', async () => {
       const analysisWithoutConcepts = {
         ...mockAnalysis,
         domainConcepts: [],
       };
 
-      const context = service.buildFocusedContext(analysisWithoutConcepts);
+      const context = await service.buildFocusedContext(analysisWithoutConcepts);
 
       expect(context).not.toContain('### Domain Concepts');
     });
 
-    it('should handle empty documentation', () => {
+    it('should handle empty documentation', async () => {
       const analysisWithoutDocs = {
         ...mockAnalysis,
         documentationSnippets: [],
       };
 
-      const context = service.buildFocusedContext(analysisWithoutDocs);
+      const context = await service.buildFocusedContext(analysisWithoutDocs);
 
       expect(context).not.toContain('### Relevant Documentation');
     });
 
-    it('should summarize source files', () => {
-      mockFs.readFileSync.mockReturnValue(`
+    it('should summarize source files', async () => {
+      mockContentProvider.setDefaultContent(`
         export class AuthService {
           async authenticate(credentials: any) { return true; }
         }
       `);
-      mockFs.existsSync.mockReturnValue(true);
+      mockContentProvider.setDefaultExists(true);
 
-      const context = service.buildFocusedContext(mockAnalysis);
+      const context = await service.buildFocusedContext(mockAnalysis);
 
       expect(context).toContain('### Related Source Code');
     });
@@ -251,13 +343,13 @@ describe('UserService', () => {
   describe('private helper methods (via analyzeTest)', () => {
     describe('extractAssertions', () => {
       it('should extract toBe assertions', async () => {
-        mockFs.readFileSync.mockReturnValue(`
+        mockContentProvider.setDefaultContent(`
           it('test', () => {
             expect(result).toBe(true);
           });
         `);
-        mockFs.existsSync.mockReturnValue(false);
-        mockFs.readdirSync.mockReturnValue([]);
+        mockContentProvider.setDefaultExists(false);
+        mockContentProvider.setDefaultDirectoryEntries([]);
 
         const result = await service.analyzeTest('/test.spec.ts', 'test', 1, '/');
 
@@ -265,13 +357,13 @@ describe('UserService', () => {
       });
 
       it('should extract toHaveBeenCalled assertions', async () => {
-        mockFs.readFileSync.mockReturnValue(`
+        mockContentProvider.setDefaultContent(`
           it('test', () => {
             expect(mockFn).toHaveBeenCalled();
           });
         `);
-        mockFs.existsSync.mockReturnValue(false);
-        mockFs.readdirSync.mockReturnValue([]);
+        mockContentProvider.setDefaultExists(false);
+        mockContentProvider.setDefaultDirectoryEntries([]);
 
         const result = await service.analyzeTest('/test.spec.ts', 'test', 1, '/');
 
@@ -280,13 +372,13 @@ describe('UserService', () => {
 
       it('should extract toThrow assertions', async () => {
         // Use simpler code without nested parens (regex limitation)
-        mockFs.readFileSync.mockReturnValue(`
+        mockContentProvider.setDefaultContent(`
           it('test', () => {
             expect(fn).toThrow(Error);
           });
         `);
-        mockFs.existsSync.mockReturnValue(false);
-        mockFs.readdirSync.mockReturnValue([]);
+        mockContentProvider.setDefaultExists(false);
+        mockContentProvider.setDefaultDirectoryEntries([]);
 
         const result = await service.analyzeTest('/test.spec.ts', 'test', 1, '/');
 
@@ -294,13 +386,13 @@ describe('UserService', () => {
       });
 
       it('should include test description as assertion', async () => {
-        mockFs.readFileSync.mockReturnValue(`
+        mockContentProvider.setDefaultContent(`
           it('should validate user input', () => {
             expect(true).toBe(true);
           });
         `);
-        mockFs.existsSync.mockReturnValue(false);
-        mockFs.readdirSync.mockReturnValue([]);
+        mockContentProvider.setDefaultExists(false);
+        mockContentProvider.setDefaultDirectoryEntries([]);
 
         const result = await service.analyzeTest(
           '/test.spec.ts',
@@ -315,12 +407,12 @@ describe('UserService', () => {
 
     describe('extractImports', () => {
       it('should extract named imports', async () => {
-        mockFs.readFileSync.mockReturnValue(`
+        mockContentProvider.setDefaultContent(`
           import { Service } from './service';
           it('test', () => {});
         `);
-        mockFs.existsSync.mockReturnValue(false);
-        mockFs.readdirSync.mockReturnValue([]);
+        mockContentProvider.setDefaultExists(false);
+        mockContentProvider.setDefaultDirectoryEntries([]);
 
         const result = await service.analyzeTest('/test.spec.ts', 'test', 1, '/');
 
@@ -328,12 +420,12 @@ describe('UserService', () => {
       });
 
       it('should extract wildcard imports', async () => {
-        mockFs.readFileSync.mockReturnValue(`
+        mockContentProvider.setDefaultContent(`
           import * as utils from './utils';
           it('test', () => {});
         `);
-        mockFs.existsSync.mockReturnValue(false);
-        mockFs.readdirSync.mockReturnValue([]);
+        mockContentProvider.setDefaultExists(false);
+        mockContentProvider.setDefaultDirectoryEntries([]);
 
         const result = await service.analyzeTest('/test.spec.ts', 'test', 1, '/');
 
@@ -343,7 +435,7 @@ describe('UserService', () => {
 
     describe('extractFunctionCalls', () => {
       it('should filter out test framework functions', async () => {
-        mockFs.readFileSync.mockReturnValue(`
+        mockContentProvider.setDefaultContent(`
           describe('test', () => {
             beforeEach(() => {});
             it('test', () => {
@@ -351,8 +443,8 @@ describe('UserService', () => {
             });
           });
         `);
-        mockFs.existsSync.mockReturnValue(false);
-        mockFs.readdirSync.mockReturnValue([]);
+        mockContentProvider.setDefaultExists(false);
+        mockContentProvider.setDefaultDirectoryEntries([]);
 
         const result = await service.analyzeTest('/test.spec.ts', 'test', 1, '/');
 
@@ -364,14 +456,14 @@ describe('UserService', () => {
       });
 
       it('should extract actual function calls', async () => {
-        mockFs.readFileSync.mockReturnValue(`
+        mockContentProvider.setDefaultContent(`
           it('test', () => {
             const result = service.processData(input);
             expect(result).toBeDefined();
           });
         `);
-        mockFs.existsSync.mockReturnValue(false);
-        mockFs.readdirSync.mockReturnValue([]);
+        mockContentProvider.setDefaultExists(false);
+        mockContentProvider.setDefaultDirectoryEntries([]);
 
         const result = await service.analyzeTest('/test.spec.ts', 'test', 1, '/');
 
@@ -381,12 +473,12 @@ describe('UserService', () => {
 
     describe('extractTestSetup', () => {
       it('should detect mock usage', async () => {
-        mockFs.readFileSync.mockReturnValue(`
+        mockContentProvider.setDefaultContent(`
           jest.mock('./service');
           it('test', () => {});
         `);
-        mockFs.existsSync.mockReturnValue(false);
-        mockFs.readdirSync.mockReturnValue([]);
+        mockContentProvider.setDefaultExists(false);
+        mockContentProvider.setDefaultDirectoryEntries([]);
 
         const result = await service.analyzeTest('/test.spec.ts', 'test', 1, '/');
 
@@ -394,12 +486,12 @@ describe('UserService', () => {
       });
 
       it('should detect fixture usage', async () => {
-        mockFs.readFileSync.mockReturnValue(`
+        mockContentProvider.setDefaultContent(`
           const fixture = createFixture();
           it('test', () => {});
         `);
-        mockFs.existsSync.mockReturnValue(false);
-        mockFs.readdirSync.mockReturnValue([]);
+        mockContentProvider.setDefaultExists(false);
+        mockContentProvider.setDefaultDirectoryEntries([]);
 
         const result = await service.analyzeTest('/test.spec.ts', 'test', 1, '/');
 
@@ -409,13 +501,13 @@ describe('UserService', () => {
 
     describe('inferExpectedBehavior', () => {
       it('should infer function invocation behavior', async () => {
-        mockFs.readFileSync.mockReturnValue(`
+        mockContentProvider.setDefaultContent(`
           it('test', () => {
             expect(mockFn).toHaveBeenCalled();
           });
         `);
-        mockFs.existsSync.mockReturnValue(false);
-        mockFs.readdirSync.mockReturnValue([]);
+        mockContentProvider.setDefaultExists(false);
+        mockContentProvider.setDefaultDirectoryEntries([]);
 
         const result = await service.analyzeTest('/test.spec.ts', 'test', 1, '/');
 
@@ -424,13 +516,13 @@ describe('UserService', () => {
 
       it('should infer error handling behavior', async () => {
         // Use simpler assertion without nested parens (regex limitation)
-        mockFs.readFileSync.mockReturnValue(`
+        mockContentProvider.setDefaultContent(`
           it('test', () => {
             expect(fn).toThrow(Error);
           });
         `);
-        mockFs.existsSync.mockReturnValue(false);
-        mockFs.readdirSync.mockReturnValue([]);
+        mockContentProvider.setDefaultExists(false);
+        mockContentProvider.setDefaultDirectoryEntries([]);
 
         const result = await service.analyzeTest('/test.spec.ts', 'test', 1, '/');
 
@@ -438,13 +530,13 @@ describe('UserService', () => {
       });
 
       it('should infer value return behavior', async () => {
-        mockFs.readFileSync.mockReturnValue(`
+        mockContentProvider.setDefaultContent(`
           it('test', () => {
             expect(result).toBe(expected);
           });
         `);
-        mockFs.existsSync.mockReturnValue(false);
-        mockFs.readdirSync.mockReturnValue([]);
+        mockContentProvider.setDefaultExists(false);
+        mockContentProvider.setDefaultDirectoryEntries([]);
 
         const result = await service.analyzeTest('/test.spec.ts', 'test', 1, '/');
 
@@ -452,13 +544,13 @@ describe('UserService', () => {
       });
 
       it('should infer object structure behavior', async () => {
-        mockFs.readFileSync.mockReturnValue(`
+        mockContentProvider.setDefaultContent(`
           it('test', () => {
             expect(obj).toHaveProperty('id');
           });
         `);
-        mockFs.existsSync.mockReturnValue(false);
-        mockFs.readdirSync.mockReturnValue([]);
+        mockContentProvider.setDefaultExists(false);
+        mockContentProvider.setDefaultDirectoryEntries([]);
 
         const result = await service.analyzeTest('/test.spec.ts', 'test', 1, '/');
 
@@ -477,9 +569,9 @@ describe('UserService', () => {
         ['notification', 'should send notification'],
         ['email', 'should validate email'],
       ])('should extract domain concept "%s" from test name "%s"', async (concept, testName) => {
-        mockFs.readFileSync.mockReturnValue(`it('${testName}', () => {});`);
-        mockFs.existsSync.mockReturnValue(false);
-        mockFs.readdirSync.mockReturnValue([]);
+        mockContentProvider.setDefaultContent(`it('${testName}', () => {});`);
+        mockContentProvider.setDefaultExists(false);
+        mockContentProvider.setDefaultDirectoryEntries([]);
 
         const result = await service.analyzeTest('/test.spec.ts', testName, 1, '/');
 
@@ -498,13 +590,13 @@ describe('UserService', () => {
       ])(
         'should extract technical concept "%s" from function call "%s"',
         async (concept, funcCall) => {
-          mockFs.readFileSync.mockReturnValue(`
+          mockContentProvider.setDefaultContent(`
           it('test', () => {
             ${funcCall}();
           });
         `);
-          mockFs.existsSync.mockReturnValue(false);
-          mockFs.readdirSync.mockReturnValue([]);
+          mockContentProvider.setDefaultExists(false);
+          mockContentProvider.setDefaultDirectoryEntries([]);
 
           const result = await service.analyzeTest('/test.spec.ts', 'test', 1, '/');
 
@@ -515,14 +607,13 @@ describe('UserService', () => {
 
     describe('findRelatedSourceFiles', () => {
       it('should find corresponding source file for test', async () => {
-        mockFs.readFileSync.mockReturnValue(`
+        mockContentProvider.setDefaultContent(`
           import { UserService } from './user.service';
           it('test', () => {});
         `);
-        mockFs.existsSync.mockImplementation((filePath: string) => {
-          return filePath === '/src/user.service.ts';
-        });
-        mockFs.readdirSync.mockReturnValue([]);
+        // Set the source file as existing
+        mockContentProvider.fileExists.set('/src/user.service.ts', true);
+        mockContentProvider.setDefaultDirectoryEntries([]);
 
         const result = await service.analyzeTest('/src/user.service.spec.ts', 'test', 1, '/');
 
@@ -530,14 +621,13 @@ describe('UserService', () => {
       });
 
       it('should resolve relative imports', async () => {
-        mockFs.readFileSync.mockReturnValue(`
+        mockContentProvider.setDefaultContent(`
           import { Helper } from './helpers/helper';
           it('test', () => {});
         `);
-        mockFs.existsSync.mockImplementation((filePath: string) => {
-          return filePath.includes('helper.ts');
-        });
-        mockFs.readdirSync.mockReturnValue([]);
+        // Set helper.ts as existing
+        mockContentProvider.fileExists.set('/src/helpers/helper.ts', true);
+        mockContentProvider.setDefaultDirectoryEntries([]);
 
         const result = await service.analyzeTest('/src/test.spec.ts', 'test', 1, '/');
 
@@ -547,10 +637,14 @@ describe('UserService', () => {
 
     describe('findRelatedTestFiles', () => {
       it('should find other test files in same directory', async () => {
-        mockFs.readFileSync.mockReturnValue('it("test", () => {});');
-        mockFs.existsSync.mockReturnValue(false);
-        // readdirSync without withFileTypes returns string arrays
-        mockFs.readdirSync.mockReturnValue(['user.spec.ts', 'auth.spec.ts', 'other.ts'] as any);
+        mockContentProvider.setDefaultContent('it("test", () => {});');
+        mockContentProvider.setDefaultExists(false);
+        // Set directory entries for the test's directory
+        mockContentProvider.setDirectoryEntries('/src', [
+          { path: 'user.spec.ts', isDirectory: false },
+          { path: 'auth.spec.ts', isDirectory: false },
+          { path: 'other.ts', isDirectory: false },
+        ]);
 
         const result = await service.analyzeTest('/src/test.spec.ts', 'test', 1, '/');
 
@@ -559,10 +653,13 @@ describe('UserService', () => {
       });
 
       it('should exclude the current test file', async () => {
-        mockFs.readFileSync.mockReturnValue('it("test", () => {});');
-        mockFs.existsSync.mockReturnValue(false);
-        // readdirSync without withFileTypes returns string arrays
-        mockFs.readdirSync.mockReturnValue(['test.spec.ts', 'other.spec.ts'] as any);
+        mockContentProvider.setDefaultContent('it("test", () => {});');
+        mockContentProvider.setDefaultExists(false);
+        // Set directory entries for the test's directory
+        mockContentProvider.setDirectoryEntries('/src', [
+          { path: 'test.spec.ts', isDirectory: false },
+          { path: 'other.spec.ts', isDirectory: false },
+        ]);
 
         const result = await service.analyzeTest('/src/test.spec.ts', 'test', 1, '/src');
 
@@ -586,9 +683,9 @@ describe('Suite', () => {
   });
 });
 `;
-      mockFs.readFileSync.mockReturnValue(testCode);
-      mockFs.existsSync.mockReturnValue(false);
-      mockFs.readdirSync.mockReturnValue([]);
+      mockContentProvider.setDefaultContent(testCode);
+      mockContentProvider.setDefaultExists(false);
+      mockContentProvider.setDefaultDirectoryEntries([]);
 
       const result = await service.analyzeTest('/test.spec.ts', 'should do something', 3, '/');
 
@@ -605,9 +702,9 @@ it('test with nested braces', () => {
   }
 });
 `;
-      mockFs.readFileSync.mockReturnValue(testCode);
-      mockFs.existsSync.mockReturnValue(false);
-      mockFs.readdirSync.mockReturnValue([]);
+      mockContentProvider.setDefaultContent(testCode);
+      mockContentProvider.setDefaultExists(false);
+      mockContentProvider.setDefaultDirectoryEntries([]);
 
       const result = await service.analyzeTest('/test.spec.ts', 'test with nested braces', 2, '/');
 

@@ -46,6 +46,7 @@ import {
   useStartReconciliation,
   useSubmitReview,
   useApplyRecommendations,
+  useCreateChangeSetFromRun,
 } from '@/hooks/reconciliation';
 import type {
   StartReconciliationDto,
@@ -365,9 +366,14 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
     }
   }, [step, runId, config, pendingReview, atomDecisions, moleculeDecisions]);
 
+  // Change set creation state
+  const [changeSetName, setChangeSetName] = useState('');
+  const [showChangeSetInput, setShowChangeSetInput] = useState(false);
+
   const startMutation = useStartReconciliation();
   const submitReviewMutation = useSubmitReview();
   const applyMutation = useApplyRecommendations();
+  const createChangeSetMutation = useCreateChangeSetFromRun();
 
   const hasAvailableProvider = providers?.availableCount ? providers.availableCount > 0 : false;
   const canStart = hasAvailableProvider && !isDailyBudgetExceeded;
@@ -493,6 +499,46 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
       {
         onSuccess: () => {
           setStep('complete');
+        },
+      }
+    );
+  };
+
+  // Handle create change set (governed path)
+  const handleCreateChangeSet = () => {
+    if (!runId) return;
+
+    // Get approved recommendations
+    const selections: string[] = [];
+    atomDecisions.forEach((decision, tempId) => {
+      if (decision === 'approve') {
+        selections.push(tempId);
+      }
+    });
+    moleculeDecisions.forEach((decision, tempId) => {
+      if (decision === 'approve') {
+        selections.push(tempId);
+      }
+    });
+
+    if (selections.length === 0) {
+      toast.error('No recommendations selected');
+      return;
+    }
+
+    createChangeSetMutation.mutate(
+      {
+        runId,
+        data: {
+          selections,
+          name: changeSetName || undefined,
+        },
+      },
+      {
+        onSuccess: () => {
+          setStep('complete');
+          setShowChangeSetInput(false);
+          setChangeSetName('');
         },
       }
     );
@@ -685,6 +731,78 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
                     Require human review before applying
                   </Label>
                 </div>
+              </div>
+
+              {/* Exception Lane (Phase 16) */}
+              <div className="space-y-2">
+                <Label>Exception Lane</Label>
+                <Select
+                  value={config.options?.exceptionLane || 'normal'}
+                  onValueChange={(value) =>
+                    setConfig({
+                      ...config,
+                      options: {
+                        ...config.options,
+                        exceptionLane: value as 'normal' | 'hotfix-exception' | 'spike-exception',
+                      },
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="normal">Normal (14-day convergence)</SelectItem>
+                    <SelectItem value="hotfix-exception">
+                      Hotfix Exception (3-day convergence)
+                    </SelectItem>
+                    <SelectItem value="spike-exception">
+                      Spike Exception (7-day convergence)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Exception lanes control drift convergence deadlines (relevant for CI-attested runs)
+                </p>
+              </div>
+
+              {/* Exception Justification (required for hotfix/spike) */}
+              {config.options?.exceptionLane &&
+                config.options.exceptionLane !== 'normal' && (
+                  <div className="space-y-2">
+                    <Label>Exception Justification (Required)</Label>
+                    <Textarea
+                      placeholder="Explain why this exception lane is needed..."
+                      value={config.options?.exceptionJustification || ''}
+                      onChange={(e) =>
+                        setConfig({
+                          ...config,
+                          options: {
+                            ...config.options,
+                            exceptionJustification: e.target.value,
+                          },
+                        })
+                      }
+                      rows={2}
+                    />
+                  </div>
+                )}
+
+              {/* Attestation Type Indicator */}
+              <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                <div
+                  className={cn(
+                    'w-2 h-2 rounded-full',
+                    config.options?.attestationType === 'ci-attested'
+                      ? 'bg-green-500'
+                      : 'bg-yellow-500'
+                  )}
+                />
+                <span className="text-sm">
+                  {config.options?.attestationType === 'ci-attested'
+                    ? 'CI-Attested (will create drift records)'
+                    : 'Local (advisory only, no drift tracking)'}
+                </span>
               </div>
 
               {/* Advanced Options - Path Filtering */}
@@ -1013,19 +1131,51 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
 
             {step === 'apply' && (
               <>
-                <Button
-                  variant="outline"
-                  onClick={() => handleApply(false)}
-                  disabled={applyMutation.isPending || approvedCount === 0}
-                >
-                  Apply
-                </Button>
-                <Button
-                  onClick={() => handleApply(true)}
-                  disabled={applyMutation.isPending || approvedCount === 0}
-                >
-                  {applyMutation.isPending ? 'Applying...' : 'Apply + Annotate'}
-                </Button>
+                {showChangeSetInput ? (
+                  <>
+                    <Input
+                      placeholder="Change set name (optional)"
+                      value={changeSetName}
+                      onChange={(e) => setChangeSetName(e.target.value)}
+                      className="w-48"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowChangeSetInput(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleCreateChangeSet}
+                      disabled={createChangeSetMutation.isPending || approvedCount === 0}
+                    >
+                      {createChangeSetMutation.isPending ? 'Creating...' : 'Create'}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowChangeSetInput(true)}
+                      disabled={applyMutation.isPending || approvedCount === 0}
+                    >
+                      Create Change Set
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleApply(false)}
+                      disabled={applyMutation.isPending || approvedCount === 0}
+                    >
+                      Apply Directly
+                    </Button>
+                    <Button
+                      onClick={() => handleApply(true)}
+                      disabled={applyMutation.isPending || approvedCount === 0}
+                    >
+                      {applyMutation.isPending ? 'Applying...' : 'Apply + Annotate'}
+                    </Button>
+                  </>
+                )}
               </>
             )}
           </div>

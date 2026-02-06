@@ -16,6 +16,8 @@ This assumption is correct *today* (Docker container), but it creates a hard arc
 
 The question isn't "should we abstract the filesystem?" -- it's "what is the correct architectural cut that makes Pact's analysis capabilities location-independent without over-engineering the current implementation?"
 
+**Governing principle:** Local coupling proves plausibility. Canonical (CI-attested) reconciliation proves reality. This asymmetry simplifies the architecture significantly — local clients need only a minimal cache and advisory reports, not a rich sync protocol.
+
 ## 2. The Two Data Planes
 
 Pact operates on two fundamentally different categories of data:
@@ -137,29 +139,32 @@ Developer Machine                    Pact Server (Remote)
 
 The client could be: VSCode extension, CLI tool, CI/CD action, or IDE plugin.
 
-### Model C: PactHub (Team Collaboration)
+### Model C: PactHub (Team Collaboration — Future)
 
-Multiple developers push Intent Plane data to a shared Pact instance. Like GitHub for intent.
+Multiple developers' CI pipelines submit attested reconciliation runs to a shared Pact instance. Like GitHub for intent.
 
 ```
-Dev A (local Pact) ──push──→ ┌────────────┐ ←──push── Dev B (local Pact)
-                              │  PactHub   │
-                              │  (shared)  │
-Dev C (local Pact) ──push──→ │            │ ←──push── CI/CD
-                              └────────────┘
+Dev A (CI pipeline) ──attested run──→ ┌────────────┐ ←──attested run── Dev B (CI pipeline)
+                                       │  PactHub   │
+                                       │  (shared)  │
+Dev C (CI pipeline) ──attested run──→ │            │ ←──attested run── Dev D (CI pipeline)
+                                       └────────────┘
 ```
 
-**What syncs**: Atoms, molecules, commitments, evidence, quality scores, metrics, coverage data, conflict records.
-**What stays local**: Project source code, test file content (optionally synced), git history.
+**What gets submitted**: CI-attested reconciliation results (atoms, recommendations, quality scores, coverage data).
+**What stays local**: Project source code, test file content, git history, local plausibility reports.
+
+Local developers use `pact pull` to cache Main state and `pact check` for advisory plausibility reports. Only CI-attested runs update canonical truth.
 
 ### The Key Insight
 
-All three models use the **same Pact server code**. The difference is only in *how data arrives*:
-- Model A: Internal pipeline reads files and stores content
-- Model B: External client sends content via API
-- Model C: Multiple instances sync Intent Plane data
+All three models use the **same Pact server code**. The difference is only in *how data arrives* and *whether the run is CI-attested*:
 
-The Ingestion Boundary design means the Pact server doesn't know or care which model is active. It receives text, analyzes it, stores results.
+- Model A: Internal pipeline reads files and stores content (canonical if CI-attested)
+- Model B: External client sends content via API (local = plausible, CI = canonical)
+- Model C: Multiple CI pipelines submit attested runs (canonical via CI)
+
+The Ingestion Boundary design means the Pact server doesn't know or care which model is active. It receives text, analyzes it, stores results. The attestation type determines whether the results update canonical truth or remain advisory.
 
 ## 5. Data That Crosses the Boundary
 
@@ -256,35 +261,64 @@ This refactoring is a separate effort (possibly Phase 16+) and should not block 
 
 Enterprise adoption requires clear privacy guarantees:
 
-| Deployment Model | Source Code Leaves Machine? | Test Code Leaves Machine? | Intent Data Shared? |
-|-----------------|---------------------------|--------------------------|-------------------|
-| Model A (co-located) | No | No | No |
-| Model B (remote server) | No | Yes (for quality analysis) | Yes |
-| Model C (PactHub) | No | Configurable | Yes |
+| Deployment Model | Source Code Leaves Machine? | Test Code Leaves Machine? | Intent Data Shared? | Truth Level |
+|-----------------|---------------------------|--------------------------|-------------------|-------------|
+| Model A (co-located) | No | No | No | Canonical if CI-attested |
+| Model B (remote server) | No | Yes (for quality analysis) | Yes | Local = plausible |
+| Model C (PactHub) | No | Configurable | Yes (via CI) | Canonical via CI |
 
 **Critical enterprise requirement**: Test source code should be configurable for storage. Some organizations may not want test code stored in the database or sent to a remote server. The `testSourceCode` field should be optional, and quality analysis should degrade gracefully (use heuristic-only, not LLM) when test source is not available.
 
 **LLM privacy**: When test source code is sent to LLM providers for quality analysis, this raises the same concerns as any LLM-based code analysis. Pact's existing LLM abstraction (supporting Ollama for local inference) already addresses this -- local LLM = no data leaves the machine.
 
-## 9. Migration Path
+## 9. The Truth Model: Local = Plausible, Canonical = True
 
-### Phase 14 (Now): Establish the Pattern
+The architectural simplification that governs all deployment models:
+
+- **Local coupling proves plausibility.** A developer running `pact check` locally can see that their tests satisfy atoms in their working tree. This is useful feedback but does not update Pact Main.
+- **Canonical reconciliation proves reality.** A CI-attested reconciliation run against the project's `integrationTarget` branch (e.g., "main", "develop") produces truth: proven counts, commitment backlog, and health metrics are updated.
+
+This asymmetry eliminates the need for:
+
+- Push/pull overlay sync between local instances
+- Conflict resolution across multiple developers' local state
+- "Merged scope" queries that blend local and canonical data
+
+Local clients need only: a cached export of Pact Main (`pact pull`) and an advisory report (`pact check`). Both are ephemeral and replaceable.
+
+## 10. Migration Path
+
+### Phase 14 (Complete): Establish the Pattern
 
 - New capabilities (coverage, quality) use API-first ingestion from day one
 - Reconciliation pipeline stores test source code during discovery
 - All analysis works from database content, not filesystem re-reads
 - No breaking changes to existing code
 
-### Phase 16+ (Future): Client-Server Split
+### Phase 15: Pact Main Governance
 
-- Introduce thin client SDK (TypeScript library)
-- Client handles: file reading, git operations, patch application
-- Server handles: analysis, LLM, persistence, metrics
-- Reconciliation pipeline accepts pre-read content OR file paths
+- Atom promotion to Pact Main through governed change sets
+- `integrationTarget` as a first-class project setting
+- Scope filtering (`?scope=main`) across API endpoints
 
-### Phase 18+ (Future): PactHub
+### Phase 16: Drift Management
 
-- Multi-instance sync protocol for Intent Plane data
-- Team collaboration features (shared atoms, molecules, conflict resolution)
+- Drift detection from CI-attested reconciliation runs only
+- Local runs produce advisory reports, not drift debt records
+- Exception lanes and time-bounded convergence policies
+
+### Phase 17: Client-Server Split
+
+- ContentProvider abstraction replaces 40+ direct fs calls
+- Thin client SDK (`@pact/client-sdk`) for file reading, git ops, patch application
+- Pre-read content API for remote reconciliation
+- Minimal local state: cached Main + local report (no rich overlay sync)
+- CI attestation as the single promotion gate from plausible to true
+
+### Future: PactHub
+
+- Multi-tenant shared Pact instance with CI pipelines as canonical arbiters
+- Team collaboration features (shared atoms, molecules)
 - Org-level metrics and dashboards
 - RBAC and molecule ownership boundaries
+- Push/pull sync protocol (if needed — may not be, given CI-attested model)

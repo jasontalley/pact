@@ -34,12 +34,22 @@ export class AtomSearchDto {
   // Status filter
   @ApiPropertyOptional({
     description: 'Filter by atom status',
-    enum: ['draft', 'committed', 'superseded'],
+    enum: ['proposed', 'draft', 'committed', 'superseded'],
     example: 'draft',
   })
-  @IsEnum(['draft', 'committed', 'superseded'])
+  @IsEnum(['proposed', 'draft', 'committed', 'superseded'])
   @IsOptional()
   status?: AtomStatus;
+
+  // Scope filter (Pact Main governance)
+  @ApiPropertyOptional({
+    description: 'Filter by governance scope: all (default), main (promoted atoms only), proposed (pending governance)',
+    enum: ['all', 'main', 'proposed'],
+    default: 'all',
+  })
+  @IsEnum(['all', 'main', 'proposed'])
+  @IsOptional()
+  scope?: 'all' | 'main' | 'proposed';
 
   // Category filter
   @ApiPropertyOptional({

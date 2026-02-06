@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | **Phase** | 17 |
-| **Focus** | Decouple Pact from direct filesystem access; enable remote deployment via Client SDK |
+| **Focus** | Decouple Pact from direct filesystem access; enable remote deployment via Client SDK. Local = plausible, Canonical = true. |
 | **Status** | Not Started |
 | **Prerequisites** | Phase 14 (Ingestion Boundary), Phase 15 (Pact Main Governance) |
 | **Related Docs** | [implementation-checklist-phase15.md](implementation-checklist-phase15.md), [implementation-checklist-phase16.md](implementation-checklist-phase16.md) |
@@ -18,18 +18,20 @@ Phase 17 decouples Pact from direct filesystem access, enabling deployment as a 
 
 **Current state:** 40+ direct `fs.*` calls scattered across 13+ source files. Every reconciliation pipeline node, the context builder, the quality analyzer, and the apply service assume Pact runs on the same machine as the project.
 
-**Target state:** A **ContentProvider** abstraction replaces all direct fs calls. A **@pact/client-sdk** npm package handles client-side file reading, git operations, coverage collection, and pushing pre-read content to a remote Pact server. Local overlays enable offline work with sync to remote.
+**Target state:** A **ContentProvider** abstraction replaces all direct fs calls. A **@pact/client-sdk** npm package handles client-side file reading, git operations, coverage collection, and pushing pre-read content to a remote Pact server. Local clients maintain a **minimal cache** of Pact Main state and produce **local reconciliation reports** — advisory plausibility signals, not canonical truth. Only CI-attested reconciliation runs update canonical realization status.
+
+**Core truth model:** Local coupling proves plausibility. Canonical (CI-attested) reconciliation proves reality.
 
 **Deployment models enabled:**
 
-| Model | Client | Server | How Content Arrives |
-|-------|--------|--------|---------------------|
-| A: Co-located (current) | Same machine | Same machine | FilesystemContentProvider reads files |
-| B: Local Client + Remote | VSCode ext / CLI | Remote server | Client SDK reads files, sends via API |
-| C: CI/CD Pipeline | GitHub Action / script | Remote server | Pipeline reads files, uploads via API |
-| D: PactHub | Multiple local instances | Shared remote | Each pushes intent data, pulls Main state |
+| Model | Client | Server | How Content Arrives | Truth Level |
+|-------|--------|--------|---------------------|-------------|
+| A: Co-located (current) | Same machine | Same machine | FilesystemContentProvider reads files | Canonical if CI-attested |
+| B: Local Client + Remote | VSCode ext / CLI | Remote server | Client SDK reads files, sends via API | Local = plausible |
+| C: CI/CD Pipeline | GitHub Action / script | Remote server | Pipeline reads files, uploads via API | Canonical (CI-attested) |
+| D: PactHub (future) | Multiple local instances | Shared remote | CI pipelines submit attested runs | Canonical via CI |
 
-**All four models use the same server code.** The difference is only in how data arrives.
+**All deployment models use the same server code.** The difference is only in how data arrives and whether the run is CI-attested (canonical) or local (plausible).
 
 ### Current Filesystem Dependencies
 
@@ -226,10 +228,12 @@ Create `@pact/client-sdk` as a separate npm package within the monorepo. This pa
       get reconciliation(): ReconciliationClient;
       get atoms(): AtomsClient;
       get molecules(): MoleculesClient;
-      get sync(): SyncClient;
-      get overlay(): OverlayClient;
+      get main(): MainStateClient;  // Pull cached Main state
     }
     ```
+
+    - No `SyncClient` or `OverlayClient` — local state is minimal (cached Main + local report)
+    - `MainStateClient` provides `pull()` to cache commitments from Pact Main
 
 - [ ] **17B.3** Create FileReader module
   - **File**: `packages/client-sdk/src/file-reader.ts`
@@ -255,8 +259,9 @@ Create `@pact/client-sdk` as a separate npm package within the monorepo. This pa
     - Reconciliation: `startReconciliation()`, `submitPreReadContent()`, `getRunDetails()`, `getRecommendations()`, `applyRecommendations()`
     - Atoms: `listAtoms(filters?)`, `getAtom(id)`, `commitAtom(id)`
     - Molecules: `listMolecules()`, `getMolecule(id)`
-    - Sync: `pushLocalOverlay()`, `pullMainState(since?)`
+    - Main: `pullMainState(since?)` — cache Pact Main commitments locally
     - Drift: `listDrift()`, `getDriftSummary()`
+    - CI: `submitAttestedRun(runData)` — submit CI-attested reconciliation results
 
 - [ ] **17B.6** Create CoverageCollector module
   - **File**: `packages/client-sdk/src/coverage-collector.ts`
@@ -350,88 +355,94 @@ Add server-side API endpoints that accept pre-read file content instead of requi
 
 ---
 
-## 17D: Local Overlay and Sync Protocol
+## 17D: Minimal Local State and Main Cache
 
 ### Context
 
-Enable clients to maintain a local overlay of cached Pact Main state combined with local discoveries, and sync these with the remote server.
+Local clients need a minimal, read-mostly cache of Pact Main state for developer tooling (IDE hints, `pact check` reports). **Local = plausible, Canonical = true.** There is no push/pull overlay sync, no conflict resolution, and no "merged scope." Local reconciliation produces a plausibility report; only CI-attested runs update canonical truth.
+
+### What Was Cut (Postponed to PactHub Phase)
+
+The following were originally planned for 17D but are **deferred** because they add complexity without value until multi-tenant collaboration exists:
+
+- **Push sync** — local overlays pushing recommendations to remote
+- **Conflict detection/resolution** — `duplicate_atom`, `overlapping_test_link`, `stale_snapshot` types
+- **Bidirectional merge** — `remote_wins`, `local_wins`, `merge`, `manual` resolution strategies
+- **Rich overlay data model** — `localAtomTestLinks`, `localTestResults`, `localRecommendations` stored in `.pact/overlay.json`
 
 ### Tasks
 
-- [ ] **17D.1** Define local overlay data model
-  - **File**: `packages/client-sdk/src/overlay.ts`
-  - **Priority**: High | **Effort**: M
+- [ ] **17D.1** Define MainStateCache data model
+  - **File**: `packages/client-sdk/src/main-cache.ts`
+  - **Priority**: High | **Effort**: S
   - **Details**:
     ```typescript
-    interface LocalOverlay {
-      mainSnapshot: MainStateSnapshot;       // Cached Pact Main
-      lastSyncedAt: Date;
-      localAtomTestLinks: LocalAtomTestLink[];
-      localTestResults: LocalTestResult[];
-      localRecommendations: LocalRecommendation[];
-      projectId?: string;
-      projectRoot: string;
-      commitHash?: string;
-    }
-    interface MainStateSnapshot {
+    interface MainStateCache {
       atoms: AtomSummary[];
       molecules: MoleculeSummary[];
       atomTestLinks: AtomTestLinkSummary[];
       snapshotVersion: number;
-      generatedAt: Date;
+      pulledAt: Date;
+      serverUrl: string;
+      projectId?: string;
     }
     ```
+    - Read-only cache of Pact Main — no local mutations
+    - Used by IDE tooling to show atom-test links, coverage gaps
 
-- [ ] **17D.2** Create OverlayStore
-  - **File**: `packages/client-sdk/src/overlay-store.ts`
-  - **Priority**: High | **Effort**: M
+- [ ] **17D.2** Create MainCacheStore
+  - **File**: `packages/client-sdk/src/main-cache-store.ts`
+  - **Priority**: High | **Effort**: S
   - **Details**:
-    - Persists overlay to `.pact/overlay.json` in project root
-    - `load()`, `save()`, `merge(remote, local)` methods
+    - Persists to `.pact/main-cache.json` in project root
+    - `load()`, `save()`, `isStale(maxAgeMs?)` methods
     - `.pact/` directory added to `.gitignore`
+    - No merge logic — pull replaces the cache entirely
 
-- [ ] **17D.3** Create pull sync
-  - **File**: `packages/client-sdk/src/sync/pull.ts`
+- [ ] **17D.3** Create pull command
+  - **File**: `packages/client-sdk/src/commands/pull.ts`
+  - **Priority**: High | **Effort**: S
+  - **Details**:
+    - `pull()` — fetches latest Main state from remote, replaces local cache
+    - Returns `PullResult { atomCount, moleculeCount, pulledAt }`
+    - Implements the `pact pull` developer command
+
+- [ ] **17D.4** Create local check command
+  - **File**: `packages/client-sdk/src/commands/check.ts`
   - **Priority**: High | **Effort**: M
   - **Details**:
-    - `pull()` — fetches latest Main state from remote since `lastSyncedAt`
-    - Merges with local overlay
-    - Returns `PullResult { updatedAtoms, updatedMolecules, conflicts }`
+    - `check()` — runs local reconciliation (using cached Main + local files)
+    - Produces a `LocalReconciliationReport`:
 
-- [ ] **17D.4** Create push sync
-  - **File**: `packages/client-sdk/src/sync/push.ts`
+      ```typescript
+      interface LocalReconciliationReport {
+        plausibleLinks: { atomId: string; testFile: string; confidence: number }[];
+        orphanTests: string[];
+        uncoveredAtoms: string[];
+        qualitySummary?: { averageScore: number; gradeDistribution: Record<string, number> };
+        generatedAt: Date;
+        commitHash?: string;
+      }
+      ```
+    - Writes report to `.pact/local-report.json` for tooling integration
+    - This is **advisory only** — does not update canonical state
+
+- [ ] **17D.5** Create server-side Main state export endpoint
+  - **File**: `src/modules/agents/main-state.service.ts` + controller additions
   - **Priority**: High | **Effort**: M
   - **Details**:
-    - `push()` — sends unpushed local recommendations to remote
-    - Marks as pushed on success
-    - Returns `PushResult { pushed, conflicts }`
-
-- [ ] **17D.5** Create conflict detector
-  - **File**: `packages/client-sdk/src/sync/conflict-detector.ts`
-  - **Priority**: Medium | **Effort**: M
-  - **Details**:
-    - Detect conflicts between local recommendations and remote state
-    - Types: `duplicate_atom`, `overlapping_test_link`, `stale_snapshot`
-    - Default resolution: `remote_wins` (remote is authoritative for Main)
-    - Supports `local_wins`, `merge`, `manual` for user override
-
-- [ ] **17D.6** Create server-side sync endpoints
-  - **File**: `src/modules/agents/sync.service.ts` + controller additions
-  - **Priority**: High | **Effort**: M
-  - **Details**:
-    - `GET /agents/reconciliation/main-state?since=` — returns Main state snapshot
-    - `POST /agents/reconciliation/sync/push` — accepts local overlay, detects conflicts, merges
-    - `SyncService.getMainStateSnapshot(since?)` — atoms, molecules, links since timestamp
-    - `SyncService.pushLocalOverlay(overlay)` — validate, detect conflicts, merge
+    - `GET /agents/main-state?projectId=` — returns Main state snapshot for caching
+    - `MainStateService.getMainStateSnapshot(projectId?)` — atoms, molecules, links
+    - Includes committed atoms only (status = 'committed', on Pact Main)
+    - Lightweight endpoint — no analysis, just data export
 
 ### Verification
 
-- [ ] Local overlay can be created, populated, saved, and loaded
-- [ ] Pull retrieves only updates since last sync
-- [ ] Push sends unpushed recommendations, marks as pushed
-- [ ] Duplicate atom detection works across instances
-- [ ] Conflict resolution defaults to remote-wins
-- [ ] `.pact/overlay.json` is gitignored
+- [ ] `pact pull` fetches Main state and writes `.pact/main-cache.json`
+- [ ] `pact check` produces a local reconciliation report at `.pact/local-report.json`
+- [ ] Local report is advisory — no server state is modified
+- [ ] Cache is a simple replace (not a merge) — no conflict resolution needed
+- [ ] `.pact/` directory is gitignored
 
 ---
 
@@ -439,7 +450,7 @@ Enable clients to maintain a local overlay of cached Pact Main state combined wi
 
 ### Context
 
-Agents see only Pact Main state by default. Local overlays are advisory. Project-level scope isolation.
+Agents see only Pact Main state by default. Local reconciliation is advisory (plausible, not true). Project-level scope isolation via headers.
 
 ### Tasks
 
@@ -456,28 +467,30 @@ Agents see only Pact Main state by default. Local overlays are advisory. Project
   - **Priority**: Medium | **Effort**: S
   - **Details**:
     - `@PactScope()` parameter decorator extracts scope context from request
-    - `PactScopeContext { projectId?, scope: 'main' | 'local' | 'merged' }`
+    - `PactScopeContext { projectId?, scope: 'main' | 'local' }`
+    - No `'merged'` scope — local is advisory only, never mixed into canonical queries
 
 - [ ] **17E.3** Add scope-filtered queries to services
   - **Files**: `atoms.service.ts`, `molecules.service.ts`, `reconciliation.repository.ts`
   - **Priority**: Medium | **Effort**: M
   - **Details**:
     - Accept optional `projectId` for filtering
-    - Agents operating on Main state see only committed atoms (status: 'committed')
-    - Local overlay recommendations tagged with `scope: 'local'`
+    - `scope: 'main'` — committed atoms on Pact Main (default for agents and CI)
+    - `scope: 'local'` — advisory; used only by local client tooling for plausibility checks
 
 - [ ] **17E.4** Configure agent scope
   - **File**: `src/modules/agents/graphs/graph-registry.service.ts`
   - **Priority**: Medium | **Effort**: S
   - **Details**:
     - When invoking reconciliation graph, pass scope context
-    - Agents see Main-scope data unless explicitly configured for merged view
+    - Agents always see Main-scope data — no "merged view" needed
 
 ### Verification
 
 - [ ] When `x-pact-project-id` header is set, only that project's data is returned
 - [ ] Agents see only Main-scope data by default
 - [ ] Scope filtering does not break existing behavior when headers are absent
+- [ ] No `'merged'` scope exists — only `'main'` and `'local'`
 
 ---
 
@@ -485,7 +498,7 @@ Agents see only Pact Main state by default. Local overlays are advisory. Project
 
 ### Context
 
-Update MCP tools to use the client SDK and verify all four deployment models work end-to-end.
+Update MCP tools to use the client SDK and verify the core deployment models work end-to-end. Focus on the CI-attested canonical flow (the primary promotion path) and the local plausibility flow (developer experience).
 
 ### Tasks
 
@@ -510,34 +523,34 @@ Update MCP tools to use the client SDK and verify all four deployment models wor
   - **Details**:
     - Shows how a VSCode extension uses PactClient
     - FileReader → submitPreReadContent → receive recommendations → PatchApplicator
+    - `pact pull` caches Main state for IDE hints
+    - `pact check` produces local plausibility report
 
 - [ ] **17F.4** Create CLI tool example
   - **File**: `packages/client-sdk/examples/cli/example.ts`
   - **Priority**: Low | **Effort**: M
   - **Details**:
-    - `pact reconcile` — reads files, submits to remote, displays results
-    - `pact sync pull` / `push` — sync operations
+    - `pact pull` — cache Pact Main commitments locally
+    - `pact check` — generate local reconciliation report (plausibility)
     - `pact apply` — applies patches locally
+    - No `pact push` — canonical updates happen through CI only
 
 - [ ] **17F.5** Create CI/CD pipeline example
   - **File**: `packages/client-sdk/examples/ci/example.ts`
-  - **Priority**: Low | **Effort**: S
+  - **Priority**: Medium | **Effort**: S
   - **Details**:
     - GitHub Action / script pattern
-    - FileReader + CoverageCollector → submit to remote → fail on quality issues
-
-- [ ] **17F.6** PactHub multi-instance verification
-  - **Priority**: Low | **Effort**: L
-  - **Details**:
-    - Test scenario: two client instances → same server → both reconcile → both push → conflict detection
-    - Verify: no data loss, conflicts detected, eventual consistency
+    - FileReader + CoverageCollector → submit CI-attested reconciliation → canonical truth updated
+    - This is the **primary promotion gate** — the only path from plausible to true
+    - Fail build on quality issues or convergence policy violations
 
 ### Verification
 
-- [ ] VSCode extension example connects to remote Pact, submits files, receives recommendations, applies patches — all without server filesystem access
-- [ ] CLI tool works end-to-end with remote server
-- [ ] CI pipeline example runs without filesystem access on server side
-- [ ] Multi-instance push/pull maintains consistency with conflict detection
+- [ ] VSCode extension example: `pact pull` + `pact check` produce local report without modifying server state
+- [ ] CLI tool works end-to-end: pull, check, apply — all local/advisory
+- [ ] CI pipeline example: submits CI-attested run, server updates canonical epistemic state
+- [ ] Server rejects canonical state updates from non-CI-attested runs
+- [ ] No multi-instance sync verification needed (deferred to PactHub phase)
 
 ---
 
@@ -576,17 +589,15 @@ Update MCP tools to use the client SDK and verify all four deployment models wor
 |------|---------|
 | `src/modules/agents/dto/pre-read-reconciliation.dto.ts` | Pre-read content DTO |
 
-**17D: Overlay and Sync**
+**17D: Local State and Main Cache**
 
 | File | Purpose |
 |------|---------|
-| `packages/client-sdk/src/overlay.ts` | Overlay data model |
-| `packages/client-sdk/src/overlay-store.ts` | Overlay persistence |
-| `packages/client-sdk/src/sync/pull.ts` | Pull sync |
-| `packages/client-sdk/src/sync/push.ts` | Push sync |
-| `packages/client-sdk/src/sync/conflict-detector.ts` | Conflict detection |
-| `packages/client-sdk/src/sync/index.ts` | Sync barrel |
-| `src/modules/agents/sync.service.ts` | Server-side sync service |
+| `packages/client-sdk/src/main-cache.ts` | MainStateCache data model |
+| `packages/client-sdk/src/main-cache-store.ts` | Cache persistence (.pact/main-cache.json) |
+| `packages/client-sdk/src/commands/pull.ts` | Pull Main state command |
+| `packages/client-sdk/src/commands/check.ts` | Local reconciliation report command |
+| `src/modules/agents/main-state.service.ts` | Server-side Main state export |
 
 **17E: Scope Middleware**
 
@@ -636,11 +647,10 @@ Update MCP tools to use the client SDK and verify all four deployment models wor
 | `packages/client-sdk/src/__tests__/api-client.spec.ts` | API client tests |
 | `packages/client-sdk/src/__tests__/coverage-collector.spec.ts` | Coverage tests |
 | `packages/client-sdk/src/__tests__/patch-applicator.spec.ts` | Patch tests |
-| `packages/client-sdk/src/__tests__/overlay-store.spec.ts` | Overlay tests |
-| `packages/client-sdk/src/__tests__/sync/pull.spec.ts` | Pull sync tests |
-| `packages/client-sdk/src/__tests__/sync/push.spec.ts` | Push sync tests |
-| `packages/client-sdk/src/__tests__/sync/conflict-detector.spec.ts` | Conflict tests |
-| `src/modules/agents/sync.service.spec.ts` | Server sync tests |
+| `packages/client-sdk/src/__tests__/main-cache-store.spec.ts` | Cache persistence tests |
+| `packages/client-sdk/src/__tests__/commands/pull.spec.ts` | Pull command tests |
+| `packages/client-sdk/src/__tests__/commands/check.spec.ts` | Check command tests |
+| `src/modules/agents/main-state.service.spec.ts` | Main state export tests |
 | `src/modules/agents/reconciliation.service.pre-read.spec.ts` | Pre-read reconciliation tests |
 | `src/common/middleware/scope.middleware.spec.ts` | Scope middleware tests |
 | `test/reconciliation-pre-read.e2e-spec.ts` | E2E pre-read test |
@@ -654,13 +664,13 @@ Update MCP tools to use the client SDK and verify all four deployment models wor
 17B (Client SDK) ── can start after 17A.1 (interface defined) ────> 17B.8 (Tests)
                                                                        │
 17C (Pre-Read API) ── depends on 17A complete + 17B.5 ────────────> 17C.5 (Limits)
-17D (Overlay + Sync) ── depends on 17B complete ──────────────────> 17D.6 (Server sync)
+17D (Main Cache + Local Check) ── depends on 17B ─────────────────> 17D.5 (Server export)
 17E (Scope Middleware) ── depends on 17A ─────────────────────────> 17E.4 (Agent scope)
                                                                        │
-17F (Integration) ── depends on ALL above ────────────────────────> 17F.6 (PactHub verification)
+17F (Integration) ── depends on ALL above ────────────────────────> 17F.5 (CI verification)
 ```
 
-17A must start first (pipeline refactor). 17B can begin in parallel after 17A.1 defines the interface. 17C-17E depend on 17A+17B completion. 17F is the integration/verification phase.
+17A must start first (pipeline refactor). 17B can begin in parallel after 17A.1 defines the interface. 17C-17E depend on 17A+17B completion. 17D is significantly lighter than originally planned (no sync protocol). 17F focuses on CI-attested canonical flow verification.
 
 ---
 
@@ -668,12 +678,16 @@ Update MCP tools to use the client SDK and verify all four deployment models wor
 
 1. **ContentProvider is async** — all methods return `Promise<>` even for filesystem implementation, ensuring the interface works for both sync fs and async network-backed providers.
 
-2. **Local overlays are ephemeral files** — stored in `.pact/overlay.json`, not committed to git. If lost, simply re-pull from remote.
+2. **Local = plausible, Canonical = true** — local reconciliation produces advisory plausibility reports. Only CI-attested runs against the project's `integrationTarget` branch update canonical epistemic state (proven counts, commitment backlog, health metrics). This eliminates the need for push/pull sync, conflict resolution, and merged scopes.
 
-3. **Conflict resolution defaults to remote-wins** — when two instances create atoms from the same test, the first to push wins. The second gets a conflict notification.
+3. **Minimal local state** — `.pact/main-cache.json` (cached Main export) and `.pact/local-report.json` (last local check). Both are gitignored, ephemeral, and replaceable. No rich overlay data model needed.
 
-4. **Client SDK is zero-dependency on NestJS** — uses only Node.js built-ins and `fetch`, making it embeddable in VSCode extensions and CLI tools.
+4. **CI attestation is the single promotion gate** — the transition from "plausible" to "true" happens exclusively through CI. This simplifies the architecture by removing the need for conflict resolution between local instances.
 
-5. **No schema migration needed** — the `projectId` column already exists on 5+ entities. Phase 17 activates its use through scope middleware.
+5. **Client SDK is zero-dependency on NestJS** — uses only Node.js built-ins and `fetch`, making it embeddable in VSCode extensions and CLI tools.
 
-6. **Pre-read content transmitted as JSON** — for repos under 50MB of relevant content. Streaming endpoint available for larger repos.
+6. **No schema migration needed** — the `projectId` column already exists on 5+ entities. Phase 17 activates its use through scope middleware.
+
+7. **Pre-read content transmitted as JSON** — for repos under 50MB of relevant content. Streaming endpoint available for larger repos.
+
+8. **Push/pull sync deferred to PactHub phase** — multi-instance conflict resolution, bidirectional overlay sync, and "merged scope" are unnecessary until team collaboration features are built. Cutting this reduces Phase 17 scope by ~30%.

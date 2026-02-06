@@ -203,3 +203,34 @@ export function useApplyRecommendations() {
     },
   });
 }
+
+/**
+ * Hook to create a governed change set from reconciliation results.
+ * Creates proposed atoms that must go through approval before reaching Main.
+ */
+export function useCreateChangeSetFromRun() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      runId,
+      data,
+    }: {
+      runId: string;
+      data: { selections?: string[]; name?: string; description?: string };
+    }) => reconciliationApi.createChangeSet(runId, data),
+    onSuccess: (result, { runId }) => {
+      queryClient.invalidateQueries({ queryKey: reconciliationKeys.run(runId) });
+      queryClient.invalidateQueries({ queryKey: reconciliationKeys.runs() });
+      queryClient.invalidateQueries({ queryKey: ['atoms'] });
+      queryClient.invalidateQueries({ queryKey: ['change-sets'] });
+
+      toast.success(
+        `Change set created with ${result.atomCount} proposed atoms. Submit for review to promote to Main.`
+      );
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to create change set: ${error.message}`);
+    },
+  });
+}

@@ -21,6 +21,7 @@ import { ConflictsModule } from './modules/conflicts/conflicts.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
 import { CoverageModule } from './modules/coverage/coverage.module';
+import { DriftModule } from './modules/drift/drift.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { CoverageModule } from './modules/coverage/coverage.module';
     MetricsModule,
     ConversationsModule,
     CoverageModule,
+    DriftModule,
   ],
   controllers: [AppController],
   providers: [AppService],

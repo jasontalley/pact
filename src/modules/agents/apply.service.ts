@@ -13,16 +13,22 @@
  * @see docs/implementation-checklist-phase5.md Section 6.2
  */
 
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, Optional, Inject } from '@nestjs/common';
 import { DataSource, QueryRunner } from 'typeorm';
-import * as fs from 'fs/promises';
-import * as path from 'path';
 import { ReconciliationRepository } from './repositories/reconciliation.repository';
 import { AtomRecommendation } from './entities/atom-recommendation.entity';
 import { MoleculeRecommendation } from './entities/molecule-recommendation.entity';
 import { Atom } from '../atoms/atom.entity';
 import { Molecule } from '../molecules/molecule.entity';
 import { MoleculeAtom } from '../molecules/molecule-atom.entity';
+import { ChangeSetMetadata, ChangeSetStatus } from '../molecules/change-set.types';
+import { ContentProvider, WriteProvider, FilesystemContentProvider, FilesystemWriteProvider } from './content';
+import { CONTENT_PROVIDER } from './context-builder.service';
+
+/**
+ * Injection token for WriteProvider
+ */
+export const WRITE_PROVIDER = Symbol('WRITE_PROVIDER');
 
 /**
  * Apply request
@@ -85,11 +91,26 @@ interface FileModification {
 @Injectable()
 export class ApplyService {
   private readonly logger = new Logger(ApplyService.name);
+  private contentProvider: ContentProvider;
+  private writeProvider: WriteProvider;
 
   constructor(
     private readonly dataSource: DataSource,
     private readonly repository: ReconciliationRepository,
-  ) {}
+    @Optional() @Inject(CONTENT_PROVIDER) contentProvider?: ContentProvider,
+    @Optional() @Inject(WRITE_PROVIDER) writeProvider?: WriteProvider,
+  ) {
+    this.contentProvider = contentProvider || new FilesystemContentProvider();
+    this.writeProvider = writeProvider || new FilesystemWriteProvider();
+  }
+
+  /**
+   * Set content and write providers (useful for testing or dynamic configuration)
+   */
+  setProviders(contentProvider?: ContentProvider, writeProvider?: WriteProvider): void {
+    if (contentProvider) this.contentProvider = contentProvider;
+    if (writeProvider) this.writeProvider = writeProvider;
+  }
 
   /**
    * Apply selected recommendations from a reconciliation run.
@@ -424,19 +445,17 @@ export class ApplyService {
    * Inject @atom annotation into a test file.
    *
    * Adds a comment like `// @atom IA-001` before the test function.
+   * Uses ContentProvider for reading and WriteProvider for writing.
    */
   private async injectAtomAnnotation(mod: FileModification): Promise<void> {
     const { filePath, atomId, lineNumber } = mod;
 
-    // Check file exists
-    try {
-      await fs.access(filePath);
-    } catch {
+    // Check file exists and read content
+    const content = await this.contentProvider.readFileOrNull(filePath);
+    if (content === null) {
       throw new Error(`File not found: ${filePath}`);
     }
 
-    // Read file
-    const content = await fs.readFile(filePath, 'utf-8');
     const lines = content.split('\n');
 
     // Find the line to annotate (0-indexed)
@@ -456,12 +475,191 @@ export class ApplyService {
     const indentMatch = lines[targetLine].match(/^(\s*)/);
     const indent = indentMatch ? indentMatch[1] : '';
 
-    // Insert annotation comment
-    const annotation = `${indent}// @atom ${atomId}`;
-    lines.splice(targetLine, 0, annotation);
-
-    // Write back
-    await fs.writeFile(filePath, lines.join('\n'), 'utf-8');
+    // Insert annotation comment using WriteProvider
+    const annotation = `// @atom ${atomId}`;
+    await this.writeProvider.insertLine(filePath, lineNumber, `${indent}${annotation}`);
     this.logger.log(`Injected @atom ${atomId} annotation in ${filePath}:${lineNumber}`);
+  }
+
+  // ========================================
+  // Governed Change Set Creation (Phase 15)
+  // ========================================
+
+  /**
+   * Create a governed change set from a reconciliation run.
+   * Instead of applying recommendations directly (creating draft atoms),
+   * this creates a change set molecule with proposed atoms that must go
+   * through the approval workflow before being committed to Main.
+   *
+   * @param request - Run ID, selections, and optional metadata
+   * @returns Change set ID, atom count, and molecule ID
+   */
+  async createChangeSetFromRun(request: {
+    runId: string;
+    selections?: string[];
+    name?: string;
+    description?: string;
+  }): Promise<{ changeSetId: string; atomCount: number; moleculeId: string }> {
+    const { runId, selections, name, description } = request;
+
+    this.logger.log(`Creating change set from run ${runId}`);
+
+    // Find the run
+    const run = await this.repository.findRunByRunId(runId);
+    if (!run) {
+      throw new NotFoundException(`Run ${runId} not found`);
+    }
+
+    // Get recommendations
+    const atomRecs = await this.repository.findAtomRecommendationsByRun(run.id);
+    const moleculeRecs = await this.repository.findMoleculeRecommendationsByRun(run.id);
+
+    // Filter to selected recommendations (or all pending)
+    const atomsToApply = selections
+      ? atomRecs.filter((a) => selections.includes(a.id) || selections.includes(a.tempId))
+      : atomRecs.filter((a) => a.status === 'pending');
+
+    if (atomsToApply.length === 0) {
+      throw new BadRequestException('No atom recommendations to include in change set');
+    }
+
+    // Start transaction
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Generate molecule ID for the change set
+      const moleculeIdResult = await queryRunner.manager.query(
+        `SELECT COALESCE(MAX(CAST(SUBSTRING(molecule_id FROM 3) AS INTEGER)), 0) + 1 as next_id FROM molecules WHERE molecule_id LIKE 'M-%'`,
+      );
+      const nextMoleculeId = moleculeIdResult[0]?.next_id || 1;
+      const moleculeIdStr = `M-${String(nextMoleculeId).padStart(3, '0')}`;
+
+      // 2. Create change set molecule
+      const changeSetMetadata: ChangeSetMetadata = {
+        status: 'draft' as ChangeSetStatus,
+        createdBy: 'reconciliation-agent',
+        summary: description || `Change set from reconciliation run ${runId}`,
+        sourceRef: runId,
+        source: 'reconciliation',
+        reconciliationRunId: runId,
+        approvals: [],
+        requiredApprovals: 1,
+      };
+
+      const changeSetMolecule = queryRunner.manager.create(Molecule, {
+        moleculeId: moleculeIdStr,
+        name: name || `Reconciliation: ${runId.substring(0, 8)}`,
+        description: description || `Governed change set from reconciliation run ${runId}`,
+        lensType: 'change_set',
+        ownerId: 'reconciliation-agent',
+        tags: ['reconciliation', 'governed'],
+        metadata: {},
+        changeSetMetadata,
+      });
+
+      const savedChangeSet = await queryRunner.manager.save(Molecule, changeSetMolecule);
+
+      // 3. Create proposed atoms
+      const tempIdToAtomId = new Map<string, string>();
+      let atomCount = 0;
+
+      for (const atomRec of atomsToApply) {
+        // Generate atom ID
+        const atomIdResult = await queryRunner.manager.query(
+          `SELECT COALESCE(MAX(CAST(SUBSTRING(atom_id FROM 4) AS INTEGER)), 0) + 1 as next_id FROM atoms WHERE atom_id LIKE 'IA-%'`,
+        );
+        const nextAtomId = atomIdResult[0]?.next_id || 1;
+        const atomIdStr = `IA-${String(nextAtomId).padStart(3, '0')}`;
+
+        const observableOutcomes = atomRec.observableOutcomes.map((o) => ({
+          description: o.description,
+          measurementCriteria: o.measurementCriteria,
+        }));
+
+        const atom = queryRunner.manager.create(Atom, {
+          atomId: atomIdStr,
+          description: atomRec.description,
+          category: atomRec.category,
+          qualityScore: atomRec.qualityScore || atomRec.confidence,
+          status: 'proposed',
+          changeSetId: savedChangeSet.id,
+          observableOutcomes,
+          metadata: {
+            source: 'reconciliation',
+            confidence: atomRec.confidence,
+            reasoning: atomRec.reasoning,
+            sourceTest: {
+              filePath: atomRec.sourceTestFilePath,
+              testName: atomRec.sourceTestName,
+              lineNumber: atomRec.sourceTestLineNumber,
+            },
+            tempId: atomRec.tempId,
+          },
+        });
+
+        const savedAtom = await queryRunner.manager.save(Atom, atom);
+        tempIdToAtomId.set(atomRec.tempId, savedAtom.id);
+
+        // Update recommendation
+        await queryRunner.manager.update(
+          'atom_recommendation',
+          { id: atomRec.id },
+          { atomId: savedAtom.id, status: 'accepted', acceptedAt: new Date() },
+        );
+
+        // Add atom to change set molecule
+        const junction = queryRunner.manager.create(MoleculeAtom, {
+          moleculeId: savedChangeSet.id,
+          atomId: savedAtom.id,
+          order: atomCount,
+          addedBy: 'reconciliation-agent',
+        });
+        await queryRunner.manager.save(MoleculeAtom, junction);
+
+        atomCount++;
+      }
+
+      // 4. Handle molecule recommendations (create normal molecules linking to proposed atoms)
+      const moleculesToApply = selections
+        ? moleculeRecs.filter((m) => selections.includes(m.id) || selections.includes(m.tempId))
+        : moleculeRecs.filter((m) => m.status === 'pending');
+
+      for (const moleculeRec of moleculesToApply) {
+        const atomIds = moleculeRec.atomRecommendationTempIds
+          .map((tempId) => tempIdToAtomId.get(tempId))
+          .filter((id): id is string => id !== undefined);
+
+        if (atomIds.length === 0) continue;
+
+        await this.createMoleculeFromRecommendation(queryRunner, moleculeRec, atomIds);
+
+        await queryRunner.manager.update(
+          'molecule_recommendation',
+          { id: moleculeRec.id },
+          { atomIds, status: 'accepted', acceptedAt: new Date() },
+        );
+      }
+
+      await queryRunner.commitTransaction();
+
+      this.logger.log(
+        `Change set created: ${savedChangeSet.id} with ${atomCount} proposed atoms`,
+      );
+
+      return {
+        changeSetId: savedChangeSet.id,
+        atomCount,
+        moleculeId: moleculeIdStr,
+      };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Change set creation rolled back: ${errorMessage}`);
+      throw new BadRequestException(`Failed to create change set: ${errorMessage}`);
+    } finally {
+      await queryRunner.release();
+    }
   }
 }

@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
-import * as fs from 'fs';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import * as path from 'path';
+import { ContentProvider, FilesystemContentProvider } from './content';
 
 /**
  * Structured analysis of a test
@@ -38,9 +38,28 @@ export interface TestAnalysis {
  * 4. Find relevant documentation (semantic search, not keyword matching)
  * 5. Create focused context summary (not raw file dumps)
  */
+/**
+ * Injection token for ContentProvider
+ */
+export const CONTENT_PROVIDER = Symbol('CONTENT_PROVIDER');
+
 @Injectable()
 export class ContextBuilderService {
   private readonly logger = new Logger(ContextBuilderService.name);
+  private contentProvider: ContentProvider;
+
+  constructor(
+    @Optional() @Inject(CONTENT_PROVIDER) contentProvider?: ContentProvider,
+  ) {
+    this.contentProvider = contentProvider || new FilesystemContentProvider();
+  }
+
+  /**
+   * Set or replace the content provider (useful for testing or dynamic configuration)
+   */
+  setContentProvider(provider: ContentProvider): void {
+    this.contentProvider = provider;
+  }
 
   /**
    * Analyze a test and build comprehensive context
@@ -56,7 +75,7 @@ export class ContextBuilderService {
     );
 
     // Step 1: Parse test structure
-    const testCode = this.readTestCode(testFilePath, testLineNumber);
+    const testCode = await this.readTestCode(testFilePath, testLineNumber);
     const isolatedTest = this.isolateTest(testCode, testName);
 
     // Step 2: Extract structured information
@@ -67,8 +86,8 @@ export class ContextBuilderService {
     const expectedBehavior = this.inferExpectedBehavior(assertions, functionCalls);
 
     // Step 3: Build dependency graph
-    const relatedSourceFiles = this.findRelatedSourceFiles(testFilePath, imports, rootDirectory);
-    const relatedTestFiles = this.findRelatedTestFiles(testFilePath, rootDirectory);
+    const relatedSourceFiles = await this.findRelatedSourceFiles(testFilePath, imports, rootDirectory);
+    const relatedTestFiles = await this.findRelatedTestFiles(testFilePath, rootDirectory);
 
     // Step 4: Extract domain/technical concepts
     const domainConcepts = this.extractDomainConcepts(testName, assertions, functionCalls);
@@ -110,7 +129,7 @@ export class ContextBuilderService {
    * Build focused context summary for LLM
    * Instead of raw file dumps, create structured summaries
    */
-  buildFocusedContext(analysis: TestAnalysis): string {
+  async buildFocusedContext(analysis: TestAnalysis): Promise<string> {
     this.logger.log(`[ContextBuilder] Building focused context for: ${analysis.testName}`);
     const sections: string[] = [];
 
@@ -145,7 +164,7 @@ export class ContextBuilderService {
     if (analysis.relatedSourceFiles.length > 0) {
       sections.push('### Related Source Code:');
       for (const sourceFile of analysis.relatedSourceFiles.slice(0, 3)) {
-        const summary = this.summarizeSourceFile(sourceFile);
+        const summary = await this.summarizeSourceFile(sourceFile);
         if (summary) {
           sections.push(`**${path.basename(sourceFile)}**: ${summary}`);
         }
@@ -171,15 +190,20 @@ export class ContextBuilderService {
 
   // --- Private helper methods ---
 
-  private readTestCode(filePath: string, lineNumber: number): string {
+  private async readTestCode(filePath: string, lineNumber: number): Promise<string> {
     try {
-      const content = fs.readFileSync(filePath, 'utf-8');
+      const content = await this.contentProvider.readFileOrNull(filePath);
+      if (content === null) {
+        this.logger.warn(`Test file not found: ${filePath}`);
+        return '';
+      }
       const lines = content.split('\n');
       const start = Math.max(0, lineNumber - 30);
       const end = Math.min(lines.length, lineNumber + 100);
       return lines.slice(start, end).join('\n');
     } catch (error) {
-      this.logger.warn(`Failed to read test file: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Failed to read test file: ${errorMessage}`);
       return '';
     }
   }
@@ -358,11 +382,11 @@ export class ContextBuilderService {
   /**
    * Find related source files based on imports and file structure
    */
-  private findRelatedSourceFiles(
+  private async findRelatedSourceFiles(
     testFilePath: string,
     imports: string[],
     rootDirectory: string,
-  ): string[] {
+  ): Promise<string[]> {
     const sourceFiles: string[] = [];
 
     // Find source file for this test
@@ -371,7 +395,7 @@ export class ContextBuilderService {
       .replace(/\.test\.ts$/, '.ts')
       .replace(/\.e2e-spec\.ts$/, '.ts');
 
-    if (fs.existsSync(sourcePath) && sourcePath !== testFilePath) {
+    if ((await this.contentProvider.exists(sourcePath)) && sourcePath !== testFilePath) {
       sourceFiles.push(sourcePath);
     }
 
@@ -379,17 +403,17 @@ export class ContextBuilderService {
     for (const importPath of imports.slice(0, 5)) {
       // Try to resolve relative imports
       if (importPath.startsWith('.')) {
-        const resolved = this.resolveImportPath(testFilePath, importPath);
-        if (resolved && fs.existsSync(resolved)) {
+        const resolved = await this.resolveImportPath(testFilePath, importPath);
+        if (resolved) {
           sourceFiles.push(resolved);
         }
       } else if (importPath.startsWith('@/')) {
         // Handle path aliases (e.g., @/lib/...)
         const aliasPath = importPath.replace('@/', '');
         const resolved = path.join(rootDirectory, 'src', aliasPath);
-        if (fs.existsSync(resolved + '.ts')) {
+        if (await this.contentProvider.exists(resolved + '.ts')) {
           sourceFiles.push(resolved + '.ts');
-        } else if (fs.existsSync(resolved + '/index.ts')) {
+        } else if (await this.contentProvider.exists(resolved + '/index.ts')) {
           sourceFiles.push(resolved + '/index.ts');
         }
       }
@@ -401,22 +425,22 @@ export class ContextBuilderService {
   /**
    * Find related test files (tests in same directory or testing same module)
    */
-  private findRelatedTestFiles(testFilePath: string, rootDirectory: string): string[] {
+  private async findRelatedTestFiles(testFilePath: string, _rootDirectory: string): Promise<string[]> {
     const related: string[] = [];
     const testDir = path.dirname(testFilePath);
 
     // Find other test files in same directory
     try {
-      const files = fs.readdirSync(testDir);
-      for (const file of files) {
-        if (file.endsWith('.spec.ts') || file.endsWith('.test.ts')) {
-          const fullPath = path.join(testDir, file);
+      const entries = await this.contentProvider.listFiles(testDir);
+      for (const entry of entries) {
+        if (!entry.isDirectory && (entry.path.endsWith('.spec.ts') || entry.path.endsWith('.test.ts'))) {
+          const fullPath = path.join(testDir, entry.path);
           if (fullPath !== testFilePath) {
             related.push(fullPath);
           }
         }
       }
-    } catch (error) {
+    } catch {
       // Directory might not exist or be readable
     }
 
@@ -513,18 +537,21 @@ export class ContextBuilderService {
   private async findRelevantDocumentation(
     domainConcepts: string[],
     technicalConcepts: string[],
-    testFilePath: string,
+    _testFilePath: string,
     rootDirectory: string,
   ): Promise<string[]> {
     const snippets: string[] = [];
 
     // Find docs that mention domain or technical concepts
-    const docFiles = this.findDocumentationFiles(rootDirectory);
+    const docFiles = await this.findDocumentationFiles(rootDirectory);
     const searchTerms = [...domainConcepts, ...technicalConcepts];
 
     for (const docFile of docFiles.slice(0, 20)) {
       try {
-        const content = fs.readFileSync(docFile, 'utf-8').toLowerCase();
+        const rawContent = await this.contentProvider.readFileOrNull(docFile);
+        if (rawContent === null) continue;
+
+        const content = rawContent.toLowerCase();
 
         // Check if doc mentions any concepts
         const relevance = searchTerms.filter((term) => content.includes(term.toLowerCase())).length;
@@ -541,7 +568,7 @@ export class ContextBuilderService {
             }
           }
         }
-      } catch (error) {
+      } catch {
         // Skip if can't read
       }
     }
@@ -552,9 +579,10 @@ export class ContextBuilderService {
   /**
    * Summarize a source file (extract key information, not full content)
    */
-  private summarizeSourceFile(filePath: string): string | null {
+  private async summarizeSourceFile(filePath: string): Promise<string | null> {
     try {
-      const content = fs.readFileSync(filePath, 'utf-8');
+      const content = await this.contentProvider.readFileOrNull(filePath);
+      if (content === null) return null;
 
       // Extract exports and key functions
       const exports = content.match(/export\s+(?:async\s+)?function\s+(\w+)/g) || [];
@@ -575,55 +603,43 @@ export class ContextBuilderService {
       }
 
       return summary.length > 0 ? summary.join('; ') : 'Source code file';
-    } catch (error) {
+    } catch {
       return null;
     }
   }
 
-  private resolveImportPath(fromFile: string, importPath: string): string | null {
+  private async resolveImportPath(fromFile: string, importPath: string): Promise<string | null> {
     const fromDir = path.dirname(fromFile);
     const resolved = path.resolve(fromDir, importPath);
 
     // Try .ts extension
-    if (fs.existsSync(resolved + '.ts')) {
+    if (await this.contentProvider.exists(resolved + '.ts')) {
       return resolved + '.ts';
     }
 
     // Try /index.ts
-    if (fs.existsSync(path.join(resolved, 'index.ts'))) {
-      return path.join(resolved, 'index.ts');
+    const indexPath = path.join(resolved, 'index.ts');
+    if (await this.contentProvider.exists(indexPath)) {
+      return indexPath;
     }
 
     return null;
   }
 
-  private findDocumentationFiles(rootDirectory: string): string[] {
-    const docFiles: string[] = [];
-    const patterns = ['**/README.md', '**/docs/**/*.md'];
+  private async findDocumentationFiles(rootDirectory: string): Promise<string[]> {
+    try {
+      // Use walkDirectory to find all markdown files
+      const allFiles = await this.contentProvider.walkDirectory(rootDirectory, {
+        excludePatterns: ['node_modules', '.claude', 'dist', '.git'],
+        maxFiles: 100,
+        includeExtensions: ['.md'],
+      });
 
-    const walkDir = (dir: string, depth = 0) => {
-      if (depth > 5 || !fs.existsSync(dir)) return;
-
-      try {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          const fullPath = path.join(dir, entry.name);
-          const relativePath = path.relative(rootDirectory, fullPath);
-
-          if (entry.isDirectory() && !relativePath.includes('node_modules')) {
-            walkDir(fullPath, depth + 1);
-          } else if (entry.isFile() && relativePath.endsWith('.md')) {
-            if (!relativePath.includes('.claude/')) {
-              docFiles.push(fullPath);
-            }
-          }
-        }
-      } catch (error) {
-        // Skip if can't read
-      }
-    };
-
-    walkDir(rootDirectory);
-    return docFiles.slice(0, 50);
+      // Return full paths
+      return allFiles.slice(0, 50).map((f) => path.join(rootDirectory, f));
+    } catch {
+      // Return empty array if walking fails
+      return [];
+    }
   }
 }

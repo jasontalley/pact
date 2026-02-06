@@ -10,11 +10,19 @@
  * - Session resumption for failure recovery
  */
 
-import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Optional, Inject } from '@nestjs/common';
 import { CompiledStateGraph } from '@langchain/langgraph';
 import { LLMService } from '../../../common/llm/llm.service';
 import { ToolRegistryService } from '../tools/tool-registry.service';
 import { ReconciliationRepository } from '../repositories/reconciliation.repository';
+import {
+  ContentProvider,
+  WriteProvider,
+  FilesystemContentProvider,
+  FilesystemWriteProvider,
+} from '../content';
+import { CONTENT_PROVIDER } from '../context-builder.service';
+import { WRITE_PROVIDER } from '../apply.service';
 
 import { NodeConfig } from './nodes/types';
 
@@ -63,11 +71,15 @@ export class GraphRegistryService implements OnModuleInit {
     private readonly llmService: LLMService,
     private readonly toolRegistry: ToolRegistryService,
     @Optional() private readonly reconciliationRepository?: ReconciliationRepository,
+    @Optional() @Inject(CONTENT_PROVIDER) contentProvider?: ContentProvider,
+    @Optional() @Inject(WRITE_PROVIDER) writeProvider?: WriteProvider,
   ) {
     this.nodeConfig = {
       llmService: this.llmService,
       toolRegistry: this.toolRegistry,
       logger: this.logger,
+      contentProvider: contentProvider || new FilesystemContentProvider(),
+      writeProvider: writeProvider || new FilesystemWriteProvider(),
     };
   }
 

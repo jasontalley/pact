@@ -4,6 +4,8 @@
  * Builds rich context for each orphan test.
  * Uses the `get_test_analysis` tool via ToolRegistryService.
  *
+ * Phase 17: Refactored to use ContentProvider abstraction instead of direct fs calls.
+ *
  * **Dependency-Aware Processing (Phase 3.4)**:
  * - Tests are processed in topological order when available
  * - Base modules (fewer dependencies) are analyzed first
@@ -12,8 +14,10 @@
  * @see docs/implementation-checklist-phase5.md Section 1.7
  * @see docs/implementation-checklist-phase5.md Section 2.3 (refactored to use tools)
  * @see docs/implementation-checklist-phase5.md Section 3.4 (dependency-aware processing)
+ * @see docs/implementation-checklist-phase17.md Section 17A.9
  */
 
+import * as path from 'path';
 import { NodeConfig } from '../types';
 import {
   ReconciliationGraphStateType,
@@ -23,8 +27,7 @@ import {
   RepoStructure,
 } from '../../types/reconciliation-state';
 import { ContextBuilderService } from '../../../context-builder.service';
-import * as fs from 'fs';
-import * as path from 'path';
+import { ContentProvider, FilesystemContentProvider } from '../../../content';
 
 /**
  * Options for customizing context node behavior
@@ -42,6 +45,13 @@ export interface ContextNodeOptions {
   useTool?: boolean;
   /** Use topological ordering for test processing (default: true) */
   useTopologicalOrder?: boolean;
+}
+
+/**
+ * Get or create ContentProvider from config
+ */
+function getContentProvider(config: NodeConfig, basePath?: string): ContentProvider {
+  return config.contentProvider || new FilesystemContentProvider(basePath);
 }
 
 /**
@@ -110,51 +120,47 @@ function getTestKey(test: OrphanTestInfo): string {
 
 /**
  * Build simple documentation index by scanning docs directory
+ * Uses ContentProvider for async file operations
  */
-function buildDocumentationIndex(rootDirectory: string, maxChunks: number): DocChunk[] {
+async function buildDocumentationIndex(
+  rootDirectory: string,
+  maxChunks: number,
+  contentProvider: ContentProvider,
+): Promise<DocChunk[]> {
   const chunks: DocChunk[] = [];
   const docsDir = path.join(rootDirectory, 'docs');
 
-  if (!fs.existsSync(docsDir)) {
+  // Check if docs directory exists
+  if (!(await contentProvider.exists(docsDir))) {
     return chunks;
   }
 
-  function walkDocs(dir: string): void {
-    if (chunks.length >= maxChunks) return;
+  // Walk the docs directory
+  const docFiles = await contentProvider.walkDirectory(docsDir, {
+    excludePatterns: ['node_modules'],
+    maxFiles: maxChunks * 2, // Get more files than needed for filtering
+    includeExtensions: ['.md'],
+  });
 
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
+  for (const relativePath of docFiles) {
+    if (chunks.length >= maxChunks) break;
 
-    for (const entry of entries) {
-      if (chunks.length >= maxChunks) break;
+    // Construct full path for reading
+    const fullPath = path.join(docsDir, relativePath);
+    const docRelativePath = path.join('docs', relativePath);
 
-      const fullPath = path.join(dir, entry.name);
-      const relativePath = path.relative(rootDirectory, fullPath);
+    const content = await contentProvider.readFileOrNull(fullPath);
+    if (content === null) continue;
 
-      if (entry.isDirectory() && !relativePath.includes('node_modules')) {
-        walkDocs(fullPath);
-      } else if (entry.isFile() && entry.name.endsWith('.md')) {
-        try {
-          const content = fs.readFileSync(fullPath, 'utf-8');
-          const keywords = extractKeywords(content);
+    const keywords = extractKeywords(content);
 
-          chunks.push({
-            filePath: relativePath,
-            content: content.substring(0, 2000), // Limit content size
-            keywords,
-          });
-        } catch {
-          // Skip files we can't read
-        }
-      }
-    }
+    chunks.push({
+      filePath: docRelativePath,
+      content: content.substring(0, 2000), // Limit content size
+      keywords,
+    });
   }
 
-  walkDocs(docsDir);
   return chunks;
 }
 
@@ -192,7 +198,7 @@ function extractKeywords(content: string): string[] {
 /**
  * Fallback test analysis when ContextBuilderService is not available
  */
-function createFallbackAnalysis(test: OrphanTestInfo, rootDirectory: string): TestAnalysis {
+function createFallbackAnalysis(test: OrphanTestInfo, _rootDirectory: string): TestAnalysis {
   // Extract basic info from test code
   const testCode = test.testCode || '';
 
@@ -264,6 +270,7 @@ export function createContextNode(options: ContextNodeOptions = {}) {
       const repoStructure = state.repoStructure;
       const rawOrphanTests = state.orphanTests || [];
       const shouldAnalyzeDocs = state.input?.options?.analyzeDocs ?? indexDocs;
+      const isFixtureMode = state.fixtureMode === true;
 
       // Sort tests by topological order if available (Phase 3.4)
       const orphanTests = useTopologicalOrder
@@ -277,21 +284,34 @@ export function createContextNode(options: ContextNodeOptions = {}) {
           `(useTool=${useTool}, topologicalOrder=${hasTopoOrder && useTopologicalOrder})`,
       );
 
-      // Build documentation index if requested
+      // Get ContentProvider for non-fixture mode file operations
+      const contentProvider = getContentProvider(config, rootDirectory);
+
+      // Build documentation index if requested (skip in fixture mode - use ContentProvider)
       let documentationIndex: DocChunk[] | null = null;
-      if (shouldAnalyzeDocs) {
+      if (shouldAnalyzeDocs && !isFixtureMode) {
         config.logger?.log('[ContextNode] Building documentation index...');
-        documentationIndex = buildDocumentationIndex(rootDirectory, maxDocChunks);
+        documentationIndex = await buildDocumentationIndex(
+          rootDirectory,
+          maxDocChunks,
+          contentProvider,
+        );
         config.logger?.log(
           `[ContextNode] Indexed ${documentationIndex.length} documentation chunks`,
         );
+      } else if (isFixtureMode) {
+        config.logger?.log('[ContextNode] Fixture mode: skipping documentation index');
       }
 
-      // Check if tool is available
-      const hasTestAnalysisTool = useTool && config.toolRegistry.hasTool('get_test_analysis');
-      const contextBuilderService = options.contextBuilderService;
+      // Check if tool is available (not in fixture mode - no filesystem access)
+      const hasTestAnalysisTool = !isFixtureMode && useTool && config.toolRegistry.hasTool('get_test_analysis');
+      const contextBuilderService = isFixtureMode ? undefined : options.contextBuilderService;
       const contextPerTest = new Map<string, TestAnalysis>();
       let processedCount = 0;
+
+      if (isFixtureMode) {
+        config.logger?.log('[ContextNode] Fixture mode: using fallback analysis (no filesystem access)');
+      }
 
       for (const test of orphanTests) {
         const testKey = getTestKey(test);
@@ -299,8 +319,11 @@ export function createContextNode(options: ContextNodeOptions = {}) {
         try {
           let analysis: TestAnalysis;
 
-          // Try tool-based analysis first
-          if (hasTestAnalysisTool) {
+          // In fixture mode, always use fallback analysis (no filesystem access)
+          if (isFixtureMode) {
+            analysis = createFallbackAnalysis(test, rootDirectory);
+          } else if (hasTestAnalysisTool) {
+            // Try tool-based analysis first
             try {
               const toolResult = (await config.toolRegistry.executeTool('get_test_analysis', {
                 test_file_path: test.filePath,

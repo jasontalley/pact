@@ -7,11 +7,10 @@
  * @see docs/implementation-checklist-phase5.md Phase 2.2
  */
 
-import { Injectable, Logger } from '@nestjs/common';
-import * as fs from 'fs';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import * as path from 'path';
 import { ToolExecutor } from './tool-registry.service';
-import { ContextBuilderService, TestAnalysis } from '../context-builder.service';
+import { ContextBuilderService, TestAnalysis, CONTENT_PROVIDER } from '../context-builder.service';
 import {
   TestAtomCouplingService,
   OrphanTest,
@@ -24,6 +23,7 @@ import { ClusteringAtomInput, ClusteredMolecule } from './reconciliation-tools.d
 import { InferredAtom } from '../graphs/types/reconciliation-state';
 import { getChangedTestFiles, getCurrentCommitHash, isGitRepository } from '../utils/git-utils';
 import { DependencyAnalyzer, DependencyEdge } from '../utils/dependency-analyzer';
+import { ContentProvider, FilesystemContentProvider } from '../content';
 
 /**
  * Result type for repo structure tool
@@ -125,13 +125,24 @@ export interface DocSearchResult {
 @Injectable()
 export class ReconciliationToolsService implements ToolExecutor {
   private readonly logger = new Logger(ReconciliationToolsService.name);
+  private contentProvider: ContentProvider;
 
   constructor(
     private readonly contextBuilder: ContextBuilderService,
     private readonly testAtomCoupling: TestAtomCouplingService,
     private readonly atomQuality: AtomQualityService,
     private readonly llmService: LLMService,
-  ) {}
+    @Optional() @Inject(CONTENT_PROVIDER) contentProvider?: ContentProvider,
+  ) {
+    this.contentProvider = contentProvider || new FilesystemContentProvider();
+  }
+
+  /**
+   * Set or replace the content provider (useful for testing or dynamic configuration)
+   */
+  setContentProvider(provider: ContentProvider): void {
+    this.contentProvider = provider;
+  }
 
   async execute(name: string, args: Record<string, unknown>): Promise<unknown> {
     switch (name) {
@@ -183,42 +194,23 @@ export class ReconciliationToolsService implements ToolExecutor {
     const testFiles: string[] = [];
     const sourceFiles: string[] = [];
 
-    // Walk directory
-    const walkDir = (dir: string, depth = 0) => {
-      if (depth > 20 || files.length >= maxFiles) return;
+    // Walk directory using ContentProvider
+    const allFiles = await this.contentProvider.walkDirectory(rootDirectory, {
+      excludePatterns: allExcludes,
+      maxFiles,
+      includeExtensions: ['.ts'],
+    });
 
-      try {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const relativePath of allFiles) {
+      files.push(relativePath);
+      const filename = path.basename(relativePath);
 
-        for (const entry of entries) {
-          if (files.length >= maxFiles) break;
-
-          const fullPath = path.join(dir, entry.name);
-          const relativePath = path.relative(rootDirectory, fullPath);
-
-          // Check exclusions
-          if (allExcludes.some((exclude) => relativePath.includes(exclude))) {
-            continue;
-          }
-
-          if (entry.isDirectory()) {
-            walkDir(fullPath, depth + 1);
-          } else if (entry.isFile() && entry.name.endsWith('.ts')) {
-            files.push(relativePath);
-
-            if (this.isTestFile(entry.name)) {
-              testFiles.push(relativePath);
-            } else {
-              sourceFiles.push(relativePath);
-            }
-          }
-        }
-      } catch (error) {
-        // Skip directories that can't be read
+      if (this.isTestFile(filename)) {
+        testFiles.push(relativePath);
+      } else {
+        sourceFiles.push(relativePath);
       }
-    };
-
-    walkDir(rootDirectory);
+    }
 
     const result: RepoStructureResult = {
       files,
@@ -229,8 +221,8 @@ export class ReconciliationToolsService implements ToolExecutor {
 
     // Optionally analyze dependencies using DependencyAnalyzer
     if (includeDependencies) {
-      const analyzer = new DependencyAnalyzer(rootDirectory);
-      const analysis = analyzer.analyzeRepository(sourceFiles);
+      const analyzer = new DependencyAnalyzer(rootDirectory, this.contentProvider);
+      const analysis = await analyzer.analyzeRepository(sourceFiles);
 
       result.dependencyEdges = analysis.graph.edges;
       result.topologicalOrder = analysis.topologicalOrder.order;
@@ -441,13 +433,14 @@ export class ReconciliationToolsService implements ToolExecutor {
     for (const testFile of changedTestFiles) {
       const fullPath = path.join(rootDirectory, testFile);
 
-      if (!fs.existsSync(fullPath)) {
-        // File was deleted - skip
+      // Check if file exists (might have been deleted)
+      const content = await this.contentProvider.readFileOrNull(fullPath);
+      if (content === null) {
+        // File was deleted or unreadable - skip
         continue;
       }
 
       try {
-        const content = fs.readFileSync(fullPath, 'utf-8');
         const testsInFile = this.parseTestsFromFile(content, testFile);
 
         for (const test of testsInFile) {
@@ -641,13 +634,16 @@ export class ReconciliationToolsService implements ToolExecutor {
     const snippets: DocSearchResult['snippets'] = [];
 
     // Find documentation files
-    const docFiles = this.findDocFiles(rootDirectory, docPatterns);
+    const docFiles = await this.findDocFiles(rootDirectory, docPatterns);
 
     for (const docFile of docFiles) {
       if (snippets.length >= maxSnippets) break;
 
       try {
-        const content = fs.readFileSync(docFile, 'utf-8').toLowerCase();
+        const rawContent = await this.contentProvider.readFileOrNull(docFile);
+        if (rawContent === null) continue;
+
+        const content = rawContent.toLowerCase();
         const matchedConcepts = concepts.filter((c) => content.includes(c.toLowerCase()));
 
         if (matchedConcepts.length > 0) {
@@ -931,10 +927,10 @@ export class ReconciliationToolsService implements ToolExecutor {
   /**
    * Analyze import dependencies between source files
    */
-  private analyzeDependencies(
+  private async analyzeDependencies(
     sourceFiles: string[],
     rootDirectory: string,
-  ): Array<{ from: string; to: string }> {
+  ): Promise<Array<{ from: string; to: string }>> {
     const edges: Array<{ from: string; to: string }> = [];
     const importRegex = /import\s+.*?\s+from\s+['"]([^'"]+)['"]/g;
 
@@ -942,7 +938,9 @@ export class ReconciliationToolsService implements ToolExecutor {
       // Limit for performance
       try {
         const fullPath = path.join(rootDirectory, file);
-        const content = fs.readFileSync(fullPath, 'utf-8');
+        const content = await this.contentProvider.readFileOrNull(fullPath);
+        if (content === null) continue;
+
         const matches = content.matchAll(importRegex);
 
         for (const match of matches) {
@@ -983,37 +981,19 @@ export class ReconciliationToolsService implements ToolExecutor {
   /**
    * Find documentation files
    */
-  private findDocFiles(rootDirectory: string, patterns: string[]): string[] {
-    const docFiles: string[] = [];
-    const maxFiles = 100;
+  private async findDocFiles(rootDirectory: string, _patterns: string[]): Promise<string[]> {
+    try {
+      const allFiles = await this.contentProvider.walkDirectory(rootDirectory, {
+        excludePatterns: ['node_modules', 'dist', '.git'],
+        maxFiles: 100,
+        includeExtensions: ['.md'],
+      });
 
-    const walkDir = (dir: string, depth = 0) => {
-      if (depth > 5 || docFiles.length >= maxFiles) return;
-
-      try {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-        for (const entry of entries) {
-          if (docFiles.length >= maxFiles) break;
-
-          const fullPath = path.join(dir, entry.name);
-          const relativePath = path.relative(rootDirectory, fullPath);
-
-          if (relativePath.includes('node_modules')) continue;
-
-          if (entry.isDirectory()) {
-            walkDir(fullPath, depth + 1);
-          } else if (entry.isFile() && entry.name.endsWith('.md')) {
-            docFiles.push(fullPath);
-          }
-        }
-      } catch {
-        // Skip directories that can't be read
-      }
-    };
-
-    walkDir(rootDirectory);
-    return docFiles;
+      // Return full paths
+      return allFiles.map((f) => path.join(rootDirectory, f));
+    } catch {
+      return [];
+    }
   }
 
   /**

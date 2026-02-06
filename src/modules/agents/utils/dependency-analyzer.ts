@@ -5,10 +5,11 @@
  * and compute topological order for processing.
  *
  * @see docs/implementation-checklist-phase5.md Section 3.3
+ * @see docs/implementation-checklist-phase17.md Section 17A.13
  */
 
-import * as fs from 'fs';
 import * as path from 'path';
+import { ContentProvider, FilesystemContentProvider } from '../content';
 
 /**
  * Represents a dependency edge between files
@@ -51,9 +52,11 @@ export interface TopologicalSortResult {
  */
 export class DependencyAnalyzer {
   private rootDirectory: string;
+  private contentProvider: ContentProvider;
 
-  constructor(rootDirectory: string) {
+  constructor(rootDirectory: string, contentProvider?: ContentProvider) {
     this.rootDirectory = rootDirectory;
+    this.contentProvider = contentProvider || new FilesystemContentProvider(rootDirectory);
   }
 
   /**
@@ -67,17 +70,11 @@ export class DependencyAnalyzer {
    * @param filePath - Path to the file (relative to root)
    * @returns Array of imported file paths (relative to root)
    */
-  parseImports(filePath: string): string[] {
+  async parseImports(filePath: string): Promise<string[]> {
     const fullPath = path.join(this.rootDirectory, filePath);
 
-    if (!fs.existsSync(fullPath)) {
-      return [];
-    }
-
-    let content: string;
-    try {
-      content = fs.readFileSync(fullPath, 'utf-8');
-    } catch {
+    const content = await this.contentProvider.readFileOrNull(fullPath);
+    if (content === null) {
       return [];
     }
 
@@ -91,21 +88,21 @@ export class DependencyAnalyzer {
     // CommonJS require
     const requireRegex = /require\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g;
 
-    const processMatch = (match: RegExpMatchArray | null, regex: RegExp) => {
+    const processMatch = async (_match: RegExpMatchArray | null, regex: RegExp) => {
       let m: RegExpExecArray | null;
       regex.lastIndex = 0; // Reset regex state
       while ((m = regex.exec(content)) !== null) {
         const importPath = m[1];
-        const resolved = this.resolveImportPath(importPath, fileDir);
+        const resolved = await this.resolveImportPath(importPath, fileDir);
         if (resolved) {
           imports.push(resolved);
         }
       }
     };
 
-    processMatch(null, es6ImportRegex);
-    processMatch(null, dynamicImportRegex);
-    processMatch(null, requireRegex);
+    await processMatch(null, es6ImportRegex);
+    await processMatch(null, dynamicImportRegex);
+    await processMatch(null, requireRegex);
 
     return [...new Set(imports)]; // Deduplicate
   }
@@ -117,7 +114,7 @@ export class DependencyAnalyzer {
    * @param fromDir - The directory of the importing file
    * @returns Resolved file path relative to root, or null if external/not found
    */
-  private resolveImportPath(importPath: string, fromDir: string): string | null {
+  private async resolveImportPath(importPath: string, fromDir: string): Promise<string | null> {
     // Skip external packages (not starting with . or /)
     if (!importPath.startsWith('.') && !importPath.startsWith('/')) {
       return null;
@@ -137,14 +134,14 @@ export class DependencyAnalyzer {
     for (const ext of extensions) {
       const withExt = resolvedPath + ext;
       const fullPath = path.join(this.rootDirectory, withExt);
-      if (fs.existsSync(fullPath)) {
+      if (await this.contentProvider.exists(fullPath)) {
         return withExt;
       }
     }
 
     // Check if the path already has an extension
     const fullPath = path.join(this.rootDirectory, resolvedPath);
-    if (fs.existsSync(fullPath)) {
+    if (await this.contentProvider.exists(fullPath)) {
       return resolvedPath;
     }
 
@@ -157,7 +154,7 @@ export class DependencyAnalyzer {
    * @param files - List of file paths (relative to root)
    * @returns Dependency graph
    */
-  buildDependencyGraph(files: string[]): DependencyGraph {
+  async buildDependencyGraph(files: string[]): Promise<DependencyGraph> {
     const edges: DependencyEdge[] = [];
     const adjacencyList = new Map<string, string[]>();
     const reverseAdjacencyList = new Map<string, string[]>();
@@ -172,7 +169,7 @@ export class DependencyAnalyzer {
     const fileSet = new Set(files);
 
     for (const file of files) {
-      const imports = this.parseImports(file);
+      const imports = await this.parseImports(file);
 
       for (const importedFile of imports) {
         // Only include edges to files in our file set
@@ -319,7 +316,7 @@ export class DependencyAnalyzer {
    * @param files - List of file paths to analyze
    * @returns Complete dependency analysis
    */
-  analyzeRepository(files: string[]): {
+  async analyzeRepository(files: string[]): Promise<{
     graph: DependencyGraph;
     topologicalOrder: TopologicalSortResult;
     stats: {
@@ -329,8 +326,8 @@ export class DependencyAnalyzer {
       filesWithNoDependents: number;
       hasCycles: boolean;
     };
-  } {
-    const graph = this.buildDependencyGraph(files);
+  }> {
+    const graph = await this.buildDependencyGraph(files);
     const topologicalOrder = this.topologicalSort(graph);
 
     // Calculate stats

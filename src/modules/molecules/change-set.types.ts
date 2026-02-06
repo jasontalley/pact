@@ -54,4 +54,12 @@ export interface ChangeSetMetadata {
   committedAt?: string;
   /** IDs of atoms that were batch-committed */
   committedAtomIds?: string[];
+  /** How this change set was created */
+  source?: 'manual' | 'reconciliation' | 'import';
+  /** Run ID if source is 'reconciliation' */
+  reconciliationRunId?: string;
+  /** Whether atoms should be auto-promoted to Main on commit */
+  autoPromote?: boolean;
+  /** IDs of atoms promoted to Main during commit */
+  promotedAtomIds?: string[];
 }

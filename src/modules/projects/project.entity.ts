@@ -9,6 +9,24 @@ import {
 import type { InvariantConfig } from '../invariants/invariant-config.entity';
 
 /**
+ * Drift convergence policies for a project
+ */
+export interface DriftPolicies {
+  /** Days until normal drift becomes overdue (default: 14) */
+  normalConvergenceDays?: number;
+  /** Days until hotfix drift becomes overdue (default: 3) */
+  hotfixConvergenceDays?: number;
+  /** Days until spike drift becomes overdue (default: 7) */
+  spikeConvergenceDays?: number;
+  /** Days at which drift escalates to high severity (default: 7) */
+  highSeverityDays?: number;
+  /** Days at which drift escalates to critical severity (default: 14) */
+  criticalSeverityDays?: number;
+  /** Whether to block CI on overdue drift (default: false) */
+  blockOnOverdueDrift?: boolean;
+}
+
+/**
  * Project settings interface for extensible configuration
  */
 export interface ProjectSettings {
@@ -16,6 +34,15 @@ export interface ProjectSettings {
   enforceInvariants?: boolean;
   /** Default quality threshold for atoms */
   qualityThreshold?: number;
+  /**
+   * The branch where canonical reality is asserted (e.g. "main", "develop").
+   * Used by CI-attested reconciliation to label which branch the run was performed against.
+   * Pact does not need to understand the org's Git workflow — it only needs a consistent
+   * place where reality is asserted.
+   */
+  integrationTarget?: string;
+  /** Drift convergence policies (Phase 16) */
+  driftPolicies?: DriftPolicies;
   /** Custom metadata for project-specific needs */
   [key: string]: unknown;
 }

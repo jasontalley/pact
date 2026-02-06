@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -9,6 +9,7 @@ import { EpistemicMetrics } from './dto/epistemic-metrics.dto';
 import { CouplingMetrics } from './dto/coupling-metrics.dto';
 import { CoverageReport } from '../coverage/coverage-report.entity';
 import { TestRecord } from '../agents/entities/test-record.entity';
+import { DriftMetricsService } from '../drift/drift-metrics.service';
 
 export interface MetricsTrend {
   date: string;
@@ -30,6 +31,8 @@ export class MetricsHistoryService {
     private readonly testRecordRepository: Repository<TestRecord>,
     private readonly couplingMetricsService: CouplingMetricsService,
     private readonly epistemicMetricsService: EpistemicMetricsService,
+    @Optional() @Inject(DriftMetricsService)
+    private readonly driftMetricsService?: DriftMetricsService,
   ) {}
 
   /**
@@ -73,15 +76,16 @@ export class MetricsHistoryService {
 
   /**
    * Build additional metrics: test quality aggregate, coverage summary,
-   * quality-weighted certainty, and coupling strength.
+   * quality-weighted certainty, coupling strength, and drift metrics.
    */
   private async buildAdditionalMetrics(
     epistemicMetrics: EpistemicMetrics,
     couplingMetrics: CouplingMetrics,
   ): Promise<Record<string, unknown>> {
-    const [testQuality, coverage] = await Promise.all([
+    const [testQuality, coverage, drift] = await Promise.all([
       this.getTestQualityAggregate(),
       this.getLatestCoverageSummary(),
+      this.getDriftMetrics(),
     ]);
 
     return {
@@ -89,7 +93,30 @@ export class MetricsHistoryService {
       coverage,
       qualityWeightedCertainty: epistemicMetrics.qualityWeightedCertainty,
       averageCouplingStrength: couplingMetrics.atomTestCoupling.averageCouplingStrength,
+      drift,
     };
+  }
+
+  /**
+   * Get drift metrics for snapshot (Phase 16).
+   */
+  private async getDriftMetrics(): Promise<Record<string, unknown> | null> {
+    if (!this.driftMetricsService) {
+      return null;
+    }
+
+    try {
+      const summary = await this.driftMetricsService.getDriftMetricsSnapshot();
+      return {
+        totalOpen: summary.totalOpen,
+        byType: summary.byType,
+        bySeverity: summary.bySeverity,
+        overdueCount: summary.overdueCount,
+        convergenceScore: summary.convergenceScore,
+      };
+    } catch {
+      return null;
+    }
   }
 
   /**

@@ -5,6 +5,9 @@
   "author": "Jason Talley",
   "private": true,
   "license": "UNLICENSED",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -26,6 +29,10 @@
     "test:quality": "node bootstrap/tooling/test-quality-analyzer.js",
     "test:quality:report": "node bootstrap/tooling/test-quality-analyzer.js --report",
     "test:coupling": "node bootstrap/tooling/test-atom-coupling.js src",
+    "test:agents": "jest --testPathPattern=test/agents --no-coverage",
+    "test:agents:property": "jest --testPathPattern=test/agents/.*/properties --no-coverage",
+    "test:agents:cost": "jest --testPathPattern=test/agents/cost-latency --no-coverage",
+    "evaluate:agents": "ts-node scripts/evaluate-agents.ts",
     "pact:seed": "node bootstrap/seed/seed-atoms.js seed",
     "pact:seed:list": "node bootstrap/seed/seed-atoms.js list",
     "pact:project": "node bootstrap/seed/project-atoms.js project",

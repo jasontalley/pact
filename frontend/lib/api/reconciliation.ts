@@ -142,4 +142,20 @@ export const reconciliationApi = {
     );
     return response.data;
   },
+
+  /**
+   * Create a governed change set from a reconciliation run.
+   * Instead of applying directly, atoms are created as 'proposed' and
+   * must go through change set approval before being committed to Main.
+   */
+  createChangeSet: async (
+    runId: string,
+    data: { selections?: string[]; name?: string; description?: string }
+  ): Promise<{ changeSetId: string; atomCount: number; moleculeId: string }> => {
+    const response = await apiClient.post<{ changeSetId: string; atomCount: number; moleculeId: string }>(
+      `/agents/reconciliation/runs/${runId}/create-change-set`,
+      data
+    );
+    return response.data;
+  },
 };

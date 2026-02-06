@@ -26,8 +26,11 @@ A molecule is a human-readable grouping that helps people understand how atoms r
 Guidelines:
 - Group atoms that work together to deliver a coherent capability
 - A molecule with 1-3 atoms is fine (don't over-group)
-- Each atom can belong to multiple molecules
 - Choose appropriate lens types: user_story, feature, journey, capability
+- Prefer 3-5 molecules total (fewer is better if it covers all atoms)
+- Minimize overlap: each atom should have one primary molecule; secondary membership is optional but must represent a genuinely different lens
+- Every atom must belong to at least one molecule
+- Do NOT create molecules that are supersets or near-duplicates of each other
 
 Respond ONLY with valid JSON:
 {

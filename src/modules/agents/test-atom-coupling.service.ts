@@ -1,9 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import * as fs from 'fs';
 import * as path from 'path';
 import { Atom } from '../atoms/atom.entity';
+import { ContentProvider, FilesystemContentProvider } from './content';
+import { CONTENT_PROVIDER } from './context-builder.service';
 
 export interface TestFileAnalysis {
   filePath: string;
@@ -61,11 +62,22 @@ export class TestAtomCouplingService {
   private readonly logger = new Logger(TestAtomCouplingService.name);
   private readonly defaultTestPatterns = ['**/*.spec.ts', '**/*.test.ts'];
   private readonly defaultExcludePatterns = ['**/node_modules/**', '**/dist/**'];
+  private contentProvider: ContentProvider;
 
   constructor(
     @InjectRepository(Atom)
     private atomRepository: Repository<Atom>,
-  ) {}
+    @Optional() @Inject(CONTENT_PROVIDER) contentProvider?: ContentProvider,
+  ) {
+    this.contentProvider = contentProvider || new FilesystemContentProvider();
+  }
+
+  /**
+   * Set or replace the content provider
+   */
+  setContentProvider(provider: ContentProvider): void {
+    this.contentProvider = provider;
+  }
 
   /**
    * Analyze coupling between tests and atoms
@@ -77,7 +89,7 @@ export class TestAtomCouplingService {
     this.logger.log(`Analyzing test-atom coupling in: ${testDirectory}`);
 
     // Step 1: Find all test files
-    const testFiles = this.findTestFiles(testDirectory, options);
+    const testFiles = await this.findTestFiles(testDirectory, options);
     this.logger.log(`Found ${testFiles.length} test files`);
 
     // Step 2: Analyze each test file
@@ -86,7 +98,7 @@ export class TestAtomCouplingService {
     const allReferencedAtomIds = new Set<string>();
 
     for (const filePath of testFiles) {
-      const analysis = this.analyzeTestFile(filePath);
+      const analysis = await this.analyzeTestFile(filePath);
       testFileAnalyses.push(analysis);
       allOrphanTests.push(...analysis.orphanTests);
       analysis.referencedAtomIds.forEach((id) => allReferencedAtomIds.add(id));
@@ -155,38 +167,25 @@ export class TestAtomCouplingService {
   /**
    * Find test files in a directory
    */
-  private findTestFiles(directory: string, options: CouplingCheckOptions): string[] {
+  private async findTestFiles(directory: string, options: CouplingCheckOptions): Promise<string[]> {
     const includePatterns = options.includePatterns || this.defaultTestPatterns;
     const excludePatterns = options.excludePatterns || this.defaultExcludePatterns;
+
+    // Use ContentProvider to walk the directory
+    const allFiles = await this.contentProvider.walkDirectory(directory, {
+      excludePatterns: excludePatterns.map((p) => p.replace(/\*\*\//g, '').replace(/\*\*/g, '')),
+      maxFiles: 10000,
+      includeExtensions: ['.ts'],
+    });
+
+    // Filter to match include patterns
     const testFiles: string[] = [];
-
-    const walkDir = (dir: string) => {
-      if (!fs.existsSync(dir)) {
-        return;
+    for (const relativePath of allFiles) {
+      if (this.matchesPatterns(relativePath, includePatterns)) {
+        testFiles.push(path.join(directory, relativePath));
       }
+    }
 
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
-        const relativePath = path.relative(directory, fullPath);
-
-        // Check exclusions
-        if (this.matchesPatterns(relativePath, excludePatterns)) {
-          continue;
-        }
-
-        if (entry.isDirectory()) {
-          walkDir(fullPath);
-        } else if (entry.isFile()) {
-          if (this.matchesPatterns(relativePath, includePatterns)) {
-            testFiles.push(fullPath);
-          }
-        }
-      }
-    };
-
-    walkDir(directory);
     return testFiles;
   }
 
@@ -226,8 +225,17 @@ export class TestAtomCouplingService {
   /**
    * Analyze a single test file for @atom annotations
    */
-  analyzeTestFile(filePath: string): TestFileAnalysis {
-    const content = fs.readFileSync(filePath, 'utf-8');
+  async analyzeTestFile(filePath: string): Promise<TestFileAnalysis> {
+    const content = await this.contentProvider.readFileOrNull(filePath);
+    if (content === null) {
+      return {
+        filePath,
+        totalTests: 0,
+        annotatedTests: 0,
+        orphanTests: [],
+        referencedAtomIds: [],
+      };
+    }
     const lines = content.split('\n');
 
     const referencedAtomIds = new Set<string>();

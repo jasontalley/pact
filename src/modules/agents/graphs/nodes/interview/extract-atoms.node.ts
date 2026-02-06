@@ -26,14 +26,34 @@ Each atom MUST be:
 - **Implementation-agnostic**: Describes behavior, not implementation
 - **Testable**: Can be validated with automated tests
 
-For each atom, provide:
-- description: Clear behavioral statement
-- category: One of functional, performance, security, ux, operational
-- observableOutcomes: List of verifiable outcomes
-- confidence: 0-100 how confident you are this is a valid, well-defined atom
-- sourceEvidence: Quotes or references from the conversation supporting this atom
+## Vocabulary Rules
+- Use the EXACT domain terminology from the conversation. If the user says "edit", use "edit" not "modify". If they say "bid", use "bid" not "offer". If they say "appointment", use "appointment" not "booking".
+- Each atom description MUST include the key domain noun from the conversation (e.g., "appointment", "inventory", "form", "record", "bid", "payment", "article").
+- Do NOT paraphrase domain-specific terms into generic synonyms.
 
-Respond ONLY with valid JSON:
+## Description Guidelines
+Write descriptions as clear, direct behavioral statements. Use action verbs and specific terminology:
+- Good: "User can authenticate with email and password"
+- Good: "System maintains user session across requests"
+- Good: "System rejects invalid credentials with error message"
+- Bad: "System processes login requests" (too vague)
+- Bad: "Login works" (not testable)
+
+## Category Decision Rules
+- Default to **functional** unless the atom is PRIMARILY about one of the other categories.
+- Use **security** ONLY for atoms whose primary purpose is protecting data, controlling access, or authenticating identity. Business workflows that involve security (e.g., payment processing, health records) are still **functional**.
+- Use **performance** ONLY for atoms that specify measurable latency, throughput, or response time targets.
+- Use **ux** ONLY for atoms about user interface behavior, visual feedback, or accessibility.
+- Use **operational** ONLY for atoms about deployment, monitoring, or infrastructure management.
+
+## Atom Count
+- Extract as many or as few atoms as the conversation warrants. Do NOT target a specific number.
+- Atomicity test: if a description contains "and" connecting two distinct behaviors, split into separate atoms.
+- Consolidation test: if two descriptions cover the same behavior at different specificity, keep only the more specific one.
+
+## Output Format
+Respond with ONLY valid JSON. No markdown, no code blocks, no commentary before or after the JSON.
+Do NOT include code examples, curly braces, or special characters inside string values.
 {
   "atoms": [
     {
@@ -74,25 +94,29 @@ export function createExtractAtomsNode(options?: ExtractAtomsNodeOptions) {
 
         let atoms: AtomCandidate[] = [];
         try {
-          const content = response.content || '';
-          const jsonMatch = content.match(/\{[\s\S]*\}/);
-          const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : content);
+          let content = response.content || '';
+
+          // Remove markdown code blocks if present
+          content = content.replaceAll(/```json\s*/gi, '').replaceAll(/```\s*/g, '');
+
+          // Extract and parse JSON with recovery
+          const parsed = parseJsonWithRecovery(content, logger);
           atoms = (parsed.atoms || [])
             .filter((a: { confidence?: number }) => (a.confidence ?? 0) >= minConfidence)
             .map(
               (a: {
                 description: string;
                 category: string;
-                observableOutcomes: string[];
+                observableOutcomes: string[] | string;
                 confidence: number;
-                sourceEvidence: string[];
+                sourceEvidence: string[] | string;
               }) =>
                 ({
                   description: a.description,
                   category: a.category as AtomCandidate['category'],
-                  observableOutcomes: a.observableOutcomes || [],
+                  observableOutcomes: normalizeToArray(a.observableOutcomes),
                   confidence: a.confidence,
-                  sourceEvidence: a.sourceEvidence || [],
+                  sourceEvidence: normalizeToArray(a.sourceEvidence),
                 }) as AtomCandidate,
             );
         } catch {
@@ -128,10 +152,38 @@ export function createExtractAtomsNode(options?: ExtractAtomsNodeOptions) {
 }
 
 /**
+ * Normalize a value to a string array. Handles string (semicolon-delimited) or array inputs.
+ */
+function normalizeToArray(value: string[] | string | undefined): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    return value
+      .split(';')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+  }
+  return [];
+}
+
+/**
  * Build the full conversation context for the LLM.
  */
 function buildConversationContext(state: InterviewGraphStateType): string {
   const parts: string[] = [`Original Intent: "${state.rawIntent}"`];
+
+  // Include domain context if available
+  if (state.scenarioContext) {
+    if (state.scenarioContext.domain) {
+      parts.push(`Domain: ${state.scenarioContext.domain}`);
+    }
+    if (state.scenarioContext.constraints && state.scenarioContext.constraints.length > 0) {
+      parts.push(`Constraints: ${state.scenarioContext.constraints.join(', ')}`);
+    }
+    if (state.scenarioContext.invariants && state.scenarioContext.invariants.length > 0) {
+      parts.push(`Invariants: ${state.scenarioContext.invariants.join('; ')}`);
+    }
+  }
 
   if (state.intentAnalysis) {
     parts.push(
@@ -154,4 +206,170 @@ function buildConversationContext(state: InterviewGraphStateType): string {
   parts.push('\nExtract all testable, atomic behavioral requirements from the above conversation.');
 
   return parts.join('\n');
+}
+
+/**
+ * Parse JSON from LLM response with layered recovery.
+ *
+ * Layer 1: Extract JSON object using brace counting, then JSON.parse()
+ * Layer 2: Apply targeted repairs (trailing commas, newlines, etc.) and retry
+ * Layer 3: Attempt to extract individual atom objects as fallback
+ */
+function parseJsonWithRecovery(
+  content: string,
+  logger?: { log?: (msg: string) => void; warn: (msg: string) => void },
+): { atoms: unknown[] } {
+  // Layer 1: Standard extraction + parse
+  const jsonText = extractJsonText(content, logger);
+  if (jsonText) {
+    try {
+      return JSON.parse(jsonText) as { atoms: unknown[] };
+    } catch {
+      // Layer 2: Apply targeted repairs
+      const repaired = repairJson(jsonText, logger);
+      if (repaired) {
+        try {
+          return JSON.parse(repaired) as { atoms: unknown[] };
+        } catch {
+          // Fall through to Layer 3
+        }
+      }
+    }
+  }
+
+  // Layer 3: Extract individual atom objects
+  const atoms = extractIndividualAtoms(content, logger);
+  if (atoms.length > 0) {
+    logger?.log?.(`ExtractAtoms: Recovered ${atoms.length} atom(s) via individual extraction`);
+    return { atoms };
+  }
+
+  logger?.warn('ExtractAtoms: All JSON parsing layers failed');
+  throw new Error('Failed to parse JSON from LLM response');
+}
+
+/**
+ * Extract the outermost JSON object from content using brace counting.
+ */
+function extractJsonText(
+  content: string,
+  logger?: { warn: (msg: string) => void },
+): string | null {
+  const startIdx = content.indexOf('{');
+  if (startIdx === -1) {
+    logger?.warn('ExtractAtoms: No JSON object found in response');
+    return null;
+  }
+
+  const endIdx = findMatchingBrace(content, startIdx);
+
+  if (endIdx === -1) {
+    logger?.warn('ExtractAtoms: Unbalanced braces, attempting truncated recovery');
+    return content.substring(startIdx) + ']}';
+  }
+
+  return content.substring(startIdx, endIdx + 1);
+}
+
+/**
+ * Find the index of the closing brace that matches the opening brace at startIdx.
+ * Returns -1 if no matching brace is found.
+ */
+function findMatchingBrace(content: string, startIdx: number): number {
+  let braceCount = 0;
+  let inString = false;
+  let escapeNext = false;
+
+  for (let i = startIdx; i < content.length; i++) {
+    const c = content[i];
+
+    if (escapeNext) {
+      escapeNext = false;
+    } else if (c === '\\' && inString) {
+      escapeNext = true;
+    } else if (c === '"') {
+      inString = !inString;
+    } else if (!inString) {
+      if (c === '{') braceCount++;
+      if (c === '}') braceCount--;
+      if (braceCount === 0) return i;
+    }
+  }
+
+  return -1;
+}
+
+/**
+ * Apply targeted JSON repairs for common LLM output issues.
+ */
+function repairJson(
+  jsonText: string,
+  logger?: { log?: (msg: string) => void; warn: (msg: string) => void },
+): string | null {
+  let repaired = jsonText;
+
+  // Repair 1: Remove trailing commas before ] or }
+  repaired = repaired.replaceAll(/,\s*([}\]])/g, '$1');
+
+  // Repair 2: Replace unescaped newlines inside string values
+  repaired = repaired.replaceAll(/(?<="[^"]*)\n(?=[^"]*")/g, String.raw`\n`);
+
+  // Repair 3: Replace single quotes used as string delimiters
+  // Only when the pattern clearly indicates single-quoted strings
+  repaired = repaired.replaceAll(/:\s*'([^']*)'/g, ': "$1"');
+
+  // Repair 4: Handle truncated output — close open structures
+  const openBraces = (repaired.match(/{/g) || []).length;
+  const closeBraces = (repaired.match(/}/g) || []).length;
+  const openBrackets = (repaired.match(/\[/g) || []).length;
+  const closeBrackets = (repaired.match(/]/g) || []).length;
+
+  for (let i = 0; i < openBrackets - closeBrackets; i++) {
+    repaired += ']';
+  }
+  for (let i = 0; i < openBraces - closeBraces; i++) {
+    repaired += '}';
+  }
+
+  if (repaired === jsonText) {
+    return null;
+  }
+
+  logger?.log?.('ExtractAtoms: Applied JSON repairs');
+  return repaired;
+}
+
+/**
+ * Last-resort extraction: find individual atom-like objects in the content.
+ */
+function extractIndividualAtoms(
+  content: string,
+  logger?: { warn: (msg: string) => void },
+): unknown[] {
+  const atoms: unknown[] = [];
+  // Match objects that have a "description" field — likely atom objects
+  const atomPattern = /\{[^{}]*"description"\s*:\s*"[^"]+?"[^{}]*\}/g;
+  const matches = content.match(atomPattern);
+
+  if (!matches) return atoms;
+
+  for (const match of matches) {
+    try {
+      // Try to fix common issues in the individual object
+      let fixed = match.replaceAll(/,\s*}/g, '}');
+      fixed = fixed.replaceAll(/,\s*]/g, ']');
+      const obj = JSON.parse(fixed);
+      if (obj.description && typeof obj.description === 'string') {
+        atoms.push(obj);
+      }
+    } catch {
+      // Skip unparseable individual objects
+    }
+  }
+
+  if (matches.length > 0 && atoms.length === 0) {
+    logger?.warn(`ExtractAtoms: Found ${matches.length} atom-like objects but none parsed`);
+  }
+
+  return atoms;
 }

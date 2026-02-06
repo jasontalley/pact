@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { Atom, AtomStatus, AtomCategory } from './atom.entity';
+import { MoleculeAtom } from '../molecules/molecule-atom.entity';
 import { AtomsRepository } from './atoms.repository';
 import { CreateAtomDto } from './dto/create-atom.dto';
 import { UpdateAtomDto } from './dto/update-atom.dto';
@@ -35,6 +36,8 @@ export class AtomsService {
   constructor(
     @InjectRepository(Atom)
     private readonly atomRepository: Repository<Atom>,
+    @InjectRepository(MoleculeAtom)
+    private readonly moleculeAtomRepository: Repository<MoleculeAtom>,
     private readonly atomsRepository: AtomsRepository,
     @Optional() private readonly atomsGateway?: AtomsGateway,
   ) {}
@@ -130,15 +133,72 @@ export class AtomsService {
   }
 
   /**
-   * Update a draft atom
-   * Throws ForbiddenException if atom is not in draft status (INV-004)
+   * Create a proposed atom within a governed change set.
+   * Proposed atoms are mutable (like drafts) but must go through
+   * change set approval before being committed.
+   */
+  async propose(createAtomDto: CreateAtomDto, changeSetId: string): Promise<Atom> {
+    const atomId = await this.generateAtomId();
+
+    const atom = this.atomRepository.create({
+      atomId,
+      description: createAtomDto.description,
+      category: createAtomDto.category,
+      qualityScore: createAtomDto.qualityScore ?? null,
+      createdBy: createAtomDto.createdBy ?? null,
+      tags: createAtomDto.tags ?? [],
+      canvasPosition: createAtomDto.canvasPosition ?? null,
+      parentIntent: createAtomDto.parentIntent ?? null,
+      observableOutcomes: createAtomDto.observableOutcomes ?? [],
+      falsifiabilityCriteria: createAtomDto.falsifiabilityCriteria ?? [],
+      refinementHistory: [],
+      status: 'proposed',
+      changeSetId,
+      intentIdentity: (createAtomDto as any).intentIdentity ?? uuidv4(),
+      intentVersion: (createAtomDto as any).intentVersion ?? 1,
+    });
+
+    const savedAtom = await this.atomRepository.save(atom);
+
+    // Emit WebSocket event
+    this.atomsGateway?.emitAtomProposed?.(savedAtom, changeSetId);
+
+    return savedAtom;
+  }
+
+  /**
+   * Convert a proposed atom back to a draft, removing it from governance.
+   * Escape hatch for atoms that should not go through change set approval.
+   */
+  async convertToDraft(id: string): Promise<Atom> {
+    const atom = await this.findOne(id);
+
+    if (atom.status !== 'proposed') {
+      throw new BadRequestException(
+        `Only proposed atoms can be converted to draft. Current status: '${atom.status}'`,
+      );
+    }
+
+    atom.status = 'draft';
+    atom.changeSetId = null;
+
+    const savedAtom = await this.atomRepository.save(atom);
+
+    this.atomsGateway?.emitAtomUpdated(savedAtom);
+
+    return savedAtom;
+  }
+
+  /**
+   * Update a draft or proposed atom
+   * Throws ForbiddenException if atom is not in draft/proposed status (INV-004)
    */
   async update(id: string, updateAtomDto: UpdateAtomDto): Promise<Atom> {
     const atom = await this.findOne(id);
 
-    if (atom.status !== 'draft') {
+    if (atom.status !== 'draft' && atom.status !== 'proposed') {
       throw new ForbiddenException(
-        `Cannot update atom with status '${atom.status}'. Only draft atoms can be updated.`,
+        `Cannot update atom with status '${atom.status}'. Only draft or proposed atoms can be updated.`,
       );
     }
 
@@ -177,18 +237,22 @@ export class AtomsService {
   }
 
   /**
-   * Delete a draft atom
-   * Throws ForbiddenException if atom is not in draft status (INV-004)
+   * Delete a draft or proposed atom
+   * Throws ForbiddenException if atom is not in draft/proposed status (INV-004)
    */
   async remove(id: string): Promise<void> {
     const atom = await this.findOne(id);
     const atomId = atom.id;
 
-    if (atom.status !== 'draft') {
+    if (atom.status !== 'draft' && atom.status !== 'proposed') {
       throw new ForbiddenException(
-        `Cannot delete atom with status '${atom.status}'. Only draft atoms can be deleted.`,
+        `Cannot delete atom with status '${atom.status}'. Only draft or proposed atoms can be deleted.`,
       );
     }
+
+    // Remove any molecule junction records for this atom
+    // This is necessary because MoleculeAtom has onDelete: 'RESTRICT'
+    await this.moleculeAtomRepository.delete({ atomId: atom.id });
 
     await this.atomRepository.remove(atom);
 
@@ -197,8 +261,9 @@ export class AtomsService {
   }
 
   /**
-   * Commit an atom (make it immutable)
-   * Enforces quality gate: atom must have quality score >= 80
+   * Commit an atom (make it immutable) and promote to Main.
+   * Enforces quality gate: atom must have quality score >= 80.
+   * Proposed atoms must go through their change set — use commitChangeSet() instead.
    */
   async commit(id: string): Promise<Atom> {
     const atom = await this.findOne(id);
@@ -211,6 +276,12 @@ export class AtomsService {
       throw new BadRequestException('Cannot commit a superseded atom');
     }
 
+    if (atom.status === 'proposed') {
+      throw new BadRequestException(
+        'Proposed atoms must be committed through their change set',
+      );
+    }
+
     // Quality gate enforcement
     const qualityScore = atom.qualityScore ?? 0;
     if (qualityScore < 80) {
@@ -221,11 +292,13 @@ export class AtomsService {
 
     atom.status = 'committed';
     atom.committedAt = new Date();
+    atom.promotedToMainAt = new Date();
 
     const savedAtom = await this.atomRepository.save(atom);
 
-    // Emit WebSocket event
+    // Emit WebSocket events
     this.atomsGateway?.emitAtomCommitted(savedAtom);
+    this.atomsGateway?.emitAtomPromotedToMain?.(savedAtom);
 
     return savedAtom;
   }
@@ -334,9 +407,9 @@ export class AtomsService {
   async addTag(id: string, tag: string): Promise<Atom> {
     const atom = await this.findOne(id);
 
-    if (atom.status !== 'draft') {
+    if (atom.status !== 'draft' && atom.status !== 'proposed') {
       throw new ForbiddenException(
-        `Cannot modify tags on atom with status '${atom.status}'. Only draft atoms can be modified.`,
+        `Cannot modify tags on atom with status '${atom.status}'. Only draft or proposed atoms can be modified.`,
       );
     }
 
@@ -354,9 +427,9 @@ export class AtomsService {
   async removeTag(id: string, tag: string): Promise<Atom> {
     const atom = await this.findOne(id);
 
-    if (atom.status !== 'draft') {
+    if (atom.status !== 'draft' && atom.status !== 'proposed') {
       throw new ForbiddenException(
-        `Cannot modify tags on atom with status '${atom.status}'. Only draft atoms can be modified.`,
+        `Cannot modify tags on atom with status '${atom.status}'. Only draft or proposed atoms can be modified.`,
       );
     }
 

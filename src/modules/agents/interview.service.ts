@@ -16,6 +16,7 @@ import { ConversationsService } from '../conversations/conversations.service';
 import {
   InterviewGraphStateType,
   InterviewQuestion,
+  AnswerStatus,
   AtomCandidate,
   MoleculeCandidate,
 } from './graphs/types/interview-state';
@@ -70,6 +71,36 @@ export interface InterviewAnswerResult {
     molecules: MoleculeCandidate[];
     output: string;
   };
+}
+
+/**
+ * Classify a user's answer to determine its status.
+ * Detects deferrals, out-of-scope declarations, and conflicts.
+ */
+function classifyAnswer(response: string): AnswerStatus {
+  const text = response.toLowerCase();
+
+  // Deferral patterns: user explicitly postpones
+  if (/\b(later|not now|not yet|next phase|phase \d|defer|postpone|future|backlog)\b/i.test(text)) {
+    return 'deferred';
+  }
+
+  // Out-of-scope patterns: user declares topic irrelevant
+  if (/\b(out of scope|not in scope|not relevant|doesn't apply|not applicable|n\/a)\b/i.test(text)) {
+    return 'out_of_scope';
+  }
+
+  // Conflict patterns: user contradicts prior information
+  if (/\b(actually|wait|no[,.]? I said|that contradicts|I meant|correction)\b/i.test(text)) {
+    return 'conflict';
+  }
+
+  // If the response is very short or non-substantive, it may be unanswered
+  if (text.trim().length < 3 || /^(n\/a|idk|dunno|\?+|\.+)$/i.test(text.trim())) {
+    return 'unanswered';
+  }
+
+  return 'answered';
 }
 
 @Injectable()
@@ -213,13 +244,20 @@ export class InterviewService {
       );
     }
 
-    // Update pending questions with answers
+    // Update pending questions with answers and classify each response
     const updatedQuestions = session.pendingQuestions.map((q) => {
       const answer = answers.find((a) => a.questionId === q.id);
       if (answer) {
-        return { ...q, answered: true, response: answer.response };
+        const answerStatus = classifyAnswer(answer.response);
+        return {
+          ...q,
+          answered: answerStatus === 'answered',
+          answerStatus,
+          responseScope: 'individual' as const,
+          response: answer.response,
+        };
       }
-      return q;
+      return { ...q, answerStatus: 'unanswered' as AnswerStatus };
     });
 
     // Persist user answers

@@ -38,6 +38,7 @@ import { ReconciliationToolsService } from './tools/reconciliation-tools.service
 import { RECONCILIATION_TOOLS } from './tools/reconciliation-tools.definitions';
 import { GraphRegistryService } from './graphs/graph-registry.service';
 import { ReconciliationSchedulerService } from './reconciliation-scheduler.service';
+import { ArtifactCaptureService } from './evaluation/artifact-capture.service';
 
 @Module({
   imports: [
@@ -83,6 +84,7 @@ import { ReconciliationSchedulerService } from './reconciliation-scheduler.servi
     ReconciliationToolsService,
     GraphRegistryService,
     ReconciliationSchedulerService,
+    ArtifactCaptureService,
   ],
   exports: [
     AtomizationService,
@@ -101,6 +103,7 @@ import { ReconciliationSchedulerService } from './reconciliation-scheduler.servi
     ToolRegistryService,
     GraphRegistryService,
     ReconciliationSchedulerService,
+    ArtifactCaptureService,
   ],
 })
 export class AgentsModule implements OnModuleInit {

@@ -2,20 +2,24 @@
 
 import { Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { AppLayout } from '@/components/layout';
 import { useAtoms } from '@/hooks/atoms/use-atoms';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { QualityBadge } from '@/components/quality/QualityBadge';
 import { formatDistanceToNow } from '@/lib/utils/format';
-import type { AtomStatus, AtomCategory } from '@/types/atom';
+import { cn } from '@/lib/utils';
+import type { AtomStatus, AtomCategory, AtomScope } from '@/types/atom';
 
 function AtomsListContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
 
   // Get filter values from URL (managed by Sidebar)
   const status = searchParams.get('status') as AtomStatus | null;
   const category = searchParams.get('category') as AtomCategory | null;
+  const scope = (searchParams.get('scope') as AtomScope) || 'all';
   const search = searchParams.get('search') || undefined;
   const tags = searchParams.getAll('tag');
   const page = parseInt(searchParams.get('page') || '1', 10);
@@ -23,6 +27,7 @@ function AtomsListContent() {
   const { data, isLoading, error } = useAtoms({
     status: status || undefined,
     category: category || undefined,
+    scope,
     search,
     tags: tags.length > 0 ? tags : undefined,
     page,
@@ -30,6 +35,18 @@ function AtomsListContent() {
     sortBy: 'createdAt',
     sortOrder: 'DESC',
   });
+
+  // Handle scope change
+  const handleScopeChange = (newScope: AtomScope) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (newScope === 'all') {
+      params.delete('scope');
+    } else {
+      params.set('scope', newScope);
+    }
+    params.delete('page'); // Reset pagination on scope change
+    router.push(`${pathname}?${params.toString()}`);
+  };
 
   const atoms = data?.items ?? [];
   const total = data?.total ?? 0;
@@ -44,6 +61,27 @@ function AtomsListContent() {
             <p className="text-muted-foreground">
               Browse and filter all intent atoms
             </p>
+          </div>
+          {/* Scope Toggle */}
+          <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
+            {([
+              { value: 'all', label: 'All' },
+              { value: 'main', label: 'Main' },
+              { value: 'proposed', label: 'Proposed' },
+            ] as const).map(({ value, label }) => (
+              <button
+                key={value}
+                onClick={() => handleScopeChange(value)}
+                className={cn(
+                  'px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
+                  scope === value
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
 

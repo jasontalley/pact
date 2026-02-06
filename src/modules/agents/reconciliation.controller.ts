@@ -46,6 +46,10 @@ import {
 } from './reconciliation.service';
 import { ApplyService, ApplyRequest, ApplyResult } from './apply.service';
 import {
+  PreReadContentDto,
+  PreReadAnalysisStartResult,
+} from './dto/pre-read-reconciliation.dto';
+import {
   ReconciliationSchedulerService,
   ScheduleInfo,
   ScheduleHistoryEntry,
@@ -268,6 +272,42 @@ export class ReconciliationController {
   async startAnalysis(@Body() dto: StartAnalysisDto): Promise<AnalysisStartResult> {
     this.logger.log(`POST /agents/reconciliation/start`);
     return this.reconciliationService.analyzeWithInterrupt(dto);
+  }
+
+  /**
+   * Start a reconciliation analysis using pre-read content (remote mode)
+   *
+   * This endpoint enables clients to submit file contents via API,
+   * allowing reconciliation without server filesystem access.
+   * Used by: VSCode extensions, CLI tools, CI/CD pipelines.
+   */
+  @Post('analyze/pre-read')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Run reconciliation with pre-read content',
+    description:
+      'Analyze a repository using pre-read file content submitted by the client. ' +
+      'Enables remote reconciliation without server filesystem access.',
+  })
+  @ApiBody({ type: PreReadContentDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Reconciliation started with pre-read content',
+    type: PreReadAnalysisStartResult,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid content or missing required files',
+  })
+  @ApiResponse({
+    status: 413,
+    description: 'Content size exceeds limit',
+  })
+  async analyzeWithPreReadContent(
+    @Body() dto: PreReadContentDto,
+  ): Promise<PreReadAnalysisStartResult> {
+    this.logger.log(`POST /agents/reconciliation/analyze/pre-read`);
+    return this.reconciliationService.analyzeWithPreReadContent(dto);
   }
 
   // ===========================================================================
@@ -508,6 +548,53 @@ export class ReconciliationController {
       injectAnnotations: body.injectAnnotations,
     };
     return this.applyService.applyPatch(request);
+  }
+
+  /**
+   * Create a governed change set from a reconciliation run (Phase 15).
+   * Instead of applying directly, this creates proposed atoms within
+   * a change set that must go through approval before being committed to Main.
+   */
+  @Post('runs/:runId/create-change-set')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Create governed change set from run',
+    description:
+      'Creates a change set with proposed atoms from reconciliation recommendations. ' +
+      'Proposed atoms must be approved and committed through the change set workflow before appearing on Main.',
+  })
+  @ApiParam({ name: 'runId', description: 'The run ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        selections: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Specific recommendation IDs to include (empty = all pending)',
+        },
+        name: { type: 'string', description: 'Optional name for the change set' },
+        description: { type: 'string', description: 'Optional description' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Change set created with proposed atoms',
+  })
+  @ApiResponse({ status: 400, description: 'No recommendations or creation failed' })
+  @ApiResponse({ status: 404, description: 'Run not found' })
+  async createChangeSet(
+    @Param('runId') runId: string,
+    @Body() body: { selections?: string[]; name?: string; description?: string },
+  ): Promise<{ changeSetId: string; atomCount: number; moleculeId: string }> {
+    this.logger.log(`POST /agents/reconciliation/runs/${runId}/create-change-set`);
+    return this.applyService.createChangeSetFromRun({
+      runId,
+      selections: body.selections,
+      name: body.name,
+      description: body.description,
+    });
   }
 
   /**

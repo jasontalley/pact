@@ -9,6 +9,9 @@ import { TestQualityCard } from '@/components/dashboard/TestQualityCard';
 import { CoverageCard } from '@/components/dashboard/CoverageCard';
 import { RecentAtoms } from '@/components/dashboard/RecentAtoms';
 import { QuickActions } from '@/components/dashboard/QuickActions';
+import { DriftDebtCard } from '@/components/dashboard/DriftDebtCard';
+import { CommitmentBacklogCard } from '@/components/dashboard/CommitmentBacklogCard';
+import { DriftTrendChart } from '@/components/dashboard/DriftTrendChart';
 
 export default function DashboardPage() {
   return (
@@ -31,6 +34,13 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <TestQualityCard />
           <CoverageCard />
+        </div>
+
+        {/* Drift Debt + Commitment Backlog */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <DriftDebtCard />
+          <CommitmentBacklogCard />
+          <DriftTrendChart />
         </div>
 
         {/* Trend Chart */}

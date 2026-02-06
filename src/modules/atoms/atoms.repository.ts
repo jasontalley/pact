@@ -130,6 +130,7 @@ export class AtomsRepository {
     const {
       search,
       status,
+      scope,
       category,
       tags,
       tagsAll,
@@ -148,6 +149,14 @@ export class AtomsRepository {
     } = criteria;
 
     const qb = this.repository.createQueryBuilder('atom');
+
+    // Apply scope filter (Pact Main governance)
+    if (scope === 'main') {
+      qb.andWhere('atom.promotedToMainAt IS NOT NULL');
+    } else if (scope === 'proposed') {
+      qb.andWhere('atom.status = :scopeStatus', { scopeStatus: 'proposed' });
+    }
+    // scope === 'all' or undefined → no additional filter
 
     // Apply filters
     this.applyFilters(qb, {
@@ -340,6 +349,7 @@ export class AtomsRepository {
       .getRawMany();
 
     const byStatus: Record<AtomStatus, number> = {
+      proposed: 0,
       draft: 0,
       committed: 0,
       superseded: 0,

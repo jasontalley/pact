@@ -23,6 +23,19 @@ export interface AtomCommittedEvent {
   data: Atom;
 }
 
+export interface AtomProposedEvent {
+  type: 'atom:proposed';
+  atomId: string;
+  changeSetId: string;
+  data: Atom;
+}
+
+export interface AtomPromotedToMainEvent {
+  type: 'atom:promotedToMain';
+  atomId: string;
+  data: Atom;
+}
+
 export interface AtomSupersededEvent {
   type: 'atom:superseded';
   atomId: string;
@@ -43,6 +56,8 @@ export interface AtomDeletedEvent {
 export type AtomEvent =
   | AtomCreatedEvent
   | AtomCommittedEvent
+  | AtomProposedEvent
+  | AtomPromotedToMainEvent
   | AtomSupersededEvent
   | AtomUpdatedEvent
   | AtomDeletedEvent;
@@ -103,6 +118,33 @@ export class AtomsGateway implements OnGatewayInit, OnGatewayConnection, OnGatew
     };
     this.server?.emit('atom:committed', event);
     this.logger.debug(`Emitted atom:committed for ${atom.atomId}`);
+  }
+
+  /**
+   * Emit event when an atom is created as proposed (in a change set)
+   */
+  emitAtomProposed(atom: Atom, changeSetId: string): void {
+    const event: AtomProposedEvent = {
+      type: 'atom:proposed',
+      atomId: atom.id,
+      changeSetId,
+      data: atom,
+    };
+    this.server?.emit('atom:proposed', event);
+    this.logger.debug(`Emitted atom:proposed for ${atom.atomId} in change set ${changeSetId}`);
+  }
+
+  /**
+   * Emit event when an atom is promoted to Main
+   */
+  emitAtomPromotedToMain(atom: Atom): void {
+    const event: AtomPromotedToMainEvent = {
+      type: 'atom:promotedToMain',
+      atomId: atom.id,
+      data: atom,
+    };
+    this.server?.emit('atom:promotedToMain', event);
+    this.logger.debug(`Emitted atom:promotedToMain for ${atom.atomId}`);
   }
 
   /**

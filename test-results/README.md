@@ -4,7 +4,7 @@ This directory contains all test execution results and reports for the Pact proj
 
 ## Directory Structure
 
-```
+```bash
 test-results/
 ├── backend/
 │   ├── unit/
@@ -24,6 +24,15 @@ test-results/
 ├── quality/
 │   ├── quality-report.html     # Test quality analysis report
 │   └── coupling-report.json    # Test-atom coupling analysis
+├── agents/                     # LangGraph agent evaluation results
+│   ├── property/              # Property test results (invariants)
+│   ├── contracts/             # Contract acceptance test results
+│   ├── cost/                  # Cost/latency budget test results
+│   ├── golden/                # Golden suite evaluation reports
+│   ├── snapshots/             # Baseline snapshots for golden tests
+│   │   ├── reconciliation/    # Reconciliation agent snapshots
+│   │   └── interview/         # Interview agent snapshots
+│   └── summary-*.json         # Run summaries with pass/fail counts
 └── analysis/
     └── brownfield-*.json       # Brownfield analysis reports
 ```
@@ -77,6 +86,19 @@ open test-results/quality/quality-report.html
 cat test-results/quality/coupling-report.json
 ```
 
+### Agent Evaluation Results
+
+```bash
+# View latest evaluation summary
+cat test-results/agents/summary-*.json | tail -1
+
+# View property test results
+cat test-results/agents/property/results-*.json | jq '.numPassedTests, .numFailedTests'
+
+# View golden suite report (if run)
+cat test-results/agents/golden/evaluation-*.json | jq '.summary'
+```
+
 ## Generating Reports
 
 All reports are automatically generated when running tests:
@@ -96,6 +118,19 @@ All reports are automatically generated when running tests:
 
 # Full CI suite (generates all reports)
 ./scripts/test.sh --ci
+
+# Agent tests (property, contracts, cost/latency)
+./scripts/test-agents.sh
+
+# Agent tests with golden suite (requires LLM)
+./scripts/test-agents.sh --all
+
+# Specific agent test suites
+./scripts/test-agents.sh --property      # Invariant tests
+./scripts/test-agents.sh --contracts     # Contract acceptance
+./scripts/test-agents.sh --cost          # Budget tests
+./scripts/test-agents.sh --golden        # Golden evaluation
+./scripts/test-agents.sh --ci            # CI mode with JUnit
 ```
 
 ## CI/CD Artifacts

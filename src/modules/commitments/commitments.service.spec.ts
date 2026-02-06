@@ -33,6 +33,8 @@ describe('CommitmentsService', () => {
     supersededBy: null,
     createdAt: new Date(),
     committedAt: null,
+    promotedToMainAt: null,
+    changeSetId: null,
     createdBy: 'test-user',
     metadata: {},
     observableOutcomes: [],

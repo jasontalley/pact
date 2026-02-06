@@ -79,7 +79,19 @@ Add `proposed` to the atom state machine, add `promotedToMainAt` timestamp, and 
     - Add `autoPromote?: boolean`
     - Add `promotedAtomIds?: string[]`
 
-- [ ] **15A.4** Update search DTO enums
+- [ ] **15A.4** Add `integrationTarget` to ProjectSettings
+  - **File**: `src/modules/projects/project.entity.ts`
+  - **Priority**: High | **Effort**: S
+  - **Details**:
+    - Add to `ProjectSettings` interface:
+      ```typescript
+      integrationTarget?: string;  // e.g. "main", "develop" — the branch where canonical reality is asserted
+      ```
+    - Default: `'main'`
+    - Used by CI-attested reconciliation to label which branch the run was performed against
+    - Pact does not need to understand the org's Git workflow; it only needs a consistent place where reality is asserted
+
+- [ ] **15A.5** Update search DTO enums
   - **File**: `src/modules/atoms/dto/atom-search.dto.ts`
   - **Priority**: Medium | **Effort**: S
   - **Details**:
