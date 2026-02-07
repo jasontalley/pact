@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-02-07
+
+### Changed
+
+- **Multi-arch Docker images**: Release workflow now builds native amd64 and arm64 images
+  using GitHub's native ARM runners (`ubuntu-24.04-arm`) instead of QEMU emulation.
+  Builds are fast and reliable on both architectures.
+- **Digest-based manifest merge**: Each architecture pushes by digest, then a merge job
+  combines them into a single multi-arch manifest tagged with `latest` and the version.
+- **Removed platform workaround**: `docker-compose.prod.yml` no longer forces
+  `platform: linux/amd64` — Docker now pulls the native architecture automatically.
+
 ## [0.1.6] - 2026-02-07
 
 ### Fixed
