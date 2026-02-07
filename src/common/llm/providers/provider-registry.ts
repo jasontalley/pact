@@ -7,8 +7,10 @@
  * - Provider selection based on availability
  */
 
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Inject, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 
 import {
   LLMProvider,
@@ -20,6 +22,7 @@ import {
 import { OpenAIProvider, OpenAIProviderConfig } from './openai.provider';
 import { AnthropicProvider, AnthropicProviderConfig } from './anthropic.provider';
 import { OllamaProvider, OllamaProviderConfig } from './ollama.provider';
+import { LLMConfiguration } from '../../../modules/llm/llm-configuration.entity';
 
 /**
  * Registry configuration
@@ -62,7 +65,12 @@ export class ProviderRegistry implements OnModuleInit, OnModuleDestroy {
   private healthCheckTimer: NodeJS.Timeout | null = null;
   private initialized = false;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    @Optional()
+    @InjectRepository(LLMConfiguration)
+    private readonly configRepository?: Repository<LLMConfiguration>,
+  ) {
     this.config = this.loadConfig();
   }
 
@@ -97,6 +105,9 @@ export class ProviderRegistry implements OnModuleInit, OnModuleDestroy {
    */
   async onModuleInit(): Promise<void> {
     this.logger.log('Initializing Provider Registry...');
+
+    // Merge database-stored API keys into config (fallback when env vars are absent)
+    await this.mergeDbConfig();
 
     // Create and register providers
     await this.registerProviders();
@@ -133,6 +144,33 @@ export class ProviderRegistry implements OnModuleInit, OnModuleDestroy {
 
     this.providers.clear();
     this.initialized = false;
+  }
+
+  /**
+   * Merge API keys from database config when env vars are absent
+   */
+  private async mergeDbConfig(): Promise<void> {
+    if (!this.configRepository) return;
+
+    try {
+      const dbConfig = await this.configRepository.findOne({
+        where: { isActive: true },
+      });
+      if (!dbConfig?.providerConfigs) return;
+
+      const stored = dbConfig.providerConfigs;
+
+      if (!this.config.openai?.apiKey && stored.openai?.apiKey) {
+        this.config.openai = { ...this.config.openai, apiKey: stored.openai.apiKey };
+        this.logger.log('Loaded OpenAI API key from database');
+      }
+      if (!this.config.anthropic?.apiKey && stored.anthropic?.apiKey) {
+        this.config.anthropic = { ...this.config.anthropic, apiKey: stored.anthropic.apiKey };
+        this.logger.log('Loaded Anthropic API key from database');
+      }
+    } catch (error) {
+      this.logger.warn(`Failed to load config from database: ${error.message}`);
+    }
   }
 
   /**

@@ -25,6 +25,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { isGraphInterrupt } from '@langchain/langgraph';
 import { GraphRegistryService } from './graphs/graph-registry.service';
 import { ReconciliationRepository } from './repositories/reconciliation.repository';
+import { RepositoryConfigService } from '../projects/repository-config.service';
 import { PreReadContentProvider } from './content/pre-read-content-provider';
 import { PreReadContentDto, PreReadAnalysisStartResult } from './dto/pre-read-reconciliation.dto';
 import {
@@ -145,6 +146,7 @@ export class ReconciliationService {
 
   constructor(
     private readonly graphRegistry: GraphRegistryService,
+    private readonly repositoryConfigService: RepositoryConfigService,
     @Optional() private readonly repository?: ReconciliationRepository,
     @Optional() private readonly gateway?: ReconciliationGateway,
   ) {}
@@ -156,7 +158,7 @@ export class ReconciliationService {
    * @returns Reconciliation result with patch and recommendations
    */
   async analyze(dto: ReconciliationDto = {}): Promise<ReconciliationResult> {
-    const rootDirectory = dto.rootDirectory || process.cwd();
+    const rootDirectory = dto.rootDirectory || await this.repositoryConfigService.getRepositoryPath();
     const mode = dto.mode || 'full-scan';
     const runId = `REC-${uuidv4().substring(0, 8)}`;
 
@@ -393,7 +395,7 @@ export class ReconciliationService {
    * @returns Analysis start result (may be interrupted or completed)
    */
   async analyzeWithInterrupt(dto: ReconciliationDto = {}): Promise<AnalysisStartResult> {
-    const rootDirectory = dto.rootDirectory || process.cwd();
+    const rootDirectory = dto.rootDirectory || await this.repositoryConfigService.getRepositoryPath();
     const mode = dto.mode || 'full-scan';
     const threadId = uuidv4();
     const runId = `REC-${threadId.substring(0, 8)}`;

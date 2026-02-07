@@ -16,6 +16,7 @@ import {
   OrphanTestInfo,
 } from './dto/brownfield-analysis.dto';
 import { ContentProvider, FilesystemContentProvider } from './content';
+import { RepositoryConfigService } from '../projects/repository-config.service';
 
 /**
  * State for the brownfield analysis agent
@@ -76,6 +77,7 @@ export class BrownfieldAnalysisService {
     private readonly testAtomCouplingService: TestAtomCouplingService,
     private readonly atomQualityService: AtomQualityService,
     private readonly contextBuilder: ContextBuilderService,
+    private readonly repositoryConfigService: RepositoryConfigService,
     @Optional() @Inject(CONTENT_PROVIDER) contentProvider?: ContentProvider,
   ) {
     this.contentProvider = contentProvider || new FilesystemContentProvider();
@@ -92,7 +94,7 @@ export class BrownfieldAnalysisService {
    * Main entry point for brownfield analysis
    */
   async analyzeRepository(dto: BrownfieldAnalysisDto): Promise<BrownfieldAnalysisResult> {
-    const rootDirectory = dto.rootDirectory || process.cwd();
+    const rootDirectory = dto.rootDirectory || await this.repositoryConfigService.getRepositoryPath();
     const startTime = Date.now();
 
     this.logger.log(`Starting brownfield analysis of repository: ${rootDirectory}`);

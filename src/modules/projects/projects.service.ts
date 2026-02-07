@@ -87,6 +87,30 @@ export class ProjectsService {
   }
 
   /**
+   * Get the default project, creating one if none exists.
+   * Used for singleton settings like repository configuration.
+   */
+  async getOrCreateDefault(): Promise<Project> {
+    const projects = await this.projectRepository.find({
+      order: { createdAt: 'ASC' },
+      take: 1,
+    });
+
+    if (projects.length > 0) {
+      return projects[0];
+    }
+
+    const project = this.projectRepository.create({
+      name: 'Default Project',
+      description: 'Auto-created default project for Pact settings',
+      settings: {},
+      metadata: {},
+    });
+
+    return this.projectRepository.save(project);
+  }
+
+  /**
    * Check if a project exists
    */
   async exists(id: string): Promise<boolean> {
