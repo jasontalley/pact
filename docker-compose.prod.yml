@@ -62,6 +62,20 @@ services:
     networks:
       - pact-network
 
+  frontend:
+    image: jasontalley/pact-frontend:${PACT_VERSION:-latest}
+    container_name: pact-frontend-prod
+    ports:
+      - "${FRONTEND_PORT:-3001}:3000"
+    environment:
+      NODE_ENV: production
+      HOSTNAME: "0.0.0.0"
+    depends_on:
+      - app
+    restart: unless-stopped
+    networks:
+      - pact-network
+
 volumes:
   postgres_data:
   redis_data:
