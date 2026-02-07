@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-02-07
+
+### Added
+
+- **Frontend production Docker image** (`frontend/Dockerfile`) - multi-stage build using Next.js
+  standalone output, published as `jasontalley/pact-frontend` on Docker Hub
+- **Frontend service in docker-compose.prod.yml** - runs on port 3001, connects to backend API
+- **Frontend CI/CD** - parallel image build in release workflow alongside backend
+- **FRONTEND_PORT** env var in `.env.production.example`
+
 ## [0.1.2] - 2026-02-06
 
 ### Fixed
