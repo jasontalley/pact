@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-02-07
+
+### Added
+
+- **Repository settings page**: New UI at `/settings/repository` to configure the target
+  repository path from the browser, stored in the database. Includes path validation
+  (exists, readable, git repo detection) and a "Coming Soon" GitHub integration section.
+- **Repository config API**: `GET/PUT /admin/repository/config` and
+  `POST /admin/repository/validate-path` endpoints for managing repository configuration.
+- **RepositoryConfigService**: Injectable service used by reconciliation and brownfield
+  agents to resolve the default `rootDirectory` from project settings instead of
+  falling back to `process.cwd()`.
+- **Default project auto-creation**: `ProjectsService.getOrCreateDefault()` creates a
+  singleton "Default Project" on first access for storing system-level settings.
+
+### Fixed
+
+- **LLM provider cards not rendering**: Settings page now drives provider cards from admin
+  config (always lists all 3 providers) instead of active-providers list (empty when no
+  API keys set). Users can now enter API keys on a fresh install.
+- **LLM provider hot-registration**: Saving an API key via the UI now immediately registers
+  the provider in the ProviderRegistry without requiring a restart.
+- **LLM provider DB fallback**: ProviderRegistry loads API keys from the database at
+  startup when environment variables are absent.
+- **Postgres 18 PGDATA conflict**: Production compose uses `PGDATA=/data/postgresql` to
+  avoid inherited Docker VOLUME path conflicts.
+- **Dev Dockerfile**: Added `--legacy-peer-deps` to fix ERESOLVE errors with
+  `@langchain/anthropic` peer dependency.
+- **Dev compose migration**: Removed `npm run migration:run` from dev command since
+  `synchronize: true` handles schema in development.
+
 ## [0.1.7] - 2026-02-07
 
 ### Changed

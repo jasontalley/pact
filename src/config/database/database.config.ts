@@ -12,7 +12,8 @@ export const databaseConfig = (): TypeOrmModuleOptions => {
     database: process.env.DATABASE_NAME || 'pact_development',
     entities: [__dirname + '/../../**/*.entity{.ts,.js}'],
     migrations: [__dirname + '/../../migrations/*{.ts,.js}'],
-    synchronize: process.env.DATABASE_SYNCHRONIZE === 'true' || process.env.NODE_ENV === 'development',
+    synchronize:
+      process.env.DATABASE_SYNCHRONIZE === 'true' || process.env.NODE_ENV === 'development',
     logging: process.env.NODE_ENV === 'development',
     // For tests: configure pg driver to prevent open handles
     // The pg driver keeps connections alive which prevents Jest from exiting

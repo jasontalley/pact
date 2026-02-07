@@ -8,6 +8,7 @@ import {
   Shield,
   Activity,
   FileCode,
+  FolderOpen,
   History,
   ChevronRight,
 } from 'lucide-react';
@@ -26,6 +27,12 @@ const settingsSections: SettingsSection[] = [
     title: 'LLM Providers',
     description: 'Configure AI providers, model preferences, and budget limits',
     icon: Cpu,
+  },
+  {
+    href: '/settings/repository',
+    title: 'Repository',
+    description: 'Configure the target repository for analysis and reconciliation',
+    icon: FolderOpen,
   },
   {
     href: '/settings/system',

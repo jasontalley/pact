@@ -43,6 +43,8 @@ export interface ProjectSettings {
   integrationTarget?: string;
   /** Drift convergence policies (Phase 16) */
   driftPolicies?: DriftPolicies;
+  /** Path to the repository to analyze (inside the container) */
+  repositoryPath?: string;
   /** Custom metadata for project-specific needs */
   [key: string]: unknown;
 }

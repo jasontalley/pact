@@ -101,8 +101,18 @@ export default function LLMSettingsPage() {
   );
 }
 
+/** Display names for providers when no active instance exists */
+const providerDisplayNames: Record<LLMProviderType, string> = {
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  ollama: 'Ollama',
+};
+
 /**
  * Provider Settings Section
+ *
+ * Cards are driven by the admin config (which always lists all providers),
+ * not by the active-providers list (which is empty when no API keys are set).
  */
 function ProviderSettings() {
   const { data: providers, isLoading: loadingProviders } = useProviders();
@@ -112,20 +122,31 @@ function ProviderSettings() {
     return <ProviderSettingsSkeleton />;
   }
 
+  // Drive cards from admin config, merging active provider status when available
+  const providerCards = (config?.providers || []).map((providerConfig) => {
+    const activeProvider = providers?.providers.find(
+      (p) => p.name === providerConfig.provider
+    );
+    const providerStatus: ProviderStatus = activeProvider || {
+      name: providerConfig.provider,
+      displayName: providerDisplayNames[providerConfig.provider],
+      available: false,
+      health: { available: false },
+      supportedModels: providerConfig.defaultModel ? [providerConfig.defaultModel] : [],
+      defaultModel: providerConfig.defaultModel || '',
+    };
+    return { providerStatus, providerConfig };
+  });
+
   return (
     <div className="space-y-4">
-      {providers?.providers.map((provider) => {
-        const providerConfig = config?.providers.find(
-          (p) => p.provider === provider.name
-        );
-        return (
-          <ProviderCard
-            key={provider.name}
-            provider={provider}
-            config={providerConfig}
-          />
-        );
-      })}
+      {providerCards.map(({ providerStatus, providerConfig }) => (
+        <ProviderCard
+          key={providerStatus.name}
+          provider={providerStatus}
+          config={providerConfig}
+        />
+      ))}
     </div>
   );
 }

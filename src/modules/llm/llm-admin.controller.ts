@@ -25,6 +25,8 @@ import { Repository } from 'typeorm';
 
 import { ProviderRegistry } from '../../common/llm/providers/provider-registry';
 import { LLMProviderType, AgentTaskType } from '../../common/llm/providers/types';
+import { OpenAIProvider } from '../../common/llm/providers/openai.provider';
+import { AnthropicProvider } from '../../common/llm/providers/anthropic.provider';
 import { LLMConfiguration } from './llm-configuration.entity';
 import { LLMUsageTracking } from './llm-usage-tracking.entity';
 import {
@@ -195,6 +197,11 @@ export class LLMAdminController {
 
     await this.configRepository.save(config);
 
+    // Hot-register the provider if an API key was just set
+    if (update.apiKey && this.providerRegistry) {
+      await this.hotRegisterProvider(provider, update.apiKey);
+    }
+
     return this.getConfig();
   }
 
@@ -347,6 +354,38 @@ export class LLMAdminController {
   // =============================================================
   // Helper methods
   // =============================================================
+
+  private async hotRegisterProvider(
+    provider: LLMProviderType,
+    apiKey: string,
+  ): Promise<void> {
+    if (!this.providerRegistry) return;
+
+    try {
+      // Unregister existing instance if present
+      await this.providerRegistry.unregisterProvider(provider);
+
+      const providerConfig = {
+        apiKey,
+        defaultTemperature: 0.2,
+      };
+
+      let instance;
+      if (provider === 'openai') {
+        instance = new OpenAIProvider(providerConfig);
+      } else if (provider === 'anthropic') {
+        instance = new AnthropicProvider(providerConfig);
+      } else {
+        return; // Ollama doesn't use API keys
+      }
+
+      await this.providerRegistry.registerProvider(instance);
+    } catch (error) {
+      // Log but don't fail the config save
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      console.warn(`Failed to hot-register ${provider}: ${msg}`);
+    }
+  }
 
   private buildProviderConfigs(config: LLMConfiguration | null): ProviderConfigDto[] {
     const providers: LLMProviderType[] = ['openai', 'anthropic', 'ollama'];

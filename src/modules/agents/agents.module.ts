@@ -43,6 +43,7 @@ import { AtomInferenceService } from './atom-inference.service';
 import { ReconciliationAtomInferenceService } from './reconciliation-atom-inference.service';
 import { CIPolicyService } from './ci-policy.service';
 import { ReconciliationPolicy } from './entities/reconciliation-policy.entity';
+import { ProjectsModule } from '../projects/projects.module';
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { ReconciliationPolicy } from './entities/reconciliation-policy.entity';
     forwardRef(() => CommitmentsModule),
     InvariantsModule,
     ConversationsModule,
+    ProjectsModule,
   ],
   controllers: [
     AtomizationController,
