@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-02-07
+
+### Fixed
+
+- **Frontend CI build**: `.gitignore` rule `coverage` was matching `hooks/coverage/` source directory,
+  causing `use-coverage.ts` to be excluded from git. Changed to `/coverage` (root-only match)
+- **Missing hook**: Added `frontend/hooks/coverage/use-coverage.ts` to source control
+
 ## [0.1.3] - 2026-02-07
 
 ### Added
