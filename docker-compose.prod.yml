@@ -1,13 +1,13 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18
     container_name: pact-postgres-prod
     environment:
       POSTGRES_USER: ${DATABASE_USER}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
       POSTGRES_DB: ${DATABASE_NAME}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER}"]
       interval: 10s
@@ -33,6 +33,7 @@ services:
 
   app:
     image: jasontalley/pact:${PACT_VERSION:-latest}
+    platform: linux/amd64
     container_name: pact-app-prod
     ports:
       - "${PORT:-3000}:3000"
@@ -64,6 +65,7 @@ services:
 
   frontend:
     image: jasontalley/pact-frontend:${PACT_VERSION:-latest}
+    platform: linux/amd64
     container_name: pact-frontend-prod
     ports:
       - "${FRONTEND_PORT:-3001}:3000"
