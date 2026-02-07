@@ -33,7 +33,6 @@ services:
 
   app:
     image: jasontalley/pact:${PACT_VERSION:-latest}
-    platform: linux/amd64
     container_name: pact-app-prod
     ports:
       - "${PORT:-3000}:3000"
@@ -65,7 +64,6 @@ services:
 
   frontend:
     image: jasontalley/pact-frontend:${PACT_VERSION:-latest}
-    platform: linux/amd64
     container_name: pact-frontend-prod
     ports:
       - "${FRONTEND_PORT:-3001}:3000"
