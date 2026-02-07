@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-02-07
+
+### Fixed
+
+- **CI build speed**: Removed arm64 from Docker build platforms; QEMU emulation on amd64 runners
+  causes illegal instruction crashes and 30+ minute builds. amd64-only for now.
+
 ## [0.1.4] - 2026-02-07
 
 ### Fixed
