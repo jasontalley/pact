@@ -5,7 +5,7 @@ node_modules
 
 # Testing
 # Note: Coverage and test results are now in centralized /test-results/ directory
-coverage
+/coverage
 test-results/
 playwright-report/
 blob-report/
