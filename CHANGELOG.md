@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-02-07
+
+### Fixed
+
+- **Postgres 18 volume mount**: Changed mount from `/var/lib/postgresql/data` to
+  `/var/lib/postgresql` to match Postgres 18's new data directory layout
+- **Apple Silicon support**: Added `platform: linux/amd64` to app and frontend services
+  so Docker Desktop pulls the correct image automatically on ARM Macs
+- **CI Postgres version**: Restored `postgres:18` in release workflow (was incorrectly
+  downgraded to 16-alpine)
+
 ## [0.1.5] - 2026-02-07
 
 ### Fixed
