@@ -137,7 +137,7 @@ jobs:
             ${{ secrets.DOCKER_USERNAME }}/pact:${{ steps.version.outputs.VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
 
   docker-build-frontend:
     name: Build and Push Frontend Image
@@ -172,7 +172,7 @@ jobs:
             ${{ secrets.DOCKER_USERNAME }}/pact-frontend:${{ steps.version.outputs.VERSION }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
 
   create-release:
     name: Create GitHub Release
