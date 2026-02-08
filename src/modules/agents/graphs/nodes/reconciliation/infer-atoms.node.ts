@@ -16,6 +16,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { NodeConfig } from '../types';
+import { CancellationError } from '../../../../../common/cancellation.registry';
 import { AgentTaskType } from '../../../../../common/llm/providers/types';
 import {
   ReconciliationGraphStateType,
@@ -392,6 +393,14 @@ export function createInferAtomsNode(options: InferAtomsNodeOptions = {}) {
 
       // Process tests in batches
       for (let i = 0; i < orphanTests.length; i += batchSize) {
+        // Check for cancellation between batches
+        if (config.cancellationRegistry?.isCancelled(state.runId)) {
+          config.logger?.log(
+            `[InferAtomsNode] Cancelled after ${processedCount}/${orphanTests.length} tests`,
+          );
+          throw new CancellationError(state.runId);
+        }
+
         const batch = orphanTests.slice(i, i + batchSize);
 
         // Process batch in parallel

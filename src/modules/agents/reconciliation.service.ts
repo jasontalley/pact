@@ -23,6 +23,7 @@ import {
 import { ReconciliationGateway } from '../../gateways/reconciliation.gateway';
 import { v4 as uuidv4 } from 'uuid';
 import { isGraphInterrupt } from '@langchain/langgraph';
+import { CancellationRegistry, CancellationError } from '../../common/cancellation.registry';
 import { GraphRegistryService } from './graphs/graph-registry.service';
 import { ReconciliationRepository } from './repositories/reconciliation.repository';
 import { RepositoryConfigService } from '../projects/repository-config.service';
@@ -95,7 +96,7 @@ interface TrackedRun {
   input: ReconciliationInput;
   startTime: Date;
   interruptPayload?: InterruptPayload;
-  status: 'running' | 'interrupted' | 'completed' | 'failed';
+  status: 'running' | 'interrupted' | 'completed' | 'failed' | 'cancelling' | 'cancelled';
 }
 
 /**
@@ -147,6 +148,7 @@ export class ReconciliationService {
   constructor(
     private readonly graphRegistry: GraphRegistryService,
     private readonly repositoryConfigService: RepositoryConfigService,
+    private readonly cancellationRegistry: CancellationRegistry,
     @Optional() private readonly repository?: ReconciliationRepository,
     @Optional() private readonly gateway?: ReconciliationGateway,
   ) {}
@@ -465,6 +467,42 @@ export class ReconciliationService {
   }
 
   /**
+   * Cancel an active reconciliation run.
+   *
+   * Sets the run to 'cancelling' status and registers it in the cancellation
+   * registry. Long-running nodes (infer_atoms, verify) check the registry
+   * between iterations and throw CancellationError when detected.
+   *
+   * @param runId - The run ID to cancel
+   * @returns Confirmation object
+   * @throws NotFoundException if run not found
+   * @throws BadRequestException if run is not in a cancellable state
+   */
+  cancelRun(runId: string): { runId: string; status: string; message: string } {
+    const trackedRun = this.activeRuns.get(runId);
+
+    if (!trackedRun) {
+      throw new NotFoundException(`Run ${runId} not found`);
+    }
+
+    if (trackedRun.status !== 'running') {
+      throw new BadRequestException(
+        `Run ${runId} cannot be cancelled (status: ${trackedRun.status}). Only running runs can be cancelled.`,
+      );
+    }
+
+    this.logger.log(`Cancellation requested for run ${runId}`);
+    trackedRun.status = 'cancelling';
+    this.cancellationRegistry.cancel(runId);
+
+    return {
+      runId,
+      status: 'cancelling',
+      message: 'Cancellation requested. The run will stop at the next safe checkpoint.',
+    };
+  }
+
+  /**
    * Execute the reconciliation graph in the background.
    *
    * Handles completion, interruption, and errors via WebSocket events
@@ -489,6 +527,7 @@ export class ReconciliationService {
           input,
           rootDirectory,
           startTime: new Date(),
+          runId,
         },
         { configurable: { thread_id: threadId } },
       );
@@ -603,6 +642,17 @@ export class ReconciliationService {
         return;
       }
 
+      // User-initiated cancellation
+      if (error instanceof CancellationError) {
+        this.logger.log(`Reconciliation cancelled by user: ${runId}`);
+        trackedRun.status = 'cancelled';
+        this.cancellationRegistry.clear(runId);
+
+        // Emit WebSocket event: cancelled
+        this.gateway?.emitCancelled(runId, 'Cancelled by user');
+        return;
+      }
+
       // Regular error
       trackedRun.status = 'failed';
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -610,6 +660,9 @@ export class ReconciliationService {
 
       // Emit WebSocket event: failed
       this.gateway?.emitFailed(runId, errorMessage, 'failed');
+    } finally {
+      // Always clean up cancellation registry
+      this.cancellationRegistry.clear(runId);
     }
   }
 
@@ -749,7 +802,7 @@ export class ReconciliationService {
 
     for (const [runId, run] of this.activeRuns.entries()) {
       const age = now - run.startTime.getTime();
-      const isTerminal = run.status === 'completed' || run.status === 'failed';
+      const isTerminal = run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled';
 
       if (isTerminal && age > olderThanMs) {
         this.activeRuns.delete(runId);

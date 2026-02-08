@@ -144,6 +144,16 @@ export const reconciliationApi = {
   },
 
   /**
+   * Cancel an active reconciliation run
+   */
+  cancel: async (runId: string): Promise<{ runId: string; status: string; message: string }> => {
+    const response = await apiClient.post<{ runId: string; status: string; message: string }>(
+      `/agents/reconciliation/runs/${runId}/cancel`
+    );
+    return response.data;
+  },
+
+  /**
    * Create a governed change set from a reconciliation run.
    * Instead of applying directly, atoms are created as 'proposed' and
    * must go through change set approval before being committed to Main.

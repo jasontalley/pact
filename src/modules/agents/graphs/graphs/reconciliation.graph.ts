@@ -30,6 +30,7 @@ import {
   isGraphInterrupt,
 } from '@langchain/langgraph';
 import { NodeConfig } from '../nodes/types';
+import { CancellationError } from '../../../../common/cancellation.registry';
 import {
   ReconciliationGraphState,
   ReconciliationGraphStateType,
@@ -123,6 +124,12 @@ function wrapWithErrorHandling(
       // It must be re-thrown to properly pause graph execution
       if (isGraphInterrupt(error)) {
         config.logger?.log(`[${nodeName}] NodeInterrupt thrown, pausing for human review`);
+        throw error;
+      }
+
+      // CancellationError must propagate to stop the graph immediately
+      if (error instanceof CancellationError) {
+        config.logger?.log(`[${nodeName}] Cancelled by user`);
         throw error;
       }
 

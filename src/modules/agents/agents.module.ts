@@ -43,6 +43,7 @@ import { AtomInferenceService } from './atom-inference.service';
 import { ReconciliationAtomInferenceService } from './reconciliation-atom-inference.service';
 import { CIPolicyService } from './ci-policy.service';
 import { ReconciliationPolicy } from './entities/reconciliation-policy.entity';
+import { CancellationRegistry } from '../../common/cancellation.registry';
 import { ProjectsModule } from '../projects/projects.module';
 
 @Module({
@@ -95,6 +96,7 @@ import { ProjectsModule } from '../projects/projects.module';
     AtomInferenceService,
     ReconciliationAtomInferenceService,
     CIPolicyService,
+    CancellationRegistry,
   ],
   exports: [
     AtomizationService,

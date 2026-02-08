@@ -106,12 +106,23 @@ export interface ReconciliationInterruptedEvent {
   timestamp: Date;
 }
 
+/**
+ * Event emitted when reconciliation is cancelled by user
+ */
+export interface ReconciliationCancelledEvent {
+  type: 'reconciliation:cancelled';
+  runId: string;
+  reason: string;
+  timestamp: Date;
+}
+
 export type ReconciliationEvent =
   | ReconciliationProgressEvent
   | ReconciliationStartedEvent
   | ReconciliationCompletedEvent
   | ReconciliationFailedEvent
-  | ReconciliationInterruptedEvent;
+  | ReconciliationInterruptedEvent
+  | ReconciliationCancelledEvent;
 
 /**
  * WebSocket Gateway for real-time reconciliation progress updates
@@ -286,5 +297,19 @@ export class ReconciliationGateway
     };
     this.server?.emit('reconciliation:interrupted', event);
     this.logger.log(`[${runId}] Reconciliation interrupted: ${reason}`);
+  }
+
+  /**
+   * Emit event when reconciliation is cancelled by user
+   */
+  emitCancelled(runId: string, reason: string): void {
+    const event: ReconciliationCancelledEvent = {
+      type: 'reconciliation:cancelled',
+      runId,
+      reason,
+      timestamp: new Date(),
+    };
+    this.server?.emit('reconciliation:cancelled', event);
+    this.logger.log(`[${runId}] Reconciliation cancelled: ${reason}`);
   }
 }

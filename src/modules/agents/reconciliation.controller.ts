@@ -387,6 +387,36 @@ export class ReconciliationController {
   }
 
   /**
+   * Cancel an active reconciliation run
+   */
+  @Post('runs/:runId/cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Cancel a running reconciliation',
+    description:
+      'Request cancellation of a running reconciliation. The run will stop at the next safe checkpoint.',
+  })
+  @ApiParam({ name: 'runId', description: 'The run ID to cancel' })
+  @ApiResponse({
+    status: 200,
+    description: 'Cancellation requested',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Run is not in a cancellable state',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Run not found',
+  })
+  cancelRun(
+    @Param('runId') runId: string,
+  ): { runId: string; status: string; message: string } {
+    this.logger.log(`POST /agents/reconciliation/runs/${runId}/cancel`);
+    return this.reconciliationService.cancelRun(runId);
+  }
+
+  /**
    * Get quality metrics for a run
    */
   @Get('runs/:runId/metrics')

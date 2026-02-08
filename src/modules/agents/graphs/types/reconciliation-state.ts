@@ -457,6 +457,12 @@ export const ReconciliationGraphState = Annotation.Root({
     default: () => null,
   }),
 
+  /** Run ID for tracking and cancellation (passed from service layer) */
+  runId: Annotation<string>({
+    reducer: (_, update) => update,
+    default: () => '',
+  }),
+
   // -------------------------------------------------------------------------
   // Repository Structure (Phase: structure)
   // -------------------------------------------------------------------------

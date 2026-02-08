@@ -8,6 +8,7 @@ import { Logger } from '@nestjs/common';
 import { LLMService } from '../../../../common/llm/llm.service';
 import { ToolRegistryService } from '../../tools/tool-registry.service';
 import { ContentProvider, WriteProvider } from '../../content';
+import { CancellationRegistry } from '../../../../common/cancellation.registry';
 
 /**
  * Configuration passed to all nodes via dependency injection
@@ -23,6 +24,8 @@ export interface NodeConfig {
   contentProvider?: ContentProvider;
   /** Write provider for file modifications (optional, used by apply service) */
   writeProvider?: WriteProvider;
+  /** Cancellation registry for cooperative cancellation of long-running operations */
+  cancellationRegistry?: CancellationRegistry;
 }
 
 /**

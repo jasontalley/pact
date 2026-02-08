@@ -27,6 +27,7 @@ import { WRITE_PROVIDER } from '../apply.service';
 import { BatchLlmService } from '../../../common/llm/batch/batch.service';
 
 import { NodeConfig } from './nodes/types';
+import { CancellationRegistry } from '../../../common/cancellation.registry';
 
 /**
  * Configuration metadata for a registered graph
@@ -79,6 +80,7 @@ export class GraphRegistryService implements OnModuleInit {
     @Optional() @Inject(CONTENT_PROVIDER) contentProvider?: ContentProvider,
     @Optional() @Inject(WRITE_PROVIDER) writeProvider?: WriteProvider,
     @Optional() private readonly batchLlmService?: BatchLlmService,
+    @Optional() private readonly cancellationRegistry?: CancellationRegistry,
   ) {
     this.nodeConfig = {
       llmService: this.llmService,
@@ -86,6 +88,7 @@ export class GraphRegistryService implements OnModuleInit {
       logger: this.logger,
       contentProvider: contentProvider || new FilesystemContentProvider(),
       writeProvider: writeProvider || new FilesystemWriteProvider(),
+      cancellationRegistry: this.cancellationRegistry,
     };
   }
 

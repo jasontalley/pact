@@ -10,6 +10,7 @@ import {
   type ReconciliationCompletedEvent,
   type ReconciliationFailedEvent,
   type ReconciliationInterruptedEvent,
+  type ReconciliationCancelledEvent,
 } from '@/lib/socket/reconciliation-client';
 
 export interface ReconciliationEventHandlers {
@@ -17,6 +18,7 @@ export interface ReconciliationEventHandlers {
   onCompleted?: (event: ReconciliationCompletedEvent) => void;
   onFailed?: (event: ReconciliationFailedEvent) => void;
   onInterrupted?: (event: ReconciliationInterruptedEvent) => void;
+  onCancelled?: (event: ReconciliationCancelledEvent) => void;
 }
 
 /**
@@ -60,6 +62,12 @@ export function useReconciliationEvents(
     }
   }, [runId]);
 
+  const handleCancelled = useCallback((event: ReconciliationCancelledEvent) => {
+    if (event.runId === runId) {
+      handlersRef.current.onCancelled?.(event);
+    }
+  }, [runId]);
+
   useEffect(() => {
     if (!runId) return;
 
@@ -69,13 +77,15 @@ export function useReconciliationEvents(
     reconciliationSocket.on(RECONCILIATION_EVENTS.COMPLETED, handleCompleted);
     reconciliationSocket.on(RECONCILIATION_EVENTS.FAILED, handleFailed);
     reconciliationSocket.on(RECONCILIATION_EVENTS.INTERRUPTED, handleInterrupted);
+    reconciliationSocket.on(RECONCILIATION_EVENTS.CANCELLED, handleCancelled);
 
     return () => {
       reconciliationSocket.off(RECONCILIATION_EVENTS.PROGRESS, handleProgress);
       reconciliationSocket.off(RECONCILIATION_EVENTS.COMPLETED, handleCompleted);
       reconciliationSocket.off(RECONCILIATION_EVENTS.FAILED, handleFailed);
       reconciliationSocket.off(RECONCILIATION_EVENTS.INTERRUPTED, handleInterrupted);
+      reconciliationSocket.off(RECONCILIATION_EVENTS.CANCELLED, handleCancelled);
       disconnectReconciliationSocket();
     };
-  }, [runId, handleProgress, handleCompleted, handleFailed, handleInterrupted]);
+  }, [runId, handleProgress, handleCompleted, handleFailed, handleInterrupted, handleCancelled]);
 }

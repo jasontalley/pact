@@ -378,6 +378,8 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
   const [changeSetName, setChangeSetName] = useState('');
   const [showChangeSetInput, setShowChangeSetInput] = useState(false);
 
+  const [isCancelling, setIsCancelling] = useState(false);
+
   const startMutation = useStartReconciliation();
   const submitReviewMutation = useSubmitReview();
   const applyMutation = useApplyRecommendations();
@@ -451,6 +453,13 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
     setStep('config');
   }, []);
 
+  const handleWsCancelled = useCallback(() => {
+    toast.info('Reconciliation run cancelled');
+    setIsCancelling(false);
+    setStep('config');
+    setRunId(null);
+  }, []);
+
   const handleWsProgress = useCallback((event: { phase: string; progress: number; message: string }) => {
     setProgressPhase(event.phase);
     setProgressPercent(event.progress);
@@ -463,7 +472,21 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
     onCompleted: handleWsCompleted,
     onFailed: handleWsFailed,
     onInterrupted: handleWsInterrupted,
+    onCancelled: handleWsCancelled,
   });
+
+  // Handle cancel run
+  const handleCancelRun = async () => {
+    if (!runId) return;
+    setIsCancelling(true);
+    try {
+      await reconciliationApi.cancel(runId);
+      toast.info('Cancellation requested...');
+    } catch {
+      toast.error('Failed to cancel run');
+      setIsCancelling(false);
+    }
+  };
 
   // Handle start analysis — returns immediately, progress via WebSocket
   const handleStartAnalysis = () => {
@@ -991,6 +1014,14 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
                   Phase: {progressPhase.replaceAll('_', ' ')}
                 </p>
               )}
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleCancelRun}
+                disabled={isCancelling || !runId}
+              >
+                {isCancelling ? 'Cancelling...' : 'Cancel Run'}
+              </Button>
             </div>
           )}
 

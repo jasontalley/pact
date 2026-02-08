@@ -17,6 +17,7 @@
  */
 
 import { NodeConfig } from '../types';
+import { CancellationError } from '../../../../../common/cancellation.registry';
 import {
   ReconciliationGraphStateType,
   ReconciliationDecision,
@@ -406,6 +407,10 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
 
       // Path 1: Batch mode (Phase 20) - for high-volume validation
       if (options.batchService && inferredAtoms.length >= batchThreshold) {
+        // Check for cancellation before starting batch
+        if (config.cancellationRegistry?.isCancelled(state.runId)) {
+          throw new CancellationError(state.runId);
+        }
         try {
           const batchAvailable = await options.batchService.isAvailable();
           if (batchAvailable) {
@@ -495,6 +500,10 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
 
         await Promise.all(
           inferredAtoms.map(async (atom) => {
+            // Check for cancellation before acquiring semaphore slot
+            if (config.cancellationRegistry?.isCancelled(state.runId)) {
+              throw new CancellationError(state.runId);
+            }
             await acquire();
             try {
               const toolResult = (await config.toolRegistry.executeTool('validate_atom_quality', {
@@ -528,6 +537,11 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
       // Path 3: Sequential mode (default fallback)
       if (!validationComplete) {
         for (const atom of inferredAtoms) {
+          // Check for cancellation between atom validations
+          if (config.cancellationRegistry?.isCancelled(state.runId)) {
+            throw new CancellationError(state.runId);
+          }
+
           let score: number;
           let issues: string[] = [];
           let passes: boolean;

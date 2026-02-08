@@ -1,6 +1,7 @@
-import { Module, Global } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { Module, Global, Logger } from '@nestjs/common';
+import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
+import { Repository } from 'typeorm';
 import { LLMService } from '../../common/llm/llm.service';
 import { ProviderRegistry } from '../../common/llm/providers/provider-registry';
 import { ModelRouter } from '../../common/llm/routing/model-router';
@@ -37,22 +38,45 @@ import { LLMAdminController } from './llm-admin.controller';
     LLMService,
     {
       provide: BatchLlmService,
-      useFactory: (configService: ConfigService): BatchLlmService => {
+      useFactory: async (
+        configService: ConfigService,
+        configRepository: Repository<LLMConfiguration>,
+      ): Promise<BatchLlmService> => {
+        const logger = new Logger('BatchLlmServiceFactory');
         const service = new BatchLlmService();
 
-        const anthropicKey = configService.get<string>('ANTHROPIC_API_KEY');
+        // Try DB-stored keys first (same pattern as ProviderRegistry.mergeDbConfig)
+        let anthropicKey: string | undefined;
+        let openaiKey: string | undefined;
+
+        try {
+          const dbConfig = await configRepository.findOne({
+            where: { isActive: true },
+          });
+          if (dbConfig?.providerConfigs) {
+            anthropicKey = dbConfig.providerConfigs.anthropic?.apiKey;
+            openaiKey = dbConfig.providerConfigs.openai?.apiKey;
+            if (anthropicKey) logger.log('Loaded Anthropic API key from database for batch service');
+            if (openaiKey) logger.log('Loaded OpenAI API key from database for batch service');
+          }
+        } catch (error) {
+          logger.warn(`Failed to load batch config from database: ${error instanceof Error ? error.message : error}`);
+        }
+
+        // Fallback to env vars
+        anthropicKey = anthropicKey || configService.get<string>('ANTHROPIC_API_KEY');
+        openaiKey = openaiKey || configService.get<string>('OPENAI_API_KEY');
+
         if (anthropicKey) {
           service.registerProvider(new AnthropicBatchProvider(anthropicKey));
         }
-
-        const openaiKey = configService.get<string>('OPENAI_API_KEY');
         if (openaiKey) {
           service.registerProvider(new OpenAIBatchProvider(openaiKey));
         }
 
         return service;
       },
-      inject: [ConfigService],
+      inject: [ConfigService, getRepositoryToken(LLMConfiguration)],
     },
   ],
   exports: [ProviderRegistry, ModelRouter, LLMService, BatchLlmService],

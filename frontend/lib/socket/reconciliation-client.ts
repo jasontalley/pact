@@ -47,6 +47,7 @@ export const RECONCILIATION_EVENTS = {
   COMPLETED: 'reconciliation:completed',
   FAILED: 'reconciliation:failed',
   INTERRUPTED: 'reconciliation:interrupted',
+  CANCELLED: 'reconciliation:cancelled',
 } as const;
 
 /**
@@ -103,5 +104,14 @@ export interface ReconciliationInterruptedEvent {
   reason: string;
   pendingAtomCount: number;
   pendingMoleculeCount: number;
+  timestamp: string;
+}
+
+/**
+ * Cancelled event payload
+ */
+export interface ReconciliationCancelledEvent {
+  runId: string;
+  reason: string;
   timestamp: string;
 }
