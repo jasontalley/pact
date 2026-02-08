@@ -44,6 +44,39 @@ export interface VerifyNodeOptions {
    * When true, interrupts if failCount > passCount (legacy behavior).
    */
   forceInterruptOnQualityFail?: boolean;
+  /** Batch LLM service for high-volume validation (Phase 20) */
+  batchService?: {
+    isAvailable(providerName?: string): Promise<boolean>;
+    submitAndWait(
+      requests: Array<{
+        customId: string;
+        userPrompt: string;
+        systemPrompt?: string;
+        model?: string;
+        maxTokens?: number;
+      }>,
+      options?: {
+        onProgress?: (job: {
+          completedRequests: number;
+          totalRequests: number;
+          failedRequests: number;
+        }) => void;
+      },
+    ): Promise<
+      Array<{ customId: string; success: boolean; content?: string; error?: string }>
+    >;
+  };
+  /** Minimum atom count to trigger batch/concurrent mode (default: 20) */
+  batchThreshold?: number;
+  /** Max concurrent tool calls in concurrent mode (default: 5) */
+  concurrencyLimit?: number;
+  /** Callback for batch progress updates */
+  onBatchProgress?: (progress: {
+    runId?: string;
+    completed: number;
+    total: number;
+    failed: number;
+  }) => void;
 }
 
 /**
@@ -253,6 +286,21 @@ function validateAtomDirect(
 }
 
 /**
+ * Build a quality validation prompt for batch mode
+ */
+function buildBatchQualityPrompt(atom: InferredAtom): string {
+  return (
+    `Validate the quality of this intent atom and respond with JSON:\n` +
+    `Description: ${atom.description}\n` +
+    `Category: ${atom.category || 'unspecified'}\n` +
+    `Observable Outcomes: ${JSON.stringify(atom.observableOutcomes || [])}\n` +
+    `Confidence: ${atom.confidence}\n` +
+    `Reasoning: ${atom.reasoning || 'none'}\n\n` +
+    `Respond ONLY with: {"totalScore": <0-100>, "decision": "approve"|"revise"|"reject", "feedback": "<brief>"}`
+  );
+}
+
+/**
  * Process human review input and update decisions.
  *
  * @param atoms - Inferred atoms
@@ -352,64 +400,190 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
 
       // Check if tool is available
       const hasValidateTool = useTool && config.toolRegistry.hasTool('validate_atom_quality');
+      const batchThreshold = options.batchThreshold ?? 20;
 
       let passCount = 0;
       let failCount = 0;
+      let validationComplete = false;
 
-      // Validate each atom
-      for (const atom of inferredAtoms) {
-        let score: number;
-        let issues: string[] = [];
-        let passes: boolean;
-
-        // Try tool-based validation first
-        if (hasValidateTool) {
-          try {
-            const toolResult = (await config.toolRegistry.executeTool('validate_atom_quality', {
-              atom_id: atom.tempId,
-              description: atom.description,
-              observable_outcomes: JSON.stringify(atom.observableOutcomes || []),
-              category: atom.category || '',
-            })) as ValidateAtomToolResult;
-
-            score = toolResult.totalScore;
-            issues = toolResult.actionableImprovements || [];
-            // Use the decision or fallback to threshold check
-            passes = toolResult.decision === 'approve' || score >= inputThreshold;
-          } catch (toolError) {
-            const toolErrorMessage =
-              toolError instanceof Error ? toolError.message : String(toolError);
-            config.logger?.warn(
-              `[VerifyNode] Tool failed for ${atom.tempId}, falling back: ${toolErrorMessage}`,
+      // Path 1: Batch mode (Phase 20) - for high-volume validation
+      if (options.batchService && inferredAtoms.length >= batchThreshold) {
+        try {
+          const batchAvailable = await options.batchService.isAvailable();
+          if (batchAvailable) {
+            config.logger?.log(
+              `[VerifyNode] Using batch mode for ${inferredAtoms.length} atoms`,
             );
 
-            // Fallback to direct validation
+            const batchRequests = inferredAtoms.map((atom) => ({
+              customId: atom.tempId,
+              userPrompt: buildBatchQualityPrompt(atom),
+            }));
+
+            const batchResults = await options.batchService.submitAndWait(batchRequests, {
+              onProgress: options.onBatchProgress
+                ? (job) => {
+                    options.onBatchProgress!({
+                      runId: state.input?.runId,
+                      completed: job.completedRequests,
+                      total: job.totalRequests,
+                      failed: job.failedRequests,
+                    });
+                  }
+                : undefined,
+            });
+
+            // Process batch results
+            const resultMap = new Map(batchResults.map((r) => [r.customId, r]));
+            for (const atom of inferredAtoms) {
+              const batchResult = resultMap.get(atom.tempId);
+              if (batchResult?.success && batchResult.content) {
+                try {
+                  const parsed = JSON.parse(batchResult.content);
+                  atom.qualityScore = parsed.totalScore;
+                  if (parsed.totalScore >= inputThreshold) {
+                    passCount++;
+                  } else {
+                    failCount++;
+                  }
+                } catch {
+                  // JSON parse failed, fall back to direct scoring
+                  const direct = validateAtomDirect(atom, inputThreshold, options.customScorer);
+                  atom.qualityScore = direct.score;
+                  if (direct.passes) passCount++;
+                  else failCount++;
+                }
+              } else {
+                // Failed batch item, fall back to direct scoring
+                const direct = validateAtomDirect(atom, inputThreshold, options.customScorer);
+                atom.qualityScore = direct.score;
+                if (direct.passes) passCount++;
+                else failCount++;
+              }
+            }
+
+            validationComplete = true;
+          }
+        } catch (batchError) {
+          const msg = batchError instanceof Error ? batchError.message : String(batchError);
+          config.logger?.warn(`[VerifyNode] Batch mode failed, falling back to direct: ${msg}`);
+        }
+      }
+
+      // Path 2: Concurrent mode - tool available, atoms exceed threshold, no batch
+      if (!validationComplete && hasValidateTool && inferredAtoms.length >= batchThreshold) {
+        config.logger?.log(
+          `[VerifyNode] Using concurrent mode for ${inferredAtoms.length} atoms`,
+        );
+        const concurrencyLimit = options.concurrencyLimit ?? 5;
+        let running = 0;
+        const waitQueue: Array<() => void> = [];
+
+        const acquire = (): Promise<void> =>
+          new Promise((resolve) => {
+            if (running < concurrencyLimit) {
+              running++;
+              resolve();
+            } else {
+              waitQueue.push(() => {
+                running++;
+                resolve();
+              });
+            }
+          });
+
+        const release = (): void => {
+          running--;
+          if (waitQueue.length > 0) {
+            waitQueue.shift()!();
+          }
+        };
+
+        await Promise.all(
+          inferredAtoms.map(async (atom) => {
+            await acquire();
+            try {
+              const toolResult = (await config.toolRegistry.executeTool(
+                'validate_atom_quality',
+                {
+                  atom_id: atom.tempId,
+                  description: atom.description,
+                  observable_outcomes: JSON.stringify(atom.observableOutcomes || []),
+                  category: atom.category || '',
+                },
+              )) as ValidateAtomToolResult;
+
+              atom.qualityScore = toolResult.totalScore;
+              if (toolResult.decision === 'approve' || toolResult.totalScore >= inputThreshold) {
+                passCount++;
+              } else {
+                failCount++;
+              }
+            } catch {
+              // Fallback to direct validation for this atom
+              const direct = validateAtomDirect(atom, inputThreshold, options.customScorer);
+              atom.qualityScore = direct.score;
+              if (direct.passes) passCount++;
+              else failCount++;
+            } finally {
+              release();
+            }
+          }),
+        );
+
+        validationComplete = true;
+      }
+
+      // Path 3: Sequential mode (default fallback)
+      if (!validationComplete) {
+        for (const atom of inferredAtoms) {
+          let score: number;
+          let issues: string[] = [];
+          let passes: boolean;
+
+          if (hasValidateTool) {
+            try {
+              const toolResult = (await config.toolRegistry.executeTool('validate_atom_quality', {
+                atom_id: atom.tempId,
+                description: atom.description,
+                observable_outcomes: JSON.stringify(atom.observableOutcomes || []),
+                category: atom.category || '',
+              })) as ValidateAtomToolResult;
+
+              score = toolResult.totalScore;
+              issues = toolResult.actionableImprovements || [];
+              passes = toolResult.decision === 'approve' || score >= inputThreshold;
+            } catch (toolError) {
+              const toolErrorMessage =
+                toolError instanceof Error ? toolError.message : String(toolError);
+              config.logger?.warn(
+                `[VerifyNode] Tool failed for ${atom.tempId}, falling back: ${toolErrorMessage}`,
+              );
+
+              const result = validateAtomDirect(atom, inputThreshold, options.customScorer);
+              score = result.score;
+              issues = result.issues;
+              passes = result.passes;
+            }
+          } else {
             const result = validateAtomDirect(atom, inputThreshold, options.customScorer);
             score = result.score;
             issues = result.issues;
             passes = result.passes;
           }
-        } else {
-          // Fallback: Direct validation
-          const result = validateAtomDirect(atom, inputThreshold, options.customScorer);
-          score = result.score;
-          issues = result.issues;
-          passes = result.passes;
-        }
 
-        // Store score on atom (mutating for simplicity)
-        atom.qualityScore = score;
+          atom.qualityScore = score;
 
-        // Classify
-        if (passes) {
-          passCount++;
-        } else {
-          failCount++;
-          config.logger?.log(
-            `[VerifyNode] Atom ${atom.tempId} failed quality (${score} < ${inputThreshold}): ${atom.description.substring(0, 50)}...`,
-          );
-          if (issues.length > 0) {
-            config.logger?.log(`[VerifyNode]   Issues: ${issues.join('; ')}`);
+          if (passes) {
+            passCount++;
+          } else {
+            failCount++;
+            config.logger?.log(
+              `[VerifyNode] Atom ${atom.tempId} failed quality (${score} < ${inputThreshold}): ${atom.description.substring(0, 50)}...`,
+            );
+            if (issues.length > 0) {
+              config.logger?.log(`[VerifyNode]   Issues: ${issues.join('; ')}`);
+            }
           }
         }
       }

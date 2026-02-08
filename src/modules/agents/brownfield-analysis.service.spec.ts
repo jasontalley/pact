@@ -10,6 +10,7 @@ import { LLMService } from '../../common/llm/llm.service';
 import { Atom } from '../atoms/atom.entity';
 import { AgentAction } from './agent-action.entity';
 import { BrownfieldAnalysisDto } from './dto/brownfield-analysis.dto';
+import { RepositoryConfigService } from '../projects/repository-config.service';
 
 // Mock fs module
 jest.mock('fs', () => ({
@@ -108,6 +109,12 @@ describe('BrownfieldAnalysisService', () => {
           provide: ConfigService,
           useValue: {
             get: jest.fn(),
+          },
+        },
+        {
+          provide: RepositoryConfigService,
+          useValue: {
+            getRepositoryPath: jest.fn().mockResolvedValue('/test/repo'),
           },
         },
       ],

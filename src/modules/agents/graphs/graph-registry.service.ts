@@ -24,6 +24,7 @@ import {
 } from '../content';
 import { CONTENT_PROVIDER } from '../context-builder.service';
 import { WRITE_PROVIDER } from '../apply.service';
+import { BatchLlmService } from '../../../common/llm/batch/batch.service';
 
 import { NodeConfig } from './nodes/types';
 
@@ -77,6 +78,7 @@ export class GraphRegistryService implements OnModuleInit {
     private readonly reconciliationAtomInferenceService?: ReconciliationAtomInferenceService,
     @Optional() @Inject(CONTENT_PROVIDER) contentProvider?: ContentProvider,
     @Optional() @Inject(WRITE_PROVIDER) writeProvider?: WriteProvider,
+    @Optional() private readonly batchLlmService?: BatchLlmService,
   ) {
     this.nodeConfig = {
       llmService: this.llmService,
@@ -123,12 +125,15 @@ export class GraphRegistryService implements OnModuleInit {
     this.registerGraph(COVERAGE_FAST_GRAPH_NAME, coverageGraph, COVERAGE_FAST_GRAPH_CONFIG);
 
     // Register reconciliation graph with repository for database persistence
-
+    // BatchLlmService is registered with providers in LLMModule factory
     const reconciliationGraph = createReconciliationGraph(this.nodeConfig, {
       nodeOptions: {
         interimPersist: {
           repository: this.reconciliationRepository,
           persistToDatabase: !!this.reconciliationRepository,
+        },
+        verify: {
+          batchService: this.batchLlmService,
         },
         persist: {
           repository: this.reconciliationRepository,
