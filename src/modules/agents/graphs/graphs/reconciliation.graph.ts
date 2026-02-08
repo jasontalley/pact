@@ -173,6 +173,20 @@ function discoverRouter(
 }
 
 /**
+ * Conditional router after verify node.
+ * If human review is pending, route to END so the service can detect it.
+ * Otherwise, proceed to persist.
+ */
+function afterVerify(
+  state: ReconciliationGraphStateType,
+): typeof RECONCILIATION_NODES.PERSIST | typeof END {
+  if (state.pendingHumanReview) {
+    return END;
+  }
+  return RECONCILIATION_NODES.PERSIST;
+}
+
+/**
  * Creates the Reconciliation Agent graph.
  *
  * This graph implements the 7-phase reconciliation flow:
@@ -305,8 +319,11 @@ export function createReconciliationGraph(
     // interim_persist -> verify
     .addEdge(RECONCILIATION_NODES.INTERIM_PERSIST, RECONCILIATION_NODES.VERIFY)
 
-    // verify -> persist
-    .addEdge(RECONCILIATION_NODES.VERIFY, RECONCILIATION_NODES.PERSIST)
+    // verify -> persist (if no human review) or END (if paused for review)
+    .addConditionalEdges(RECONCILIATION_NODES.VERIFY, afterVerify, [
+      RECONCILIATION_NODES.PERSIST,
+      END,
+    ])
 
     // persist -> END
     .addEdge(RECONCILIATION_NODES.PERSIST, END);

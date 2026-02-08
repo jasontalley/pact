@@ -171,7 +171,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
     await this.loadConfiguration();
 
     // Initialize Redis for caching
-    if (this.config.cache.enabled) {
+    if (this.config.cache?.enabled) {
       this.initializeRedis();
     }
 
@@ -220,17 +220,18 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
   }
 
   private mapDatabaseConfigToServiceConfig(dbConfig: LLMConfiguration): LLMServiceConfig {
+    const defaults = loadLLMConfig();
     return {
-      primaryModel: dbConfig.primaryModel,
-      fallbackModels: dbConfig.fallbackModels,
-      defaultTimeout: dbConfig.defaultTimeout,
-      streamingEnabled: dbConfig.streamingEnabled,
-      circuitBreaker: dbConfig.circuitBreakerConfig,
-      retry: dbConfig.retryConfig,
-      rateLimit: dbConfig.rateLimitConfig,
-      cache: dbConfig.cacheConfig,
-      budget: dbConfig.budgetConfig,
-      observability: dbConfig.observabilityConfig,
+      primaryModel: dbConfig.primaryModel ?? defaults.primaryModel,
+      fallbackModels: dbConfig.fallbackModels ?? defaults.fallbackModels,
+      defaultTimeout: dbConfig.defaultTimeout ?? defaults.defaultTimeout,
+      streamingEnabled: dbConfig.streamingEnabled ?? defaults.streamingEnabled,
+      circuitBreaker: dbConfig.circuitBreakerConfig ?? defaults.circuitBreaker,
+      retry: dbConfig.retryConfig ?? defaults.retry,
+      rateLimit: dbConfig.rateLimitConfig ?? defaults.rateLimit,
+      cache: dbConfig.cacheConfig ?? defaults.cache,
+      budget: dbConfig.budgetConfig ?? defaults.budget,
+      observability: dbConfig.observabilityConfig ?? defaults.observability,
     };
   }
 
@@ -366,7 +367,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
       await this.checkBudget();
 
       // Try cache
-      if (request.useCache !== false && this.config.cache.enabled) {
+      if (request.useCache !== false && this.config.cache?.enabled) {
         const cached = await this.getCachedResponse(request);
         if (cached) {
           this.logger.log(`Cache hit for request ${requestId}`);
@@ -383,7 +384,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
       );
 
       // Cache response
-      if (request.useCache !== false && this.config.cache.enabled) {
+      if (request.useCache !== false && this.config.cache?.enabled) {
         await this.cacheResponse(request, response);
       }
 
@@ -789,7 +790,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
    * Get cached response
    */
   private async getCachedResponse(request: LLMRequest): Promise<LLMResponse | null> {
-    if (!this.redis || !this.config.cache.enabled) return null;
+    if (!this.redis || !this.config.cache?.enabled) return null;
 
     try {
       const cacheKey = this.generateCacheKey(request);
@@ -806,7 +807,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
    * Cache response
    */
   private async cacheResponse(request: LLMRequest, response: LLMResponse): Promise<void> {
-    if (!this.redis || !this.config.cache.enabled) return;
+    if (!this.redis || !this.config.cache?.enabled) return;
 
     try {
       const cacheKey = this.generateCacheKey(request);

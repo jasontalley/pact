@@ -50,7 +50,7 @@ const GPT5_MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     supportsVision: true,
     supportsFunctionCalling: true,
     supportsStreaming: true,
-    supportsReasoningEffort: true,
+    supportsReasoningEffort: false,
     costPerInputToken: 0.0000025, // $2.50 per 1M
     costPerOutputToken: 0.00001, // $10 per 1M
     maxOutputTokens: 64000,
@@ -61,7 +61,7 @@ const GPT5_MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     supportsVision: true,
     supportsFunctionCalling: true,
     supportsStreaming: true,
-    supportsReasoningEffort: true,
+    supportsReasoningEffort: false,
     costPerInputToken: 0.000005, // $5 per 1M
     costPerOutputToken: 0.00002, // $20 per 1M
     maxOutputTokens: 64000,

@@ -263,10 +263,9 @@ export class ChatAgentService {
 
     try {
       // Invoke the chat exploration graph
-      const result = await this.graphRegistry.invoke<
-        { input: string; maxIterations: number },
-        ChatExplorationStateType
-      >('chat-exploration', {
+      const result = await this.graphRegistry.invoke<ChatExplorationStateType>(
+        'chat-exploration',
+        {
         input: request.message,
         maxIterations: 5,
       });
@@ -350,12 +349,9 @@ export class ChatAgentService {
     this.logger.log(`Using coverage fast-path for session ${session.id}`);
 
     try {
-      const result = await this.graphRegistry.invoke<{ input: string }, CoverageFastStateType>(
-        'coverage-fast',
-        {
-          input: request.message,
-        },
-      );
+      const result = await this.graphRegistry.invoke<CoverageFastStateType>('coverage-fast', {
+        input: request.message,
+      });
 
       // Check if fast-path found actual coverage data
       // If not, fall back to standard graph for more thorough exploration

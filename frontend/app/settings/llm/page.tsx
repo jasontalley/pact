@@ -317,9 +317,15 @@ function ProviderCard({
               </Button>
             </div>
             {config?.apiKeySet && (
-              <p className="text-xs text-green-600 flex items-center gap-1">
-                <Check className="h-3 w-3" /> API key configured
-              </p>
+              provider.available ? (
+                <p className="text-xs text-green-600 flex items-center gap-1">
+                  <Check className="h-3 w-3" /> API key configured
+                </p>
+              ) : (
+                <p className="text-xs text-yellow-600 dark:text-yellow-400 flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" /> API key set but provider unavailable
+                </p>
+              )
             )}
           </div>
         )}
@@ -391,7 +397,7 @@ function ProviderCard({
           </div>
         )}
 
-        {provider.health.averageLatencyMs && (
+        {typeof provider.health.averageLatencyMs === 'number' && provider.health.averageLatencyMs > 0 && (
           <p className="text-xs text-muted-foreground">
             Average latency: {Math.round(provider.health.averageLatencyMs)}ms
           </p>

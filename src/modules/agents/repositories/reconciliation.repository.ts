@@ -232,6 +232,21 @@ export class ReconciliationRepository {
   }
 
   /**
+   * Update quality scores for atom recommendations by tempId within a run
+   */
+  async updateAtomQualityScores(
+    runUuid: string,
+    scores: Array<{ tempId: string; qualityScore: number }>,
+  ): Promise<void> {
+    for (const { tempId, qualityScore } of scores) {
+      await this.atomRecRepository.update(
+        { runId: runUuid, tempId },
+        { qualityScore },
+      );
+    }
+  }
+
+  /**
    * Find atom recommendations by run
    */
   async findAtomRecommendationsByRun(runUuid: string): Promise<AtomRecommendation[]> {

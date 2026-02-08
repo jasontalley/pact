@@ -18,7 +18,6 @@ import {
   CompletionReason,
 } from '../../types/interview-state';
 import { AgentTaskType } from '../../../../../common/llm/providers/types';
-import { NodeInterrupt } from '@langchain/langgraph';
 
 export interface GenerateQuestionsNodeOptions {
   /** Maximum questions per round */
@@ -119,24 +118,20 @@ export function createGenerateQuestionsNode(options?: GenerateQuestionsNodeOptio
           return handleStochasticMode(questions, turn, state, options.intervieweeCallback, logger);
         }
 
-        // Interactive mode: pause for real user response
-        throw new NodeInterrupt(
-          JSON.stringify({
-            type: 'interview_questions',
-            questions: questions.map((q) => ({
-              id: q.id,
-              question: q.question,
-              category: q.category,
-              rationale: q.rationale,
-            })),
-            round: state.round,
-            maxRounds: state.maxRounds,
-            conversationTurn: turn,
-            pendingQuestions: questions,
-          }),
+        // Interactive mode: return questions in state and let graph end.
+        // The service layer detects pendingQuestions and pauses for user input.
+        // (LangGraph 1.x: NodeInterrupt no longer throws to the caller,
+        // so we return state instead and let the routing function send to END.)
+        logger?.log(
+          `GenerateQuestions: ${questions.length} questions ready, returning for user response`,
         );
+        return {
+          pendingQuestions: questions,
+          currentPhase: 'waiting_for_response' as const,
+          conversationHistory: [turn],
+          llmCallCount: state.llmCallCount + 1,
+        };
       } catch (error) {
-        if (error instanceof NodeInterrupt) throw error;
         const message = error instanceof Error ? error.message : String(error);
         logger?.error(`GenerateQuestions: Error - ${message}`);
         return { errors: [message], currentPhase: 'extract_atoms', completionReason: 'error' };

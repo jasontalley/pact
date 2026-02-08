@@ -64,7 +64,8 @@ export interface InvokeOptions {
 @Injectable()
 export class GraphRegistryService implements OnModuleInit {
   private readonly logger = new Logger(GraphRegistryService.name);
-  private graphs = new Map<string, CompiledStateGraph<unknown, unknown>>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private graphs = new Map<string, CompiledStateGraph<any, any, any>>();
   private configs = new Map<string, GraphConfig>();
   private nodeConfig: NodeConfig;
 
@@ -164,15 +165,16 @@ export class GraphRegistryService implements OnModuleInit {
    * @param graph - Compiled LangGraph state machine
    * @param config - Configuration metadata
    */
-  registerGraph<TState, TUpdate>(
+  registerGraph(
     name: string,
-    graph: CompiledStateGraph<TState, TUpdate>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    graph: CompiledStateGraph<any, any, any>,
     config: Omit<GraphConfig, 'name'>,
   ): void {
     if (this.graphs.has(name)) {
       this.logger.warn(`Graph ${name} already registered, overwriting`);
     }
-    this.graphs.set(name, graph as CompiledStateGraph<unknown, unknown>);
+    this.graphs.set(name, graph);
     this.configs.set(name, { name, ...config });
     this.logger.log(`Registered graph: ${name} (${config.pattern} pattern)`);
   }
@@ -183,10 +185,9 @@ export class GraphRegistryService implements OnModuleInit {
    * @param name - Graph identifier
    * @returns Compiled graph or undefined if not found
    */
-  getGraph<TState, TUpdate = Partial<TState>>(
-    name: string,
-  ): CompiledStateGraph<TState, TUpdate> | undefined {
-    return this.graphs.get(name) as CompiledStateGraph<TState, TUpdate> | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getGraph(name: string): CompiledStateGraph<any, any, any> | undefined {
+    return this.graphs.get(name);
   }
 
   /**
@@ -227,9 +228,9 @@ export class GraphRegistryService implements OnModuleInit {
    * @returns Final graph state
    * @throws Error if graph not found
    */
-  async invoke<TInput, TOutput>(
+  async invoke<TOutput = unknown>(
     name: string,
-    input: TInput,
+    input: unknown,
     options?: InvokeOptions,
   ): Promise<TOutput> {
     const graph = this.getGraph(name);
@@ -265,7 +266,8 @@ export class GraphRegistryService implements OnModuleInit {
 
     const startTime = Date.now();
     try {
-      const result = await graph.invoke(input, config);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await graph.invoke(input as any, config);
       const duration = Date.now() - startTime;
       this.logger.debug(`Graph '${name}' completed in ${duration}ms`);
       return result as TOutput;
@@ -325,9 +327,9 @@ export class GraphRegistryService implements OnModuleInit {
    * @param options - Optional invocation options
    * @returns AsyncGenerator yielding state updates
    */
-  async *stream<TInput, TOutput>(
+  async *stream<TOutput = unknown>(
     name: string,
-    input: TInput,
+    input: unknown,
     options?: InvokeOptions,
   ): AsyncGenerator<TOutput> {
     const graph = this.getGraph(name);
@@ -355,7 +357,8 @@ export class GraphRegistryService implements OnModuleInit {
       };
     }
 
-    for await (const chunk of await graph.stream(input, config)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for await (const chunk of await graph.stream(input as any, config)) {
       yield chunk as TOutput;
     }
   }

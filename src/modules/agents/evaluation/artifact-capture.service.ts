@@ -56,9 +56,9 @@ export class ArtifactCaptureService {
    * @param options - Capture options (agent type, model, etc.)
    * @returns The Run Artifact with full execution trace
    */
-  async captureRun<TInput, TOutput>(
+  async captureRun<TOutput>(
     graphName: string,
-    input: TInput,
+    input: unknown,
     options: CaptureOptions,
   ): Promise<{ result: TOutput; artifact: RunArtifact }> {
     if (!this.graphRegistry) {
@@ -85,7 +85,7 @@ export class ArtifactCaptureService {
     let errors: string[] = [];
 
     try {
-      result = await this.graphRegistry.invoke<TInput, TOutput>(graphName, input, {
+      result = await this.graphRegistry.invoke<TOutput>(graphName, input, {
         threadId,
         configurable: options.configurable,
         runName: options.runName || `eval:${options.agent}:${runId}`,

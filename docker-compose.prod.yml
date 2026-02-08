@@ -3,14 +3,15 @@ services:
     image: postgres:18
     container_name: pact-postgres-prod
     environment:
-      POSTGRES_USER: ${DATABASE_USER}
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
-      POSTGRES_DB: ${DATABASE_NAME}
-      PGDATA: /data/postgresql
+      POSTGRES_USER: ${DATABASE_USER:-pact}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-pact_prod_password}
+      POSTGRES_DB: ${DATABASE_NAME:-pact_production}
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
-      - postgres_data:/data/postgresql
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER}"]
+      # Use container-level env vars so healthcheck always matches the actual DB
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -41,19 +42,21 @@ services:
     environment:
       DATABASE_HOST: postgres
       DATABASE_PORT: 5432
-      DATABASE_USER: ${DATABASE_USER}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
-      DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_USER: ${DATABASE_USER:-pact}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-pact_prod_password}
+      DATABASE_NAME: ${DATABASE_NAME:-pact_production}
       DATABASE_SYNCHRONIZE: ${DATABASE_SYNCHRONIZE:-true}
       NODE_ENV: production
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      LLM_DEFAULT_PROVIDER: ${LLM_DEFAULT_PROVIDER}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LLM_DEFAULT_PROVIDER: ${LLM_DEFAULT_PROVIDER:-openai}
       LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
       LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
       LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT:-pact-production}
+    volumes:
+      - ${REPO_PATH:-/Users/jasontalley/code/pact}:/repos/target
     depends_on:
       postgres:
         condition: service_healthy
@@ -79,7 +82,11 @@ services:
 
 volumes:
   postgres_data:
+    # Fixed name survives docker-compose down, --build, --force-recreate.
+    # Only `docker-compose down -v` removes it — avoid -v in production.
+    name: pact-postgres-data
   redis_data:
+    name: pact-redis-data
 
 networks:
   pact-network:

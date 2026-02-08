@@ -485,9 +485,9 @@ export class LLMAdminController {
   private hasEnvApiKey(provider: LLMProviderType): boolean {
     switch (provider) {
       case 'openai':
-        return !!process.env.OPENAI_API_KEY;
+        return !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim().length > 0);
       case 'anthropic':
-        return !!process.env.ANTHROPIC_API_KEY;
+        return !!(process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY.trim().length > 0);
       case 'ollama':
         return true; // Local, no API key needed
       default:

@@ -10,7 +10,6 @@
 
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-import { isGraphInterrupt } from '@langchain/langgraph';
 import { GraphRegistryService } from './graphs/graph-registry.service';
 import { ConversationsService } from '../conversations/conversations.service';
 import {
@@ -140,9 +139,10 @@ export class InterviewService {
     this.logger.log(`Starting interview session ${sessionId} for: "${rawIntent.slice(0, 50)}..."`);
 
     try {
-      // Run the graph — it will analyze intent and generate questions,
-      // then throw NodeInterrupt when questions are ready
-      await this.graphRegistry.invoke<Partial<InterviewGraphStateType>, InterviewGraphStateType>(
+      // Run the graph — it will analyze intent and generate questions.
+      // In LangGraph 1.x, the graph returns normally with pendingQuestions
+      // populated when questions are ready (no longer throws NodeInterrupt).
+      const result = await this.graphRegistry.invoke<InterviewGraphStateType>(
         INTERVIEW_GRAPH_NAME,
         { rawIntent },
         {
@@ -153,7 +153,45 @@ export class InterviewService {
         },
       );
 
-      // If we get here without interrupt, the graph completed (no questions needed)
+      // Check if graph returned with pending questions for the user
+      if (result.pendingQuestions?.length > 0) {
+        const session: InterviewSession = {
+          id: sessionId,
+          threadId,
+          conversationId: conversation.id,
+          status: 'waiting_for_answers',
+          currentRound: 1,
+          pendingQuestions: result.pendingQuestions,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        this.sessions.set(sessionId, session);
+
+        // Persist the assistant's questions
+        const questionText = result.pendingQuestions
+          .map((q, i) => `${i + 1}. ${q.question}`)
+          .join('\n');
+        await this.conversationsService.addMessage(
+          conversation.id,
+          'assistant',
+          `Clarifying questions:\n\n${questionText}`,
+          { type: 'interview_questions', round: 1 },
+        );
+
+        return {
+          sessionId,
+          conversationId: conversation.id,
+          questions: result.pendingQuestions.map((q) => ({
+            id: q.id,
+            question: q.question,
+            category: q.category,
+            rationale: q.rationale,
+          })),
+          analysis: result.intentAnalysis || null,
+        };
+      }
+
+      // Graph completed without needing questions
       const session: InterviewSession = {
         id: sessionId,
         threadId,
@@ -170,44 +208,9 @@ export class InterviewService {
         sessionId,
         conversationId: conversation.id,
         questions: [],
-        analysis: null,
+        analysis: result.intentAnalysis || null,
       };
     } catch (error) {
-      // Check if this is a graph interrupt (questions ready for user)
-      if (isGraphInterrupt(error)) {
-        const interruptData = this.parseInterruptPayload(error);
-
-        const session: InterviewSession = {
-          id: sessionId,
-          threadId,
-          conversationId: conversation.id,
-          status: 'waiting_for_answers',
-          currentRound: 1,
-          pendingQuestions: interruptData.pendingQuestions || [],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        this.sessions.set(sessionId, session);
-
-        // Persist the assistant's questions
-        const questionText = (interruptData.questions || [])
-          .map((q: { question: string }, i: number) => `${i + 1}. ${q.question}`)
-          .join('\n');
-        await this.conversationsService.addMessage(
-          conversation.id,
-          'assistant',
-          `Clarifying questions:\n\n${questionText}`,
-          { type: 'interview_questions', round: 1 },
-        );
-
-        return {
-          sessionId,
-          conversationId: conversation.id,
-          questions: interruptData.questions || [],
-          analysis: null,
-        };
-      }
-
       // Actual error
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Interview start failed: ${message}`);
@@ -290,15 +293,44 @@ export class InterviewService {
         currentPhase: userDone ? 'extract_atoms' : 'generate_questions',
       };
 
-      const result = await this.graphRegistry.invoke<
-        Partial<InterviewGraphStateType>,
-        InterviewGraphStateType
-      >(INTERVIEW_GRAPH_NAME, resumeState, {
-        threadId: session.threadId,
-        configurable: { thread_id: session.threadId },
-        runName: `interview-${sessionId}-round-${session.currentRound + 1}`,
-        tags: ['interview', 'resume'],
-      });
+      const result = await this.graphRegistry.invoke<InterviewGraphStateType>(
+        INTERVIEW_GRAPH_NAME,
+        resumeState,
+        {
+          threadId: session.threadId,
+          configurable: { thread_id: session.threadId },
+          runName: `interview-${sessionId}-round-${session.currentRound + 1}`,
+          tags: ['interview', 'resume'],
+        },
+      );
+
+      // Check if graph returned with more questions (another round)
+      if (result.pendingQuestions?.length > 0) {
+        session.currentRound++;
+        session.pendingQuestions = result.pendingQuestions;
+        session.updatedAt = new Date();
+
+        // Persist new questions
+        const questionText = result.pendingQuestions
+          .map((q, i) => `${i + 1}. ${q.question}`)
+          .join('\n');
+        await this.conversationsService.addMessage(
+          session.conversationId,
+          'assistant',
+          `Follow-up questions (round ${session.currentRound}):\n\n${questionText}`,
+          { type: 'interview_questions', round: session.currentRound },
+        );
+
+        return {
+          sessionId,
+          status: 'waiting_for_answers',
+          questions: result.pendingQuestions.map((q) => ({
+            id: q.id,
+            question: q.question,
+            category: q.category,
+          })),
+        };
+      }
 
       // Graph completed — return final results
       session.status = 'completed';
@@ -324,32 +356,6 @@ export class InterviewService {
         },
       };
     } catch (error) {
-      if (isGraphInterrupt(error)) {
-        // More questions
-        const interruptData = this.parseInterruptPayload(error);
-
-        session.currentRound++;
-        session.pendingQuestions = interruptData.pendingQuestions || [];
-        session.updatedAt = new Date();
-
-        // Persist new questions
-        const questionText = (interruptData.questions || [])
-          .map((q: { question: string }, i: number) => `${i + 1}. ${q.question}`)
-          .join('\n');
-        await this.conversationsService.addMessage(
-          session.conversationId,
-          'assistant',
-          `Follow-up questions (round ${session.currentRound}):\n\n${questionText}`,
-          { type: 'interview_questions', round: session.currentRound },
-        );
-
-        return {
-          sessionId,
-          status: 'waiting_for_answers',
-          questions: interruptData.questions || [],
-        };
-      }
-
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Interview answer submission failed: ${message}`);
       session.status = 'failed';
@@ -374,39 +380,4 @@ export class InterviewService {
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
   }
 
-  /**
-   * Parse the interrupt payload from a graph interrupt error.
-   */
-  private parseInterruptPayload(error: unknown): {
-    questions?: Array<{ id: string; question: string; category: string; rationale?: string }>;
-    pendingQuestions?: InterviewQuestion[];
-    round?: number;
-    maxRounds?: number;
-    [key: string]: unknown;
-  } {
-    try {
-      // The interrupt value is typically embedded in the error
-      const errAny = error as { value?: string; interrupts?: Array<{ value?: string }> };
-
-      // Try direct value
-      if (errAny.value) {
-        return JSON.parse(errAny.value);
-      }
-
-      // Try interrupts array
-      if (errAny.interrupts?.[0]?.value) {
-        return JSON.parse(errAny.interrupts[0].value);
-      }
-
-      // Try string representation
-      const str = String(error);
-      const jsonMatch = str.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-    } catch {
-      this.logger.warn('Failed to parse interrupt payload');
-    }
-    return {};
-  }
 }

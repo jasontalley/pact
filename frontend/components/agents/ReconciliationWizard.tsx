@@ -158,20 +158,21 @@ function PendingAtomCard({
     <Card
       className={cn(
         'transition-colors',
-        decision === 'approve' && 'border-green-500 bg-green-50 dark:bg-green-950/20',
-        decision === 'reject' && 'border-red-500 bg-red-50 dark:bg-red-950/20'
+        decision === 'approve' && 'border-green-500/60 bg-green-500/10',
+        decision === 'reject' && 'border-red-500/60 bg-red-500/10',
+        !decision && !atom.passes && 'border-yellow-500/40',
       )}
     >
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-2">
-              <Badge variant="outline" className="capitalize">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <Badge variant="outline" className="capitalize text-xs">
                 {atom.category}
               </Badge>
               <QualityBadge score={atom.qualityScore} />
               {atom.passes ? (
-                <Badge variant="default" className="bg-green-600 text-xs">
+                <Badge className="bg-green-600 text-white text-xs">
                   Passes
                 </Badge>
               ) : (
@@ -180,9 +181,9 @@ function PendingAtomCard({
                 </Badge>
               )}
             </div>
-            <p className="text-sm font-medium mb-2">{atom.description}</p>
+            <p className="text-sm text-foreground leading-relaxed mb-2">{atom.description}</p>
             {atom.issues.length > 0 && (
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-muted-foreground mt-1">
                 <p className="font-medium text-yellow-600 dark:text-yellow-400 mb-1">
                   Issues:
                 </p>
@@ -194,13 +195,13 @@ function PendingAtomCard({
               </div>
             )}
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 shrink-0">
             <Button
               size="sm"
               variant={decision === 'approve' ? 'default' : 'outline'}
               className={cn(
                 'w-20',
-                decision === 'approve' && 'bg-green-600 hover:bg-green-700'
+                decision === 'approve' && 'bg-green-600 hover:bg-green-700 text-white'
               )}
               onClick={() => onDecisionChange('approve')}
             >
@@ -239,23 +240,23 @@ function PendingMoleculeCard({
     <Card
       className={cn(
         'transition-colors',
-        decision === 'approve' && 'border-green-500 bg-green-50 dark:bg-green-950/20',
-        decision === 'reject' && 'border-red-500 bg-red-50 dark:bg-red-950/20'
+        decision === 'approve' && 'border-green-500/60 bg-green-500/10',
+        decision === 'reject' && 'border-red-500/60 bg-red-500/10',
       )}
     >
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-2">
-              <Badge variant="secondary">Molecule</Badge>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <Badge variant="secondary" className="text-xs">Molecule</Badge>
               <span
                 className={cn(
                   'text-xs font-medium',
                   confidencePercent >= 80
-                    ? 'text-green-600'
+                    ? 'text-green-600 dark:text-green-400'
                     : confidencePercent >= 60
-                    ? 'text-yellow-600'
-                    : 'text-red-600'
+                    ? 'text-yellow-600 dark:text-yellow-400'
+                    : 'text-red-600 dark:text-red-400'
                 )}
               >
                 {confidencePercent}% confidence
@@ -264,16 +265,16 @@ function PendingMoleculeCard({
                 {molecule.atomCount} atoms
               </span>
             </div>
-            <p className="text-sm font-bold mb-1">{molecule.name}</p>
+            <p className="text-sm font-bold text-foreground mb-1">{molecule.name}</p>
             <p className="text-sm text-muted-foreground">{molecule.description}</p>
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 shrink-0">
             <Button
               size="sm"
               variant={decision === 'approve' ? 'default' : 'outline'}
               className={cn(
                 'w-20',
-                decision === 'approve' && 'bg-green-600 hover:bg-green-700'
+                decision === 'approve' && 'bg-green-600 hover:bg-green-700 text-white'
               )}
               onClick={() => onDecisionChange('approve')}
             >

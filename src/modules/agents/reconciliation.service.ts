@@ -183,14 +183,23 @@ export class ReconciliationService {
 
     // Invoke graph
     try {
-      const result = await this.graphRegistry.invoke<
-        Partial<ReconciliationGraphStateType>,
-        ReconciliationGraphStateType
-      >(RECONCILIATION_GRAPH_NAME, {
+      const result = await this.graphRegistry.invoke<ReconciliationGraphStateType>(
+        RECONCILIATION_GRAPH_NAME,
+        {
         input,
         rootDirectory,
         startTime: new Date(),
       });
+
+      // In LangGraph 1.x, NodeInterrupt causes invoke() to return the state
+      // at the interrupt point rather than throwing. Detect this case.
+      if (result.pendingHumanReview && !result.output) {
+        this.logger.log(`Reconciliation interrupted for human review (analyze mode): ${runId}`);
+        // Return a partial result indicating review is needed
+        throw new Error(
+          'Reconciliation paused for human review. Use analyzeWithInterrupt() to handle review flow.',
+        );
+      }
 
       // Extract result from output
       const reconciliationResult = result.output as ReconciliationResult;
@@ -337,10 +346,7 @@ export class ReconciliationService {
     );
 
     try {
-      const result = await this.graphRegistry.invoke<
-        Partial<ReconciliationGraphStateType>,
-        ReconciliationGraphStateType
-      >(
+      const result = await this.graphRegistry.invoke<ReconciliationGraphStateType>(
         RECONCILIATION_GRAPH_NAME,
         {
           input,
@@ -445,10 +451,7 @@ export class ReconciliationService {
       this.gateway?.emitProgress(runId, 'structure', 5, 'Scanning repository structure...');
 
       // Invoke graph with thread ID for checkpointing
-      const result = await this.graphRegistry.invoke<
-        Partial<ReconciliationGraphStateType>,
-        ReconciliationGraphStateType
-      >(
+      const result = await this.graphRegistry.invoke<ReconciliationGraphStateType>(
         RECONCILIATION_GRAPH_NAME,
         {
           input,
@@ -457,6 +460,85 @@ export class ReconciliationService {
         },
         { configurable: { thread_id: threadId } },
       );
+
+      // In LangGraph 1.x, NodeInterrupt causes invoke() to return the state
+      // at the interrupt point rather than throwing an exception.
+      // Detect interrupt by checking for pendingHumanReview without output.
+      if (result.pendingHumanReview && !result.output) {
+        this.logger.log(`Reconciliation interrupted for human review: ${runId}`);
+
+        // Build interrupt payload from the state
+        let interruptPayload: InterruptPayload | undefined;
+        try {
+          const qualityThreshold = result.input?.options?.qualityThreshold ?? 80;
+          const atoms = result.inferredAtoms || [];
+          const molecules = result.inferredMolecules || [];
+          const decisions = result.decisions || [];
+          const passCount = decisions.filter((d) => d === 'approved').length;
+          const failCount = decisions.filter((d) => d === 'quality_fail').length;
+
+          interruptPayload = {
+            summary: {
+              totalAtoms: atoms.length,
+              passCount,
+              failCount,
+              qualityThreshold,
+            },
+            reason: 'Quality verification requires human review',
+            pendingAtoms: atoms.map((atom) => ({
+              tempId: atom.tempId,
+              description: atom.description,
+              category: atom.category,
+              qualityScore: atom.qualityScore || 0,
+              passes: (atom.qualityScore || 0) >= qualityThreshold,
+              issues: [],
+            })),
+            pendingMolecules: molecules.map((mol) => ({
+              tempId: mol.tempId,
+              name: mol.name,
+              description: mol.description,
+              atomCount: mol.atomTempIds.length,
+              confidence: mol.confidence,
+            })),
+          };
+        } catch {
+          this.logger.warn('Failed to build interrupt payload from state');
+        }
+
+        // Persist quality scores to DB (interim-persist saved atoms before verify ran)
+        if (this.repository && result.interimRunUuid && interruptPayload?.pendingAtoms) {
+          try {
+            const scores = interruptPayload.pendingAtoms
+              .filter((a) => typeof a.qualityScore === 'number')
+              .map((a) => ({ tempId: a.tempId, qualityScore: a.qualityScore }));
+            if (scores.length > 0) {
+              await this.repository.updateAtomQualityScores(result.interimRunUuid, scores);
+              this.logger.log(`Persisted quality scores for ${scores.length} atoms to DB`);
+            }
+          } catch (e) {
+            this.logger.warn(`Failed to persist quality scores: ${e instanceof Error ? e.message : e}`);
+          }
+        }
+
+        // Update tracked run
+        trackedRun.status = 'interrupted';
+        trackedRun.interruptPayload = interruptPayload;
+
+        // Emit WebSocket event: interrupted
+        this.gateway?.emitInterrupted(
+          runId,
+          interruptPayload?.reason || 'Human review required',
+          interruptPayload?.pendingAtoms?.length || 0,
+          interruptPayload?.pendingMolecules?.length || 0,
+        );
+
+        return {
+          completed: false,
+          runId,
+          threadId,
+          pendingReview: interruptPayload,
+        };
+      }
 
       // Extract result from output
       const reconciliationResult = result.output as ReconciliationResult;
@@ -489,41 +571,14 @@ export class ReconciliationService {
         result: reconciliationResult,
       };
     } catch (error) {
-      // Check if this is a graph interrupt (human review needed)
+      // Legacy catch for isGraphInterrupt (LangGraph 0.x compat)
       if (isGraphInterrupt(error)) {
-        this.logger.log(`Reconciliation interrupted for human review: ${runId}`);
-
-        // Extract interrupt payload from the error
-        const interruptData = (error as { value?: unknown[] }).value?.[0] as
-          | { value?: string }
-          | undefined;
-        let interruptPayload: InterruptPayload | undefined;
-
-        if (interruptData?.value) {
-          try {
-            interruptPayload = JSON.parse(interruptData.value) as InterruptPayload;
-          } catch {
-            this.logger.warn('Failed to parse interrupt payload');
-          }
-        }
-
-        // Update tracked run
+        this.logger.log(`Reconciliation interrupted (legacy path) for human review: ${runId}`);
         trackedRun.status = 'interrupted';
-        trackedRun.interruptPayload = interruptPayload;
-
-        // Emit WebSocket event: interrupted
-        this.gateway?.emitInterrupted(
-          runId,
-          interruptPayload?.reason || 'Human review required',
-          interruptPayload?.pendingAtoms?.length || 0,
-          interruptPayload?.pendingMolecules?.length || 0,
-        );
-
         return {
           completed: false,
           runId,
           threadId,
-          pendingReview: interruptPayload,
         };
       }
 
@@ -603,10 +658,7 @@ export class ReconciliationService {
     try {
       trackedRun.status = 'running';
 
-      const result = await this.graphRegistry.invoke<
-        Partial<ReconciliationGraphStateType>,
-        ReconciliationGraphStateType
-      >(
+      const result = await this.graphRegistry.invoke<ReconciliationGraphStateType>(
         RECONCILIATION_GRAPH_NAME,
         {
           humanReviewInput,

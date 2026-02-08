@@ -317,7 +317,7 @@ export function AtomRecommendationCard({
             </div>
 
             {/* Quality Issues (if score is low) */}
-            {atom.qualityScore !== undefined && atom.qualityScore < 60 && (
+            {typeof atom.qualityScore === 'number' && atom.qualityScore < 60 && (
               <div className="bg-yellow-50 border border-yellow-200 rounded p-2">
                 <h4 className="text-xs font-medium text-yellow-800 mb-1 flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3" />

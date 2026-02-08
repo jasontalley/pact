@@ -16,7 +16,6 @@
  * @see docs/implementation-checklist-phase5.md Section 4.1 (interrupt support)
  */
 
-import { NodeInterrupt } from '@langchain/langgraph';
 import { NodeConfig } from '../types';
 import {
   ReconciliationGraphStateType,
@@ -320,7 +319,6 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
   return (config: NodeConfig) =>
     async (state: ReconciliationGraphStateType): Promise<Partial<ReconciliationGraphStateType>> => {
       const inferredAtoms = state.inferredAtoms || [];
-      const inferredMolecules = state.inferredMolecules || [];
       const inputRequireReview = state.input?.options?.requireReview ?? requireReview;
       const inputThreshold = state.input?.options?.qualityThreshold ?? qualityThreshold;
       const humanReviewInput = state.humanReviewInput;
@@ -357,7 +355,6 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
 
       let passCount = 0;
       let failCount = 0;
-      const validationIssues: Map<string, string[]> = new Map();
 
       // Validate each atom
       for (const atom of inferredAtoms) {
@@ -402,10 +399,6 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
 
         // Store score on atom (mutating for simplicity)
         atom.qualityScore = score;
-
-        if (issues.length > 0) {
-          validationIssues.set(atom.tempId, issues);
-        }
 
         // Classify
         if (passes) {
@@ -453,45 +446,22 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
       const qualityFailCondition = inputForceInterruptOnQualityFail && failCount > passCount;
       const needsReview = inputRequireReview || qualityFailCondition;
 
-      // If human review needed and interrupt is enabled, pause for review
-      // Skip interrupt if there are no atoms to review
+      // If human review needed, return with pendingHumanReview=true and stay in 'verify' phase.
+      // The graph routing (afterVerify) will route to END instead of persist,
+      // and the service layer will detect the interrupt from the returned state.
+      // (LangGraph 1.x: NodeInterrupt no longer throws to the caller,
+      // so we return state and let conditional routing handle the pause.)
       if (needsReview && useInterrupt && inferredAtoms.length > 0) {
         config.logger?.log(
-          `[VerifyNode] Interrupting for human review (requireReview=${inputRequireReview}, ` +
+          `[VerifyNode] Pausing for human review (requireReview=${inputRequireReview}, ` +
             `forceInterruptOnQualityFail=${inputForceInterruptOnQualityFail}, failCount=${failCount})`,
         );
 
-        // Build interrupt payload with all data needed for review
-        const interruptPayload: InterruptPayload = {
-          summary: {
-            totalAtoms: inferredAtoms.length,
-            passCount,
-            failCount,
-            qualityThreshold: inputThreshold,
-          },
-          pendingAtoms: inferredAtoms.map((atom) => ({
-            tempId: atom.tempId,
-            description: atom.description,
-            category: atom.category,
-            qualityScore: atom.qualityScore || 0,
-            passes: (atom.qualityScore || 0) >= inputThreshold,
-            issues: validationIssues.get(atom.tempId) || [],
-          })),
-          pendingMolecules: inferredMolecules.map((mol) => ({
-            tempId: mol.tempId,
-            name: mol.name,
-            description: mol.description,
-            atomCount: mol.atomTempIds.length,
-            confidence: mol.confidence,
-          })),
-          reason: inputRequireReview
-            ? 'Review required by configuration'
-            : `Quality threshold not met (${failCount} failed, ${passCount} passed)`,
+        return {
+          decisions,
+          pendingHumanReview: true,
+          currentPhase: 'verify',
         };
-
-        // Throw NodeInterrupt - this pauses execution and returns the payload to the caller
-        // When resumed, the graph will re-enter this node with humanReviewInput populated
-        throw new NodeInterrupt(JSON.stringify(interruptPayload));
       }
 
       if (needsReview) {

@@ -147,7 +147,9 @@ export class ProviderRegistry implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Merge API keys from database config when env vars are absent
+   * Merge API keys from database config.
+   * Database keys take priority over env vars (user explicitly saved them via UI).
+   * Env vars serve as fallback when no DB config exists.
    */
   private async mergeDbConfig(): Promise<void> {
     if (!this.configRepository) return;
@@ -160,11 +162,11 @@ export class ProviderRegistry implements OnModuleInit, OnModuleDestroy {
 
       const stored = dbConfig.providerConfigs;
 
-      if (!this.config.openai?.apiKey && stored.openai?.apiKey) {
+      if (stored.openai?.apiKey) {
         this.config.openai = { ...this.config.openai, apiKey: stored.openai.apiKey };
         this.logger.log('Loaded OpenAI API key from database');
       }
-      if (!this.config.anthropic?.apiKey && stored.anthropic?.apiKey) {
+      if (stored.anthropic?.apiKey) {
         this.config.anthropic = { ...this.config.anthropic, apiKey: stored.anthropic.apiKey };
         this.logger.log('Loaded Anthropic API key from database');
       }
