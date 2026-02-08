@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { useProviders, useBudgetStatus } from '@/hooks/llm';
 import { ProviderStatus } from './ProviderStatus';
 import { QualityBadge } from '@/components/quality/QualityBadge';
+import { useReconciliationEvents } from '@/hooks/socket/use-reconciliation-events';
+import { reconciliationApi } from '@/lib/api/reconciliation';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -311,6 +313,11 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
   const [result, setResult] = useState<ReconciliationResult | null>(null);
   const [hasRestoredState, setHasRestoredState] = useState(false);
 
+  // Progress tracking from WebSocket events
+  const [progressPhase, setProgressPhase] = useState('');
+  const [progressPercent, setProgressPercent] = useState(0);
+  const [progressMessage, setProgressMessage] = useState('Initializing...');
+
   // Review decisions
   const [atomDecisions, setAtomDecisions] = useState<Map<string, 'approve' | 'reject'>>(
     new Map()
@@ -379,24 +386,94 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
   const hasAvailableProvider = providers?.availableCount ? providers.availableCount > 0 : false;
   const canStart = hasAvailableProvider && !isDailyBudgetExceeded;
 
-  // Handle start analysis
+  // WebSocket event handlers for real-time reconciliation updates
+  const handleWsCompleted = useCallback((event: { runId: string; summary: { totalOrphanTests: number; inferredAtomsCount: number; inferredMoleculesCount: number; qualityPassCount: number; qualityFailCount: number; duration: number } }) => {
+    // Fire-and-forget async work (event handler must return void)
+    void (async () => {
+      try {
+        const recs = await reconciliationApi.getRecommendations(event.runId);
+        const completedResult: ReconciliationResult = {
+          runId: event.runId,
+          status: 'completed',
+          summary: event.summary,
+          inferredAtoms: recs.atoms.map((a) => ({
+            tempId: a.tempId,
+            description: a.description,
+            category: a.category,
+            qualityScore: a.qualityScore ?? 0,
+            confidence: a.confidence,
+            observableOutcomes: a.observableOutcomes?.map((o) => o.description) ?? [],
+            reasoning: a.reasoning || '',
+            sourceTest: {
+              filePath: a.sourceTestFilePath,
+              testName: a.sourceTestName,
+              lineNumber: a.sourceTestLineNumber || 0,
+            },
+          })),
+          inferredMolecules: recs.molecules.map((m) => ({
+            tempId: m.tempId,
+            name: m.name,
+            description: m.description,
+            confidence: m.confidence,
+            reasoning: '',
+            atomTempIds: m.atomRecommendationTempIds,
+          })),
+          errors: [],
+        };
+        setResult(completedResult);
+        setStep('apply');
+        initializeApplyDecisions(completedResult);
+        toast.success(`Reconciliation complete: ${event.summary.inferredAtomsCount} atoms inferred`);
+      } catch {
+        toast.success(`Reconciliation complete: ${event.summary.inferredAtomsCount} atoms inferred`);
+        setStep('complete');
+      }
+    })();
+  }, []);
+
+  const handleWsInterrupted = useCallback((event: { runId: string; reason: string; pendingAtomCount: number; pendingMoleculeCount: number }) => {
+    void (async () => {
+      try {
+        const review = await reconciliationApi.getPendingReview(event.runId);
+        setPendingReview(review);
+        setStep('review');
+        initializeReviewDecisions(review);
+        toast.info('Reconciliation paused for review');
+      } catch {
+        toast.error('Reconciliation interrupted but could not load review data');
+        setStep('config');
+      }
+    })();
+  }, []);
+
+  const handleWsFailed = useCallback((event: { error: string }) => {
+    toast.error(`Reconciliation failed: ${event.error}`);
+    setStep('config');
+  }, []);
+
+  const handleWsProgress = useCallback((event: { phase: string; progress: number; message: string }) => {
+    setProgressPhase(event.phase);
+    setProgressPercent(event.progress);
+    setProgressMessage(event.message);
+  }, []);
+
+  // Subscribe to WebSocket events for the active run
+  useReconciliationEvents(step === 'analyzing' ? runId : null, {
+    onProgress: handleWsProgress,
+    onCompleted: handleWsCompleted,
+    onFailed: handleWsFailed,
+    onInterrupted: handleWsInterrupted,
+  });
+
+  // Handle start analysis — returns immediately, progress via WebSocket
   const handleStartAnalysis = () => {
     setStep('analyzing');
+    setProgressPhase('');
+    setProgressPercent(0);
+    setProgressMessage('Initializing...');
     startMutation.mutate(config, {
       onSuccess: (data: AnalysisStartResult) => {
         setRunId(data.runId);
-
-        if (data.completed && data.result) {
-          // No review needed, go straight to apply
-          setResult(data.result);
-          setStep('apply');
-          initializeApplyDecisions(data.result);
-        } else if (data.pendingReview) {
-          // Review needed
-          setPendingReview(data.pendingReview);
-          setStep('review');
-          initializeReviewDecisions(data.pendingReview);
-        }
       },
       onError: () => {
         setStep('config');
@@ -906,10 +983,14 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
               <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
               <p className="text-lg font-medium">Analyzing repository...</p>
               <p className="text-sm text-muted-foreground text-center max-w-md">
-                Discovering orphan tests, building context, and inferring Intent Atoms.
-                This may take a few minutes.
+                {progressMessage}
               </p>
-              <Progress value={50} className="w-64 h-2" />
+              <Progress value={progressPercent} className="w-64 h-2" />
+              {progressPhase && (
+                <p className="text-xs text-muted-foreground capitalize">
+                  Phase: {progressPhase.replaceAll('_', ' ')}
+                </p>
+              )}
             </div>
           )}
 

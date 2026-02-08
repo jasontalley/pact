@@ -396,11 +396,15 @@ export class ReconciliationService {
   /**
    * Analyze a repository with interrupt support for human review.
    *
-   * Unlike `analyze()`, this method handles interrupts gracefully and returns
-   * information needed to resume after human review.
+   * Returns immediately with the run ID. The graph executes in the background
+   * and communicates results via WebSocket events:
+   * - `reconciliation:progress` — phase updates during execution
+   * - `reconciliation:interrupted` — paused for human review
+   * - `reconciliation:completed` — analysis finished successfully
+   * - `reconciliation:failed` — analysis encountered an error
    *
    * @param dto - Analysis configuration
-   * @returns Analysis start result (may be interrupted or completed)
+   * @returns Run ID and thread ID for tracking (always completed: false)
    */
   async analyzeWithInterrupt(dto: ReconciliationDto = {}): Promise<AnalysisStartResult> {
     const rootDirectory =
@@ -449,6 +453,31 @@ export class ReconciliationService {
     };
     this.activeRuns.set(runId, trackedRun);
 
+    // Fire-and-forget: execute graph in background, communicate via WebSocket
+    this.executeGraphInBackground(runId, threadId, input, rootDirectory, trackedRun);
+
+    // Return immediately — frontend tracks progress via WebSocket
+    return {
+      completed: false,
+      runId,
+      threadId,
+    };
+  }
+
+  /**
+   * Execute the reconciliation graph in the background.
+   *
+   * Handles completion, interruption, and errors via WebSocket events
+   * and in-memory run tracking. This method never throws — all errors
+   * are caught and emitted as WebSocket events.
+   */
+  private async executeGraphInBackground(
+    runId: string,
+    threadId: string,
+    input: ReconciliationInput,
+    rootDirectory: string,
+    trackedRun: TrackedRun,
+  ): Promise<void> {
     try {
       // Emit progress: graph starting
       this.gateway?.emitProgress(runId, 'structure', 5, 'Scanning repository structure...');
@@ -536,13 +565,7 @@ export class ReconciliationService {
           interruptPayload?.pendingAtoms?.length || 0,
           interruptPayload?.pendingMolecules?.length || 0,
         );
-
-        return {
-          completed: false,
-          runId,
-          threadId,
-          pendingReview: interruptPayload,
-        };
+        return;
       }
 
       // Extract result from output
@@ -569,22 +592,15 @@ export class ReconciliationService {
         qualityFailCount: reconciliationResult.summary.qualityFailCount,
         duration: reconciliationResult.metadata.duration,
       });
-
-      return {
-        completed: true,
-        runId: reconciliationResult.runId,
-        result: reconciliationResult,
-      };
     } catch (error) {
       // Legacy catch for isGraphInterrupt (LangGraph 0.x compat)
       if (isGraphInterrupt(error)) {
         this.logger.log(`Reconciliation interrupted (legacy path) for human review: ${runId}`);
         trackedRun.status = 'interrupted';
-        return {
-          completed: false,
-          runId,
-          threadId,
-        };
+
+        // Emit WebSocket event: interrupted
+        this.gateway?.emitInterrupted(runId, 'Human review required', 0, 0);
+        return;
       }
 
       // Regular error
@@ -594,8 +610,6 @@ export class ReconciliationService {
 
       // Emit WebSocket event: failed
       this.gateway?.emitFailed(runId, errorMessage, 'failed');
-
-      throw error;
     }
   }
 
