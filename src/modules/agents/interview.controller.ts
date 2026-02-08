@@ -5,16 +5,7 @@
  * Manages multi-turn interview sessions for intent extraction.
  */
 
-import {
-  Controller,
-  Post,
-  Get,
-  Body,
-  Param,
-  HttpCode,
-  HttpStatus,
-  Logger,
-} from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, HttpCode, HttpStatus, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam } from '@nestjs/swagger';
 import { IsString, IsArray, ValidateNested, IsNotEmpty } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -69,7 +60,10 @@ export class InterviewController {
   @ApiOperation({ summary: 'Submit answers to interview questions' })
   @ApiParam({ name: 'sessionId', description: 'Interview session ID' })
   @ApiBody({ type: SubmitAnswersDto })
-  @ApiResponse({ status: 200, description: 'Answers processed, may return more questions or final result' })
+  @ApiResponse({
+    status: 200,
+    description: 'Answers processed, may return more questions or final result',
+  })
   async submitAnswers(
     @Param('sessionId') sessionId: string,
     @Body() dto: SubmitAnswersDto,

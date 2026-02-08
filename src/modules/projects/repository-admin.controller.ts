@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Get,
-  Put,
-  Post,
-  Body,
-  HttpCode,
-  HttpStatus,
-  Logger,
-} from '@nestjs/common';
+import { Controller, Get, Put, Post, Body, HttpCode, HttpStatus, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -58,9 +49,7 @@ export class RepositoryAdminController {
   @Put('config')
   @ApiOperation({ summary: 'Update repository configuration' })
   @ApiResponse({ status: 200, type: RepositoryConfigDto })
-  async updateConfig(
-    @Body() dto: UpdateRepositoryConfigDto,
-  ): Promise<RepositoryConfigDto> {
+  async updateConfig(@Body() dto: UpdateRepositoryConfigDto): Promise<RepositoryConfigDto> {
     const project = await this.projectsService.getOrCreateDefault();
 
     await this.projectsService.update(project.id, {
@@ -75,9 +64,7 @@ export class RepositoryAdminController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Validate a filesystem path' })
   @ApiResponse({ status: 200, type: ValidatePathResultDto })
-  async validatePath(
-    @Body() dto: ValidatePathDto,
-  ): Promise<ValidatePathResultDto> {
+  async validatePath(@Body() dto: ValidatePathDto): Promise<ValidatePathResultDto> {
     const result: ValidatePathResultDto = {
       path: dto.path,
       exists: false,

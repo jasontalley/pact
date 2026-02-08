@@ -79,7 +79,11 @@ export function extractJsonFromContent(content: string): string | null {
     if (ch === openChar || (openChar === '{' && ch === '{') || (openChar === '[' && ch === '[')) {
       if (ch === '{' || ch === '[') depth++;
     }
-    if (ch === closeChar || (closeChar === '}' && ch === '}') || (closeChar === ']' && ch === ']')) {
+    if (
+      ch === closeChar ||
+      (closeChar === '}' && ch === '}') ||
+      (closeChar === ']' && ch === ']')
+    ) {
       if (ch === '}' || ch === ']') depth--;
     }
 
@@ -124,9 +128,18 @@ function repairJson(text: string): string {
   let escape = false;
 
   for (const ch of repaired) {
-    if (escape) { escape = false; continue; }
-    if (ch === '\\' && inStr) { escape = true; continue; }
-    if (ch === '"') { inStr = !inStr; continue; }
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (ch === '\\' && inStr) {
+      escape = true;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = !inStr;
+      continue;
+    }
     if (inStr) continue;
 
     if (ch === '{') opens['{']++;

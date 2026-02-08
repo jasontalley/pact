@@ -355,10 +355,7 @@ export class LLMAdminController {
   // Helper methods
   // =============================================================
 
-  private async hotRegisterProvider(
-    provider: LLMProviderType,
-    apiKey: string,
-  ): Promise<void> {
+  private async hotRegisterProvider(provider: LLMProviderType, apiKey: string): Promise<void> {
     if (!this.providerRegistry) return;
 
     try {

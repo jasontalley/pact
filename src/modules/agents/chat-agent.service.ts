@@ -263,9 +263,7 @@ export class ChatAgentService {
 
     try {
       // Invoke the chat exploration graph
-      const result = await this.graphRegistry.invoke<ChatExplorationStateType>(
-        'chat-exploration',
-        {
+      const result = await this.graphRegistry.invoke<ChatExplorationStateType>('chat-exploration', {
         input: request.message,
         maxIterations: 5,
       });

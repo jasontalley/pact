@@ -7,13 +7,7 @@
  * @see docs/implementation-checklist-phase20.md Step D
  */
 
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  Index,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 'typeorm';
 
 @Entity('batch_jobs')
 export class BatchJobEntity {

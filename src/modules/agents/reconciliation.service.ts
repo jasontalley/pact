@@ -158,7 +158,8 @@ export class ReconciliationService {
    * @returns Reconciliation result with patch and recommendations
    */
   async analyze(dto: ReconciliationDto = {}): Promise<ReconciliationResult> {
-    const rootDirectory = dto.rootDirectory || await this.repositoryConfigService.getRepositoryPath();
+    const rootDirectory =
+      dto.rootDirectory || (await this.repositoryConfigService.getRepositoryPath());
     const mode = dto.mode || 'full-scan';
     const runId = `REC-${uuidv4().substring(0, 8)}`;
 
@@ -186,10 +187,11 @@ export class ReconciliationService {
       const result = await this.graphRegistry.invoke<ReconciliationGraphStateType>(
         RECONCILIATION_GRAPH_NAME,
         {
-        input,
-        rootDirectory,
-        startTime: new Date(),
-      });
+          input,
+          rootDirectory,
+          startTime: new Date(),
+        },
+      );
 
       // In LangGraph 1.x, NodeInterrupt causes invoke() to return the state
       // at the interrupt point rather than throwing. Detect this case.
@@ -401,7 +403,8 @@ export class ReconciliationService {
    * @returns Analysis start result (may be interrupted or completed)
    */
   async analyzeWithInterrupt(dto: ReconciliationDto = {}): Promise<AnalysisStartResult> {
-    const rootDirectory = dto.rootDirectory || await this.repositoryConfigService.getRepositoryPath();
+    const rootDirectory =
+      dto.rootDirectory || (await this.repositoryConfigService.getRepositoryPath());
     const mode = dto.mode || 'full-scan';
     const threadId = uuidv4();
     const runId = `REC-${threadId.substring(0, 8)}`;
@@ -516,7 +519,9 @@ export class ReconciliationService {
               this.logger.log(`Persisted quality scores for ${scores.length} atoms to DB`);
             }
           } catch (e) {
-            this.logger.warn(`Failed to persist quality scores: ${e instanceof Error ? e.message : e}`);
+            this.logger.warn(
+              `Failed to persist quality scores: ${e instanceof Error ? e.message : e}`,
+            );
           }
         }
 

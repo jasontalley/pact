@@ -62,9 +62,7 @@ export interface VerifyNodeOptions {
           failedRequests: number;
         }) => void;
       },
-    ): Promise<
-      Array<{ customId: string; success: boolean; content?: string; error?: string }>
-    >;
+    ): Promise<Array<{ customId: string; success: boolean; content?: string; error?: string }>>;
   };
   /** Minimum atom count to trigger batch/concurrent mode (default: 20) */
   batchThreshold?: number;
@@ -411,9 +409,7 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
         try {
           const batchAvailable = await options.batchService.isAvailable();
           if (batchAvailable) {
-            config.logger?.log(
-              `[VerifyNode] Using batch mode for ${inferredAtoms.length} atoms`,
-            );
+            config.logger?.log(`[VerifyNode] Using batch mode for ${inferredAtoms.length} atoms`);
 
             const batchRequests = inferredAtoms.map((atom) => ({
               customId: atom.tempId,
@@ -472,9 +468,7 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
 
       // Path 2: Concurrent mode - tool available, atoms exceed threshold, no batch
       if (!validationComplete && hasValidateTool && inferredAtoms.length >= batchThreshold) {
-        config.logger?.log(
-          `[VerifyNode] Using concurrent mode for ${inferredAtoms.length} atoms`,
-        );
+        config.logger?.log(`[VerifyNode] Using concurrent mode for ${inferredAtoms.length} atoms`);
         const concurrencyLimit = options.concurrencyLimit ?? 5;
         let running = 0;
         const waitQueue: Array<() => void> = [];
@@ -503,15 +497,12 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
           inferredAtoms.map(async (atom) => {
             await acquire();
             try {
-              const toolResult = (await config.toolRegistry.executeTool(
-                'validate_atom_quality',
-                {
-                  atom_id: atom.tempId,
-                  description: atom.description,
-                  observable_outcomes: JSON.stringify(atom.observableOutcomes || []),
-                  category: atom.category || '',
-                },
-              )) as ValidateAtomToolResult;
+              const toolResult = (await config.toolRegistry.executeTool('validate_atom_quality', {
+                atom_id: atom.tempId,
+                description: atom.description,
+                observable_outcomes: JSON.stringify(atom.observableOutcomes || []),
+                category: atom.category || '',
+              })) as ValidateAtomToolResult;
 
               atom.qualityScore = toolResult.totalScore;
               if (toolResult.decision === 'approve' || toolResult.totalScore >= inputThreshold) {

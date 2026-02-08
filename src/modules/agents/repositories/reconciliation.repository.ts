@@ -239,10 +239,7 @@ export class ReconciliationRepository {
     scores: Array<{ tempId: string; qualityScore: number }>,
   ): Promise<void> {
     for (const { tempId, qualityScore } of scores) {
-      await this.atomRecRepository.update(
-        { runId: runUuid, tempId },
-        { qualityScore },
-      );
+      await this.atomRecRepository.update({ runId: runUuid, tempId }, { qualityScore });
     }
   }
 

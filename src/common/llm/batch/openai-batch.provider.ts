@@ -14,13 +14,7 @@
  */
 
 import { Logger } from '@nestjs/common';
-import {
-  BatchProvider,
-  BatchRequest,
-  BatchJob,
-  BatchResult,
-  BatchSubmitOptions,
-} from './types';
+import { BatchProvider, BatchRequest, BatchJob, BatchResult, BatchSubmitOptions } from './types';
 
 const OPENAI_API_BASE = 'https://api.openai.com/v1';
 const DEFAULT_MODEL = 'gpt-4o-mini';
@@ -47,7 +41,15 @@ interface OpenAIBatchRequestLine {
 interface OpenAIBatchResponse {
   id: string;
   object: 'batch';
-  status: 'validating' | 'in_progress' | 'finalizing' | 'completed' | 'failed' | 'expired' | 'cancelling' | 'cancelled';
+  status:
+    | 'validating'
+    | 'in_progress'
+    | 'finalizing'
+    | 'completed'
+    | 'failed'
+    | 'expired'
+    | 'cancelling'
+    | 'cancelled';
   request_counts?: {
     total: number;
     completed: number;
@@ -152,10 +154,7 @@ export class OpenAIBatchProvider implements BatchProvider {
 
   async getBatchResults(providerBatchId: string): Promise<BatchResult[]> {
     // First get the batch to find the output file ID
-    const batch = await this.apiRequest<OpenAIBatchResponse>(
-      'GET',
-      `/batches/${providerBatchId}`,
-    );
+    const batch = await this.apiRequest<OpenAIBatchResponse>('GET', `/batches/${providerBatchId}`);
 
     if (!batch.output_file_id) {
       throw new Error('Batch has no output file yet');
@@ -199,7 +198,9 @@ export class OpenAIBatchProvider implements BatchProvider {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`OpenAI file upload failed: ${response.status}: ${errorText.substring(0, 500)}`);
+      throw new Error(
+        `OpenAI file upload failed: ${response.status}: ${errorText.substring(0, 500)}`,
+      );
     }
 
     return response.json() as Promise<OpenAIFileResponse>;

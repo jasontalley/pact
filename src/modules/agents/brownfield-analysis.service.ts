@@ -94,7 +94,8 @@ export class BrownfieldAnalysisService {
    * Main entry point for brownfield analysis
    */
   async analyzeRepository(dto: BrownfieldAnalysisDto): Promise<BrownfieldAnalysisResult> {
-    const rootDirectory = dto.rootDirectory || await this.repositoryConfigService.getRepositoryPath();
+    const rootDirectory =
+      dto.rootDirectory || (await this.repositoryConfigService.getRepositoryPath());
     const startTime = Date.now();
 
     this.logger.log(`Starting brownfield analysis of repository: ${rootDirectory}`);

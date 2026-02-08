@@ -379,5 +379,4 @@ export class InterviewService {
       .filter((s) => s.status !== 'failed')
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
   }
-
 }

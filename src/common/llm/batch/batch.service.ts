@@ -67,9 +67,7 @@ export class BatchLlmService {
 
     const maxRequests = options?.maxRequestsPerBatch ?? DEFAULT_MAX_REQUESTS;
     if (requests.length > maxRequests) {
-      throw new Error(
-        `Batch of ${requests.length} requests exceeds maximum of ${maxRequests}`,
-      );
+      throw new Error(`Batch of ${requests.length} requests exceeds maximum of ${maxRequests}`);
     }
 
     const provider = await this.resolveProvider(options?.provider);
