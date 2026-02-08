@@ -802,7 +802,8 @@ export class ReconciliationService {
 
     for (const [runId, run] of this.activeRuns.entries()) {
       const age = now - run.startTime.getTime();
-      const isTerminal = run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled';
+      const isTerminal =
+        run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled';
 
       if (isTerminal && age > olderThanMs) {
         this.activeRuns.delete(runId);

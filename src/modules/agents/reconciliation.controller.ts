@@ -409,9 +409,7 @@ export class ReconciliationController {
     status: 404,
     description: 'Run not found',
   })
-  cancelRun(
-    @Param('runId') runId: string,
-  ): { runId: string; status: string; message: string } {
+  cancelRun(@Param('runId') runId: string): { runId: string; status: string; message: string } {
     this.logger.log(`POST /agents/reconciliation/runs/${runId}/cancel`);
     return this.reconciliationService.cancelRun(runId);
   }

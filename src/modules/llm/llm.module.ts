@@ -56,11 +56,14 @@ import { LLMAdminController } from './llm-admin.controller';
           if (dbConfig?.providerConfigs) {
             anthropicKey = dbConfig.providerConfigs.anthropic?.apiKey;
             openaiKey = dbConfig.providerConfigs.openai?.apiKey;
-            if (anthropicKey) logger.log('Loaded Anthropic API key from database for batch service');
+            if (anthropicKey)
+              logger.log('Loaded Anthropic API key from database for batch service');
             if (openaiKey) logger.log('Loaded OpenAI API key from database for batch service');
           }
         } catch (error) {
-          logger.warn(`Failed to load batch config from database: ${error instanceof Error ? error.message : error}`);
+          logger.warn(
+            `Failed to load batch config from database: ${error instanceof Error ? error.message : error}`,
+          );
         }
 
         // Fallback to env vars
