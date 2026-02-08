@@ -9,7 +9,7 @@ import { Controller, Post, Get, Body, Param, HttpCode, HttpStatus, Logger } from
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam } from '@nestjs/swagger';
 import { IsString, IsArray, ValidateNested, IsNotEmpty } from 'class-validator';
 import { Type } from 'class-transformer';
-import { InterviewService, InterviewStartResult, InterviewAnswerResult } from './interview.service';
+import { InterviewService, InterviewSession, InterviewStartResult, InterviewAnswerResult } from './interview.service';
 
 // ── DTOs ──────────────────────────────────────────────────────────────
 
@@ -75,7 +75,7 @@ export class InterviewController {
   @Get('sessions')
   @ApiOperation({ summary: 'List active interview sessions' })
   @ApiResponse({ status: 200, description: 'List of active sessions' })
-  listSessions() {
+  listSessions(): InterviewSession[] {
     return this.interviewService.listSessions();
   }
 
@@ -84,7 +84,7 @@ export class InterviewController {
   @ApiParam({ name: 'sessionId', description: 'Interview session ID' })
   @ApiResponse({ status: 200, description: 'Session details' })
   @ApiResponse({ status: 404, description: 'Session not found' })
-  getSession(@Param('sessionId') sessionId: string) {
+  getSession(@Param('sessionId') sessionId: string): InterviewSession | { error: string; statusCode: number } {
     const session = this.interviewService.getSession(sessionId);
     if (!session) {
       return { error: 'Session not found', statusCode: 404 };

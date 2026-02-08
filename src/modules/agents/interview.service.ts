@@ -24,7 +24,7 @@ import { INTERVIEW_GRAPH_NAME } from './graphs/graphs/interview.graph';
 /**
  * Tracked interview session
  */
-interface InterviewSession {
+export interface InterviewSession {
   id: string;
   threadId: string;
   conversationId: string;
