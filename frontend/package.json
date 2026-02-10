@@ -16,7 +16,6 @@
   "dependencies": {
     "@tanstack/react-query": "^5.90.0",
     "@tanstack/react-query-devtools": "^5.90.0",
-    "@xyflow/react": "^12.4.0",
     "axios": "^1.7.9",
     "babel-plugin-react-compiler": "^1.0.0",
     "class-variance-authority": "^0.7.1",

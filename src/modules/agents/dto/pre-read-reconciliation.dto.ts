@@ -60,7 +60,11 @@ export class PreReadReconciliationOptionsDto {
   @IsBoolean()
   analyzeDocs?: boolean;
 
-  @ApiPropertyOptional({ description: 'Maximum number of tests to process', minimum: 1, maximum: 10000 })
+  @ApiPropertyOptional({
+    description: 'Maximum number of tests to process',
+    minimum: 1,
+    maximum: 10000,
+  })
   @IsOptional()
   @IsNumber()
   @Min(1)
@@ -72,7 +76,11 @@ export class PreReadReconciliationOptionsDto {
   @IsBoolean()
   autoCreateAtoms?: boolean;
 
-  @ApiPropertyOptional({ description: 'Minimum quality threshold (0-100)', minimum: 0, maximum: 100 })
+  @ApiPropertyOptional({
+    description: 'Minimum quality threshold (0-100)',
+    minimum: 0,
+    maximum: 100,
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -113,7 +121,10 @@ export class PreReadReconciliationOptionsDto {
   @IsString({ each: true })
   excludeFilePatterns?: string[];
 
-  @ApiPropertyOptional({ description: 'Exception lane for drift convergence', enum: ['normal', 'hotfix-exception', 'spike-exception'] })
+  @ApiPropertyOptional({
+    description: 'Exception lane for drift convergence',
+    enum: ['normal', 'hotfix-exception', 'spike-exception'],
+  })
   @IsOptional()
   @IsIn(['normal', 'hotfix-exception', 'spike-exception'])
   exceptionLane?: 'normal' | 'hotfix-exception' | 'spike-exception';

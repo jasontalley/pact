@@ -11,14 +11,14 @@ interface LayoutState {
   detailPanelAtomId: string | null;
 
   // Active view/tab
-  activeTab: 'canvas' | 'list' | 'dashboard';
+  activeTab: 'list' | 'dashboard';
 
   // Actions
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
   openAtomDetail: (id: string) => void;
   closeAtomDetail: () => void;
-  setActiveTab: (tab: 'canvas' | 'list' | 'dashboard') => void;
+  setActiveTab: (tab: 'list' | 'dashboard') => void;
 }
 
 export const useLayoutStore = create<LayoutState>((set) => ({

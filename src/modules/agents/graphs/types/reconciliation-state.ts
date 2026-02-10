@@ -10,6 +10,7 @@
  */
 
 import { Annotation } from '@langchain/langgraph';
+import type { CoverageData } from '../../coverage/coverage-parser';
 
 // ============================================================================
 // Enums
@@ -175,10 +176,160 @@ export interface RepoStructure {
   files: string[];
   /** Test files specifically (subset of files) */
   testFiles: string[];
+  /** Non-test source files */
+  sourceFiles?: string[];
+  /** UI component files (.tsx/.jsx/.vue/.svelte with component patterns) */
+  uiFiles?: string[];
+  /** Documentation files (README, docs/, CHANGELOG, etc.) */
+  docFiles?: string[];
+  /** Configuration files (package.json, tsconfig, etc.) */
+  configFiles?: string[];
   /** File dependency edges (optional, for Phase 3) */
   dependencyEdges?: DependencyEdge[];
   /** Topological order for processing (optional, for Phase 3) */
   topologicalOrder?: string[];
+  /** Detected frameworks (e.g., ['react', 'nestjs', 'express']) */
+  detectedFrameworks?: string[];
+  /** Package info extracted from package.json */
+  packageInfo?: {
+    name?: string;
+    description?: string;
+    scripts?: Record<string, string>;
+  };
+}
+
+// ============================================================================
+// Evidence Types (Phase 21C)
+// ============================================================================
+
+/**
+ * Types of evidence that can be discovered in a repository.
+ */
+export type EvidenceType =
+  | 'test'            // Orphan test (existing pipeline)
+  | 'source_export'   // Exported function, class, or handler
+  | 'ui_component'    // React/Vue/Svelte component
+  | 'api_endpoint'    // Route/controller definition
+  | 'documentation'   // README, docs, comments
+  | 'coverage_gap';   // Untested code identified via coverage data
+
+/**
+ * Default confidence weights by evidence type.
+ * Tests are highest (most explicit about behavior), coverage gaps lowest.
+ */
+export const EVIDENCE_CONFIDENCE_WEIGHTS: Record<EvidenceType, number> = {
+  test: 0.9,
+  api_endpoint: 0.8,
+  ui_component: 0.7,
+  source_export: 0.6,
+  documentation: 0.5,
+  coverage_gap: 0.4,
+};
+
+/**
+ * A piece of evidence discovered in the repository.
+ */
+export interface EvidenceItem {
+  /** Evidence type discriminator */
+  type: EvidenceType;
+  /** File where the evidence was found */
+  filePath: string;
+  /** Name of the evidence (test name, export name, component name, section title) */
+  name: string;
+  /** Source code snippet */
+  code?: string;
+  /** Line number in the source file */
+  lineNumber?: number;
+  /** Files related to this evidence */
+  relatedFiles?: string[];
+  /** Base confidence from evidence type weights */
+  baseConfidence: number;
+  /** Type-specific metadata */
+  metadata?: EvidenceMetadata;
+}
+
+/**
+ * Type-specific metadata carried on EvidenceItem.
+ */
+export interface EvidenceMetadata {
+  // test
+  testCode?: string;
+  relatedSourceFiles?: string[];
+  testSourceCode?: string;
+  // source_export
+  exportType?: 'function' | 'class' | 'const' | 'interface';
+  isDefault?: boolean;
+  // ui_component
+  framework?: string;
+  hasForm?: boolean;
+  hasNavigation?: boolean;
+  // api_endpoint
+  method?: string;
+  path?: string;
+  // documentation
+  section?: string;
+  // coverage_gap
+  uncoveredLines?: number;
+  totalLines?: number;
+  coveragePercent?: number;
+}
+
+/**
+ * Tracks where an inferred atom's evidence came from.
+ */
+export interface EvidenceSource {
+  type: EvidenceType;
+  filePath: string;
+  name: string;
+  confidence: number;
+}
+
+/**
+ * Context analysis for a single evidence item (replaces TestAnalysis for non-test types).
+ */
+export interface EvidenceAnalysis {
+  /** Evidence identifier (filePath:name) */
+  evidenceId: string;
+  /** Evidence type */
+  type: EvidenceType;
+  /** Summary of what the evidence represents */
+  summary: string;
+  /** Domain concepts extracted */
+  domainConcepts: string[];
+  /** Related source code snippets */
+  relatedCode?: string[];
+  /** Related documentation snippets */
+  relatedDocs?: string[];
+  /** Raw context (cleared after inference) */
+  rawContext?: string;
+  /** Quality score (tests only, from test quality node) */
+  qualityScore?: number;
+}
+
+// ============================================================================
+// Test Quality Types
+// ============================================================================
+
+/**
+ * Quality score for an individual test, produced by the test_quality node.
+ */
+export interface TestQualityScore {
+  /** Overall quality score (0-100) */
+  overallScore: number;
+  /** Whether the test passed quality threshold */
+  passed: boolean;
+  /** Scores per dimension (0-1 normalized) */
+  dimensions: {
+    intentFidelity: number;
+    noVacuousTests: number;
+    noBrittleTests: number;
+    determinism: number;
+    failureSignalQuality: number;
+    integrationAuthenticity: number;
+    boundaryAndNegativeCoverage: number;
+  };
+  /** Human-readable issue descriptions */
+  issues: string[];
 }
 
 // ============================================================================
@@ -244,7 +395,7 @@ export interface SourceTestReference {
 }
 
 /**
- * An atom inferred from a test.
+ * An atom inferred from evidence (test, source, UI, API, docs, or coverage gap).
  * This is a recommendation, not yet persisted.
  */
 export interface InferredAtom {
@@ -254,7 +405,7 @@ export interface InferredAtom {
   description: string;
   /** Category (e.g., functional, security, performance) */
   category: string;
-  /** Test that this atom was inferred from */
+  /** Test that this atom was inferred from (backward compat, populated when primary evidence is test) */
   sourceTest: SourceTestReference;
   /** Observable outcomes that can be verified */
   observableOutcomes: string[];
@@ -268,6 +419,10 @@ export interface InferredAtom {
   relatedDocs?: string[];
   /** Quality score after validation (optional) */
   qualityScore?: number;
+  /** All evidence sources supporting this atom (Phase 21C) */
+  evidenceSources?: EvidenceSource[];
+  /** Primary evidence type (Phase 21C) */
+  primaryEvidenceType?: EvidenceType;
 }
 
 /**
@@ -496,6 +651,46 @@ export const ReconciliationGraphState = Annotation.Root({
   deltaSummary: Annotation<DeltaSummary | null>({
     reducer: (_, update) => update,
     default: () => null,
+  }),
+
+  // -------------------------------------------------------------------------
+  // Coverage Data (Phase: structure — Phase 21D)
+  // -------------------------------------------------------------------------
+
+  /** Parsed coverage data from existing artifacts (null if none found) */
+  coverageData: Annotation<CoverageData | null>({
+    reducer: (_, update) => update,
+    default: () => null,
+  }),
+
+  // -------------------------------------------------------------------------
+  // Evidence Items (Phase: discover — Phase 21C)
+  // -------------------------------------------------------------------------
+
+  /** All evidence items discovered from all sources */
+  evidenceItems: Annotation<EvidenceItem[]>({
+    reducer: (_, update) => update,
+    default: () => [],
+  }),
+
+  // -------------------------------------------------------------------------
+  // Test Quality (Phase: test_quality)
+  // -------------------------------------------------------------------------
+
+  /** Per-test quality scores (key: filePath:testName) */
+  testQualityScores: Annotation<Map<string, TestQualityScore>>({
+    reducer: (_, update) => update,
+    default: () => new Map(),
+  }),
+
+  // -------------------------------------------------------------------------
+  // Evidence Analysis (Phase: context — Phase 21C)
+  // -------------------------------------------------------------------------
+
+  /** Per-evidence analysis (key: filePath:name) */
+  evidenceAnalysis: Annotation<Map<string, EvidenceAnalysis>>({
+    reducer: (_, update) => update,
+    default: () => new Map(),
   }),
 
   // -------------------------------------------------------------------------

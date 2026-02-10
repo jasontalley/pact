@@ -101,15 +101,6 @@ describe('useLayoutStore', () => {
 
   describe('tab navigation', () => {
     // @atom IA-STORE-001
-    it('setActiveTab changes to canvas', () => {
-      act(() => {
-        useLayoutStore.getState().setActiveTab('canvas');
-      });
-      // Verify tab can be changed to canvas view
-      expect(useLayoutStore.getState().activeTab).toBe('canvas');
-    });
-
-    // @atom IA-STORE-001
     it('setActiveTab changes to list', () => {
       act(() => {
         useLayoutStore.getState().setActiveTab('list');
@@ -143,7 +134,7 @@ describe('useLayoutStore', () => {
     it('changing tab does not affect detail panel', () => {
       act(() => {
         useLayoutStore.getState().openAtomDetail('atom-123');
-        useLayoutStore.getState().setActiveTab('canvas');
+        useLayoutStore.getState().setActiveTab('list');
       });
       // Verify detail panel atom ID persists across tab changes
       expect(useLayoutStore.getState().detailPanelAtomId).toBe('atom-123');
@@ -222,14 +213,14 @@ describe('useLayoutStore', () => {
     it('handles setting same tab multiple times', () => {
       // Boundary test: setting same tab repeatedly should be idempotent
       act(() => {
-        useLayoutStore.getState().setActiveTab('canvas');
-        useLayoutStore.getState().setActiveTab('canvas');
-        useLayoutStore.getState().setActiveTab('canvas');
+        useLayoutStore.getState().setActiveTab('list');
+        useLayoutStore.getState().setActiveTab('list');
+        useLayoutStore.getState().setActiveTab('list');
       });
 
       // Verify idempotent behavior - multiple same-tab calls maintain correct state
       // Setting the same tab multiple times should result in that tab being active
-      expect(useLayoutStore.getState().activeTab).toBe('canvas');
+      expect(useLayoutStore.getState().activeTab).toBe('list');
     });
   });
 });

@@ -1,4 +1,14 @@
-import { Controller, Get, Put, Post, Patch, Body, HttpCode, HttpStatus, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Put,
+  Post,
+  Patch,
+  Body,
+  HttpCode,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { IsString, IsBoolean, IsOptional } from 'class-validator';
 import * as fs from 'fs';
@@ -64,9 +74,10 @@ export class RepositoryAdminController {
   }
 
   @Put('config')
-  @ApiOperation({ summary: 'Update repository configuration' })
+  @ApiOperation({ summary: 'Update repository configuration', deprecated: true })
   @ApiResponse({ status: 200, type: RepositoryConfigDto })
   async updateConfig(@Body() dto: UpdateRepositoryConfigDto): Promise<RepositoryConfigDto> {
+    this.logger.warn('PUT /admin/repository/config is deprecated — use GitHub integration instead');
     const project = await this.projectsService.getOrCreateDefault();
 
     await this.projectsService.update(project.id, {
@@ -79,9 +90,10 @@ export class RepositoryAdminController {
 
   @Post('validate-path')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Validate a filesystem path' })
+  @ApiOperation({ summary: 'Validate a filesystem path', deprecated: true })
   @ApiResponse({ status: 200, type: ValidatePathResultDto })
   async validatePath(@Body() dto: ValidatePathDto): Promise<ValidatePathResultDto> {
+    this.logger.warn('POST /admin/repository/validate-path is deprecated — use GitHub integration instead');
     const result: ValidatePathResultDto = {
       path: dto.path,
       exists: false,

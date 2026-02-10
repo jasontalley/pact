@@ -16,9 +16,15 @@
 import * as path from 'path';
 import { minimatch } from 'minimatch';
 import { NodeConfig } from '../types';
-import { ReconciliationGraphStateType, OrphanTestInfo } from '../../types/reconciliation-state';
+import {
+  ReconciliationGraphStateType,
+  OrphanTestInfo,
+  EvidenceItem,
+  EVIDENCE_CONFIDENCE_WEIGHTS,
+} from '../../types/reconciliation-state';
 import { OrphanDiscoveryResult } from '../../../tools/reconciliation-tools.service';
 import { ContentProvider, FilesystemContentProvider } from '../../../content';
+import { extractEvidenceFromFile } from './evidence-extractors';
 
 /**
  * Filter options for test discovery
@@ -107,7 +113,11 @@ export interface DiscoverFullscanNodeOptions {
 /**
  * Get or create ContentProvider from config
  */
-function getContentProvider(config: NodeConfig, runId?: string, basePath?: string): ContentProvider {
+function getContentProvider(
+  config: NodeConfig,
+  runId?: string,
+  basePath?: string,
+): ContentProvider {
   if (runId && config.contentProviderOverrides?.has(runId)) {
     return config.contentProviderOverrides.get(runId)!;
   }
@@ -329,7 +339,9 @@ export function createDiscoverFullscanNode(options: DiscoverFullscanNodeOptions 
         state.fixtureMode || !!(fixtureFiles && Object.keys(fixtureFiles).length > 0);
 
       // Pre-read mode: a per-run ContentProvider override exists — skip filesystem tools
-      const hasPreReadOverride = !!(state.runId && config.contentProviderOverrides?.has(state.runId));
+      const hasPreReadOverride = !!(
+        state.runId && config.contentProviderOverrides?.has(state.runId)
+      );
 
       // Try to use the tool if available and enabled (only if no filters, NOT fixture mode, NOT pre-read)
       if (
@@ -360,8 +372,24 @@ export function createDiscoverFullscanNode(options: DiscoverFullscanNodeOptions 
             relatedSourceFiles: orphan.relatedSourceFiles,
           }));
 
+          // Convert orphan tests to evidence items
+          const toolEvidence: EvidenceItem[] = orphanTests.map((orphan) => ({
+            type: 'test' as const,
+            filePath: orphan.filePath,
+            name: orphan.testName,
+            code: orphan.testCode,
+            lineNumber: orphan.lineNumber,
+            relatedFiles: orphan.relatedSourceFiles,
+            baseConfidence: EVIDENCE_CONFIDENCE_WEIGHTS.test,
+            metadata: {
+              testCode: orphan.testCode,
+              relatedSourceFiles: orphan.relatedSourceFiles,
+            },
+          }));
+
           return {
             orphanTests,
+            evidenceItems: toolEvidence,
             currentPhase: 'context',
           };
         } catch (error) {
@@ -468,8 +496,129 @@ export function createDiscoverFullscanNode(options: DiscoverFullscanNodeOptions 
         );
       }
 
+      // ================================================================
+      // Phase 21C: Multi-source evidence extraction
+      // ================================================================
+      // Convert orphan tests to EvidenceItem format and extract evidence
+      // from source, UI, and documentation files.
+      // Skip in fixture mode (fixture mode only processes test evidence).
+      const allEvidence: EvidenceItem[] = [];
+
+      // Convert orphan tests → test evidence items
+      for (const orphan of limitedOrphanTests) {
+        allEvidence.push({
+          type: 'test',
+          filePath: orphan.filePath,
+          name: orphan.testName,
+          code: orphan.testCode,
+          lineNumber: orphan.lineNumber,
+          relatedFiles: orphan.relatedSourceFiles,
+          baseConfidence: EVIDENCE_CONFIDENCE_WEIGHTS.test,
+          metadata: {
+            testCode: orphan.testCode,
+            relatedSourceFiles: orphan.relatedSourceFiles,
+            testSourceCode: orphan.testSourceCode,
+          },
+        });
+      }
+
+      // Extract evidence from non-test files (only in non-fixture mode)
+      if (!isFixtureMode) {
+        const repoStructure = state.repoStructure;
+        const frameworks = repoStructure?.detectedFrameworks || [];
+
+        // Collect files by type with caps from the plan:
+        // - Top 200 source exports, All UI components, Top 50 API endpoints, Top 20 doc sections
+        const sourceFiles = (repoStructure?.sourceFiles || []).slice(0, 300);
+        const uiFiles = repoStructure?.uiFiles || [];
+        const docFiles = (repoStructure?.docFiles || []).slice(0, 30);
+
+        const filesToProcess: Array<{ path: string; type: 'source' | 'ui' | 'doc' }> = [
+          ...uiFiles.map((f) => ({ path: f, type: 'ui' as const })),
+          ...sourceFiles.map((f) => ({ path: f, type: 'source' as const })),
+          ...docFiles.map((f) => ({ path: f, type: 'doc' as const })),
+        ];
+
+        config.logger?.log(
+          `[DiscoverFullscanNode] Extracting evidence from ${sourceFiles.length} source, ` +
+            `${uiFiles.length} UI, ${docFiles.length} doc files` +
+            (frameworks.length > 0 ? ` (frameworks: ${frameworks.join(', ')})` : ''),
+        );
+
+        let sourceExportCount = 0;
+        let uiComponentCount = 0;
+        let apiEndpointCount = 0;
+        let docSectionCount = 0;
+
+        for (const file of filesToProcess) {
+          try {
+            const fileContent = await contentProvider.readFileOrNull(file.path);
+            if (fileContent === null) continue;
+
+            const evidence = extractEvidenceFromFile(file.path, fileContent, frameworks, file.type);
+
+            for (const item of evidence) {
+              // Apply per-type caps
+              if (item.type === 'source_export' && sourceExportCount >= 200) continue;
+              if (item.type === 'api_endpoint' && apiEndpointCount >= 50) continue;
+              if (item.type === 'documentation' && docSectionCount >= 20) continue;
+
+              allEvidence.push(item);
+
+              if (item.type === 'source_export') sourceExportCount++;
+              if (item.type === 'ui_component') uiComponentCount++;
+              if (item.type === 'api_endpoint') apiEndpointCount++;
+              if (item.type === 'documentation') docSectionCount++;
+            }
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            config.logger?.warn(
+              `[DiscoverFullscanNode] Failed to extract evidence from ${file.path}: ${errorMessage}`,
+            );
+          }
+        }
+
+        // Phase 21D: Generate coverage_gap evidence from coverage data
+        let coverageGapCount = 0;
+        const coverageData = state.coverageData;
+        if (coverageData && coverageData.files.length > 0) {
+          for (const file of coverageData.files) {
+            // Only flag files with less than 50% coverage
+            if (file.totalLines > 0 && file.coveredLines / file.totalLines < 0.5) {
+              allEvidence.push({
+                type: 'coverage_gap',
+                filePath: file.filePath,
+                name: 'Uncovered: ' + file.filePath.split('/').pop(),
+                lineNumber: file.uncoveredRanges[0]?.start,
+                baseConfidence: EVIDENCE_CONFIDENCE_WEIGHTS.coverage_gap,
+                metadata: {
+                  uncoveredLines: file.totalLines - file.coveredLines,
+                  totalLines: file.totalLines,
+                  coveragePercent: (file.coveredLines / file.totalLines) * 100,
+                },
+              });
+              coverageGapCount++;
+            }
+          }
+          if (coverageGapCount > 0) {
+            config.logger?.log(
+              `[DiscoverFullscanNode] Coverage gaps: ${coverageGapCount} files below 50% coverage`,
+            );
+          }
+        }
+
+        config.logger?.log(
+          `[DiscoverFullscanNode] Evidence extracted: ${limitedOrphanTests.length} tests, ` +
+            `${sourceExportCount} exports, ${uiComponentCount} UI components, ` +
+            `${apiEndpointCount} endpoints, ${docSectionCount} doc sections, ` +
+            `${coverageGapCount} coverage gaps ` +
+            `(${allEvidence.length} total)`,
+        );
+      }
+
       return {
         orphanTests: limitedOrphanTests,
+        evidenceItems: allEvidence,
         currentPhase: 'context',
       };
     };

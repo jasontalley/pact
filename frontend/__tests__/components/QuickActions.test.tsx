@@ -33,10 +33,10 @@ describe('QuickActions', () => {
     expect(screen.getByText('Quick Actions')).toBeInTheDocument();
     // Verify the Create New Atom action is displayed
     expect(screen.getByText('Create New Atom')).toBeInTheDocument();
-    // Verify the Open Canvas action is displayed
-    expect(screen.getByText('Open Canvas')).toBeInTheDocument();
     // Verify the Browse Atoms action is displayed
     expect(screen.getByText('Browse Atoms')).toBeInTheDocument();
+    // Verify the Start Reconciliation action is displayed
+    expect(screen.getByText('Start Reconciliation')).toBeInTheDocument();
   });
 
   // @atom IA-UI-005
@@ -45,10 +45,10 @@ describe('QuickActions', () => {
 
     // Verify description for Create New Atom action
     expect(screen.getByText('Start with natural language intent')).toBeInTheDocument();
-    // Verify description for Open Canvas action
-    expect(screen.getByText('Visual atom organization')).toBeInTheDocument();
     // Verify description for Browse Atoms action
     expect(screen.getByText('Search and filter all atoms')).toBeInTheDocument();
+    // Verify description for Start Reconciliation action
+    expect(screen.getByText('Analyze repository for intent')).toBeInTheDocument();
   });
 
   // @atom IA-UI-005
@@ -72,21 +72,21 @@ describe('QuickActions', () => {
   });
 
   // @atom IA-UI-005
-  it('renders Open Canvas as a link to /canvas', () => {
-    render(<QuickActions />);
-
-    const canvasLink = screen.getByRole('link', { name: /open canvas/i });
-    // Verify the Canvas link navigates to the correct route
-    expect(canvasLink).toHaveAttribute('href', '/canvas');
-  });
-
-  // @atom IA-UI-005
   it('renders Browse Atoms as a link to /atoms', () => {
     render(<QuickActions />);
 
     const browseLink = screen.getByRole('link', { name: /browse atoms/i });
     // Verify the Browse Atoms link navigates to the correct route
     expect(browseLink).toHaveAttribute('href', '/atoms');
+  });
+
+  // @atom IA-UI-005
+  it('renders Start Reconciliation as a link to /reconciliation', () => {
+    render(<QuickActions />);
+
+    const reconciliationLink = screen.getByRole('link', { name: /start reconciliation/i });
+    // Verify the Reconciliation link navigates to the correct route
+    expect(reconciliationLink).toHaveAttribute('href', '/reconciliation');
   });
 
   // @atom IA-UI-005
@@ -124,7 +124,7 @@ describe('QuickActions', () => {
 
     // Verify exactly 1 button action exists (Create New Atom)
     expect(actionButtons).toHaveLength(1);
-    // Verify exactly 2 link actions exist (Open Canvas, Browse Atoms)
+    // Verify exactly 2 link actions exist (Browse Atoms, Start Reconciliation)
     expect(actionLinks).toHaveLength(2);
     // Boundary assertion: Verify total count is exactly 3 (not more, not less)
     const totalActions = actionButtons.length + actionLinks.length;
@@ -133,7 +133,7 @@ describe('QuickActions', () => {
   });
 
   // @atom IA-UI-005
-  it('maintains action order: Create New Atom first, Open Canvas second, Browse Atoms third', () => {
+  it('maintains action order: Create New Atom first, Browse Atoms second, Start Reconciliation third', () => {
     render(<QuickActions />);
 
     // Get all interactive elements in document order
@@ -141,10 +141,10 @@ describe('QuickActions', () => {
 
     // Verify Create New Atom button appears first
     expect(allActions[0]).toHaveTextContent(/create new atom/i);
-    // Verify Open Canvas link appears second
-    expect(allActions[1]).toHaveTextContent(/open canvas/i);
-    // Verify Browse Atoms link appears third
-    expect(allActions[2]).toHaveTextContent(/browse atoms/i);
+    // Verify Browse Atoms link appears second
+    expect(allActions[1]).toHaveTextContent(/browse atoms/i);
+    // Verify Start Reconciliation link appears third
+    expect(allActions[2]).toHaveTextContent(/start reconciliation/i);
   });
 
   // @atom IA-UI-005

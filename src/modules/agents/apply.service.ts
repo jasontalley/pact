@@ -473,7 +473,7 @@ export class ApplyService {
       // Pre-read (browser upload) run — files aren't on the server filesystem
       throw new Error(
         `Cannot inject annotation: file ${filePath} is not accessible on the server. ` +
-        `For browser-uploaded repositories, add annotations manually: // @atom ${atomId}`,
+          `For browser-uploaded repositories, add annotations manually: // @atom ${atomId}`,
       );
     }
 

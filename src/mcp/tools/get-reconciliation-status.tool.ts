@@ -18,8 +18,7 @@ export const getReconciliationStatusTool: ToolDefinition = {
     properties: {
       runId: {
         type: 'string',
-        description:
-          'The run ID to check. If omitted, lists all active reconciliation runs.',
+        description: 'The run ID to check. If omitted, lists all active reconciliation runs.',
       },
     },
   },
@@ -75,11 +74,7 @@ export const getReconciliationStatusTool: ToolDefinition = {
         content: [
           {
             type: 'text' as const,
-            text: JSON.stringify(
-              { runs: summary, total: summary.length },
-              null,
-              2,
-            ),
+            text: JSON.stringify({ runs: summary, total: summary.length }, null, 2),
           },
         ],
       };

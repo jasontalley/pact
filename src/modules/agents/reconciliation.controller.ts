@@ -62,7 +62,7 @@ import { RequireApiKey } from '../../common/auth/api-key.guard';
 // =============================================================================
 
 /**
- * GitHub push/trigger data for reconciliation
+ * GitHub push/trigger data for reconciliation (webhook — all required)
  */
 class GitHubPushDto {
   @IsString()
@@ -70,6 +70,23 @@ class GitHubPushDto {
 
   @IsString()
   branch: string;
+
+  @IsOptional()
+  @IsString()
+  repo?: string;
+}
+
+/**
+ * GitHub start data from UI (commitSha and branch are optional)
+ */
+class GitHubStartDto {
+  @IsOptional()
+  @IsString()
+  commitSha?: string;
+
+  @IsOptional()
+  @IsString()
+  branch?: string;
 
   @IsOptional()
   @IsString()
@@ -318,9 +335,7 @@ export class ReconciliationController {
     status: 413,
     description: 'Content size exceeds limit',
   })
-  async analyzeWithPreReadContent(
-    @Body() dto: PreReadContentDto,
-  ): Promise<AnalysisStartResult> {
+  async analyzeWithPreReadContent(@Body() dto: PreReadContentDto): Promise<AnalysisStartResult> {
     this.logger.log(`POST /agents/reconciliation/analyze/pre-read`);
     return this.reconciliationService.analyzeWithPreReadContent(dto);
   }
@@ -341,11 +356,13 @@ export class ReconciliationController {
     description:
       'Clone a GitHub repository and run reconciliation. Requires GitHub PAT to be configured.',
   })
-  async startFromGitHub(
-    @Body() dto: GitHubPushDto,
-  ): Promise<AnalysisStartResult> {
-    this.logger.log(`POST /agents/reconciliation/start/github — branch=${dto.branch}`);
-    return this.reconciliationService.analyzeFromGitHub(dto);
+  async startFromGitHub(@Body() dto: GitHubStartDto): Promise<AnalysisStartResult> {
+    this.logger.log(`POST /agents/reconciliation/start/github — branch=${dto.branch || 'default'}`);
+    return this.reconciliationService.analyzeFromGitHub({
+      commitSha: dto.commitSha,
+      branch: dto.branch || 'main',
+      repo: dto.repo,
+    });
   }
 
   /**
@@ -365,10 +382,10 @@ export class ReconciliationController {
       'Webhook endpoint that triggers reconciliation from GitHub. ' +
       'Requires Authorization: Bearer pact_<key> header.',
   })
-  async handleGitHubPush(
-    @Body() dto: GitHubPushDto,
-  ): Promise<AnalysisStartResult> {
-    this.logger.log(`POST /agents/reconciliation/hooks/github/push — branch=${dto.branch}, commit=${dto.commitSha}`);
+  async handleGitHubPush(@Body() dto: GitHubPushDto): Promise<AnalysisStartResult> {
+    this.logger.log(
+      `POST /agents/reconciliation/hooks/github/push — branch=${dto.branch}, commit=${dto.commitSha}`,
+    );
     return this.reconciliationService.analyzeFromGitHub(dto);
   }
 
@@ -511,12 +528,14 @@ export class ReconciliationController {
     status: 200,
     description: 'List of active runs',
   })
-  async listRuns(): Promise<Array<{
-    runId: string;
-    threadId: string;
-    status: string;
-    startTime: Date;
-  }>> {
+  async listRuns(): Promise<
+    Array<{
+      runId: string;
+      threadId: string;
+      status: string;
+      startTime: Date;
+    }>
+  > {
     this.logger.log(`GET /agents/reconciliation/runs`);
     return this.reconciliationService.listActiveRuns();
   }

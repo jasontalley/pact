@@ -23,6 +23,7 @@ import {
   ReconciliationGraphStateType,
   InferredAtom,
   InferredMolecule,
+  EvidenceSource,
 } from '../../types/reconciliation-state';
 
 /**
@@ -362,6 +363,118 @@ function clusterBySemantic(
  * @param options - Optional customization options
  * @returns Node factory function
  */
+// ============================================================================
+// Phase 21C: Cross-Evidence Deduplication
+// ============================================================================
+
+/**
+ * Deduplicate atoms that were inferred from different evidence sources
+ * but describe the same behavior. Merges their evidenceSources and applies
+ * a corroboration confidence boost.
+ *
+ * @param atoms - All inferred atoms (may contain near-duplicates from different evidence)
+ * @param similarityThreshold - Jaccard similarity threshold for merging (default: 0.4)
+ * @param logger - Optional logger
+ * @returns Deduplicated atoms with merged evidence sources
+ */
+function deduplicateAcrossEvidence(
+  atoms: InferredAtom[],
+  similarityThreshold: number = 0.4,
+  logger?: NodeConfig['logger'],
+): InferredAtom[] {
+  if (atoms.length <= 1) return atoms;
+
+  // Group atoms into merge sets using union-find approach
+  const parent = atoms.map((_, i) => i);
+
+  function find(i: number): number {
+    while (parent[i] !== i) {
+      parent[i] = parent[parent[i]]; // path compression
+      i = parent[i];
+    }
+    return i;
+  }
+
+  function union(i: number, j: number): void {
+    const pi = find(i);
+    const pj = find(j);
+    if (pi !== pj) parent[pi] = pj;
+  }
+
+  // Compare all pairs and union similar atoms
+  for (let i = 0; i < atoms.length; i++) {
+    for (let j = i + 1; j < atoms.length; j++) {
+      // Only merge atoms from different evidence types
+      const typeI = atoms[i].primaryEvidenceType || 'test';
+      const typeJ = atoms[j].primaryEvidenceType || 'test';
+      if (typeI === typeJ) continue;
+
+      const similarity = computeTextSimilarity(getAtomText(atoms[i]), getAtomText(atoms[j]));
+      if (similarity >= similarityThreshold) {
+        union(i, j);
+      }
+    }
+  }
+
+  // Group atoms by their root parent
+  const groups = new Map<number, number[]>();
+  for (let i = 0; i < atoms.length; i++) {
+    const root = find(i);
+    const list = groups.get(root) || [];
+    list.push(i);
+    groups.set(root, list);
+  }
+
+  // Merge each group into a single atom
+  const result: InferredAtom[] = [];
+  let mergedCount = 0;
+
+  for (const indices of groups.values()) {
+    if (indices.length === 1) {
+      result.push(atoms[indices[0]]);
+      continue;
+    }
+
+    // Pick the highest-confidence atom as primary
+    let primaryIdx = indices[0];
+    for (const idx of indices) {
+      if (atoms[idx].confidence > atoms[primaryIdx].confidence) {
+        primaryIdx = idx;
+      }
+    }
+
+    const primary = { ...atoms[primaryIdx] };
+
+    // Merge evidence sources from all atoms in the group
+    const allSources: EvidenceSource[] = [];
+    for (const idx of indices) {
+      const sources = atoms[idx].evidenceSources || [];
+      allSources.push(...sources);
+    }
+    primary.evidenceSources = allSources;
+
+    // Corroboration bonus: atoms supported by multiple evidence types
+    const uniqueTypes = new Set(allSources.map((s) => s.type));
+    if (uniqueTypes.size >= 3) {
+      primary.confidence = Math.min(100, primary.confidence + 15);
+    } else if (uniqueTypes.size >= 2) {
+      primary.confidence = Math.min(100, primary.confidence + 10);
+    }
+
+    result.push(primary);
+    mergedCount += indices.length - 1;
+  }
+
+  if (mergedCount > 0) {
+    logger?.log(
+      `[SynthesizeMoleculesNode] Deduplicated: merged ${mergedCount} duplicate atoms ` +
+        `(${atoms.length} → ${result.length})`,
+    );
+  }
+
+  return result;
+}
+
 /**
  * Cluster atoms using direct implementation (fallback when tool unavailable)
  */
@@ -450,7 +563,10 @@ export function createSynthesizeMoleculesNode(options: SynthesizeMoleculesNodeOp
 
   return (config: NodeConfig) =>
     async (state: ReconciliationGraphStateType): Promise<Partial<ReconciliationGraphStateType>> => {
-      const inferredAtoms = state.inferredAtoms || [];
+      const rawAtoms = state.inferredAtoms || [];
+
+      // Phase 21C: Deduplicate atoms from different evidence sources
+      const inferredAtoms = deduplicateAcrossEvidence(rawAtoms, 0.4, config.logger);
 
       config.logger?.log(
         `[SynthesizeMoleculesNode] Clustering ${inferredAtoms.length} atoms using method: ${clusteringMethod} (useTool=${useTool})`,
@@ -524,6 +640,7 @@ export function createSynthesizeMoleculesNode(options: SynthesizeMoleculesNodeOp
       );
 
       return {
+        inferredAtoms, // Return deduplicated atoms for downstream nodes
         inferredMolecules,
         currentPhase: 'verify',
       };

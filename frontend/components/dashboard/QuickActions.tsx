@@ -17,14 +17,14 @@ export function QuickActions() {
       primary: true,
     },
     {
-      label: 'Open Canvas',
-      description: 'Visual atom organization',
-      href: '/canvas',
-    },
-    {
       label: 'Browse Atoms',
       description: 'Search and filter all atoms',
       href: '/atoms',
+    },
+    {
+      label: 'Start Reconciliation',
+      description: 'Analyze repository for intent',
+      href: '/reconciliation',
     },
   ];
 

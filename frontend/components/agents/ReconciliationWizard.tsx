@@ -388,8 +388,8 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
 
   const [isCancelling, setIsCancelling] = useState(false);
 
-  // Source mode: 'server' = filesystem on server, 'browser' = upload from browser, 'github' = clone from GitHub
-  type SourceMode = 'server' | 'browser' | 'github';
+  // Source mode: 'browser' = upload from browser, 'github' = clone from GitHub
+  type SourceMode = 'browser' | 'github';
   const [sourceMode, setSourceMode] = useState<SourceMode>('browser');
   const [githubBranch, setGithubBranch] = useState('');
   const [githubCommitSha, setGithubCommitSha] = useState('');
@@ -416,6 +416,7 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
       if (cfg.owner && cfg.repo && cfg.patSet) {
         setGithubConfigured(true);
         setGithubRepoLabel(`${cfg.owner}/${cfg.repo}`);
+        setSourceMode('github');
         if (cfg.defaultBranch) setGithubBranch(cfg.defaultBranch);
       }
     }).catch(() => { /* GitHub not configured, that's fine */ });
@@ -553,7 +554,7 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
         },
         { onSuccess, onError },
       );
-    } else if (sourceMode === 'browser' && uploadedFiles && uploadedManifest && uploadedDirectoryName) {
+    } else if (uploadedFiles && uploadedManifest && uploadedDirectoryName) {
       const payload: PreReadPayload = {
         rootDirectory: uploadedDirectoryName,
         manifest: uploadedManifest,
@@ -561,8 +562,6 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
         options: config.options,
       };
       startPreReadMutation.mutate(payload, { onSuccess, onError });
-    } else {
-      startMutation.mutate(config, { onSuccess, onError });
     }
   };
 
@@ -803,17 +802,14 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="browser">
-                      Upload from Browser — read files from your machine
-                    </SelectItem>
-                    <SelectItem value="server">
-                      Server Filesystem — read from mounted volume
-                    </SelectItem>
                     {githubConfigured && (
                       <SelectItem value="github">
                         GitHub — clone from {githubRepoLabel}
                       </SelectItem>
                     )}
+                    <SelectItem value="browser">
+                      Upload from Browser — read files from your machine
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1356,8 +1352,8 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
               </div>
               <p className="text-lg font-medium">Reconciliation Complete!</p>
               <p className="text-sm text-muted-foreground text-center max-w-md">
-                Your atoms have been created and are ready to use. You can view them on the
-                Canvas or in the Atoms list.
+                Your atoms have been created and are ready to use. You can view them in the
+                Atoms list or the Pending Review page.
               </p>
             </div>
           )}

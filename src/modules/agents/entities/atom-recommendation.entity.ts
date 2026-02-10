@@ -120,6 +120,25 @@ export class AtomRecommendation {
   qualityScore: number | null;
 
   /**
+   * Evidence sources that support this atom (Phase 21C).
+   * Each entry tracks the evidence type, file, name, and confidence.
+   */
+  @Column('jsonb', { default: [] })
+  evidenceSources: Array<{
+    type: string;
+    filePath: string;
+    name: string;
+    confidence: number;
+  }>;
+
+  /**
+   * Primary evidence type that produced this atom (Phase 21C).
+   * E.g., 'test', 'source_export', 'ui_component', 'api_endpoint', 'documentation'.
+   */
+  @Column('varchar', { length: 30, nullable: true })
+  primaryEvidenceType: string | null;
+
+  /**
    * Current status of the recommendation
    */
   @Column({ length: 20, default: 'pending' })

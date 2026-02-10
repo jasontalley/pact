@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Network, List, Plus, Menu, X, Settings, Layers, GitCompare, AlertTriangle, MessageSquarePlus, GitPullRequest, CheckSquare } from 'lucide-react';
+import { LayoutDashboard, List, Plus, Menu, X, Settings, Layers, GitCompare, AlertTriangle, MessageSquarePlus, GitPullRequest, CheckSquare } from 'lucide-react';
 import { useConflictMetrics } from '@/hooks/conflicts/use-conflicts';
 import { usePendingCount } from '@/hooks/atoms/use-atoms';
 
@@ -17,7 +17,6 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" /> },
-  { href: '/canvas', label: 'Canvas', icon: <Network className="h-4 w-4" /> },
   { href: '/atoms', label: 'Atoms', icon: <List className="h-4 w-4" /> },
   { href: '/atoms/pending', label: 'Pending Review', icon: <CheckSquare className="h-4 w-4" /> },
   { href: '/molecules', label: 'Molecules', icon: <Layers className="h-4 w-4" /> },

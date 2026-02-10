@@ -25,6 +25,9 @@ import {
   OrphanTestInfo,
   RepoStructure,
   DependencyEdge,
+  EvidenceItem,
+  EvidenceAnalysis,
+  EvidenceSource,
   cleanupPhaseState,
 } from '../../types/reconciliation-state';
 
@@ -360,6 +363,275 @@ async function inferAtomWithLLM(
   }
 }
 
+// ============================================================================
+// Phase 21C: Type-Specific Inference Prompts
+// ============================================================================
+
+function getEvidenceInferencePrompt(evidence: EvidenceItem, analysis: EvidenceAnalysis): string {
+  switch (evidence.type) {
+    case 'source_export':
+      return getSourceInferencePrompt(evidence, analysis);
+    case 'ui_component':
+      return getUIInferencePrompt(evidence, analysis);
+    case 'api_endpoint':
+      return getAPIInferencePrompt(evidence, analysis);
+    case 'documentation':
+      return getDocInferencePrompt(evidence, analysis);
+    case 'coverage_gap':
+      return getCoverageGapInferencePrompt(evidence, analysis);
+    default:
+      return getGenericEvidencePrompt(evidence, analysis);
+  }
+}
+
+function getSourceInferencePrompt(evidence: EvidenceItem, analysis: EvidenceAnalysis): string {
+  const exportType = evidence.metadata?.exportType || 'export';
+  return `You are analyzing a source code export to infer an Intent Atom.
+The atom should describe WHAT this code enables the system to do, not HOW it's implemented.
+
+## Export: ${evidence.name} (${exportType})
+## File: ${evidence.filePath}
+
+## Code
+\`\`\`typescript
+${evidence.code || ''}
+\`\`\`
+
+## Context
+${analysis.summary}
+Domain Concepts: ${analysis.domainConcepts.join(', ') || 'None identified'}
+
+## Instructions
+Infer the behavioral intent that this code realizes. Focus on the user-facing or system-facing behavior, not internal mechanics.
+
+CRITICAL: Describe WHAT the system can do, not HOW the code works.
+- GOOD: "System can create new user accounts with email verification"
+- BAD: "createUser function inserts a record into the users table"
+
+Respond with JSON only:
+{
+  "description": "Clear, behavior-focused description (1-2 sentences)",
+  "category": "functional|security|performance|reliability|usability",
+  "observableOutcomes": ["Outcome 1", "Outcome 2"],
+  "confidence": 0-100,
+  "ambiguityReasons": ["Reason (if confidence < 80)"],
+  "reasoning": "Brief explanation"
+}`;
+}
+
+function getUIInferencePrompt(evidence: EvidenceItem, analysis: EvidenceAnalysis): string {
+  const framework = evidence.metadata?.framework || 'unknown';
+  const traits: string[] = [];
+  if (evidence.metadata?.hasForm) traits.push('contains form inputs');
+  if (evidence.metadata?.hasNavigation) traits.push('contains navigation');
+
+  return `You are analyzing a UI component to infer user-facing Intent Atoms.
+Each atom should describe a behavior that a USER can perform or observe.
+
+## Component: ${evidence.name}
+## Framework: ${framework}
+## File: ${evidence.filePath}
+${traits.length > 0 ? `## Detected Patterns: ${traits.join(', ')}` : ''}
+
+## Code
+\`\`\`
+${evidence.code || ''}
+\`\`\`
+
+## Context
+${analysis.summary}
+Domain Concepts: ${analysis.domainConcepts.join(', ') || 'None identified'}
+
+## Instructions
+Infer one Intent Atom describing what the user can DO with this component.
+Focus on observable user actions and outcomes, not implementation.
+
+CRITICAL: Describe user-facing behavior only.
+- GOOD: "User can submit a contact form with name, email, and message"
+- BAD: "ContactForm component renders three input fields"
+
+Respond with JSON only:
+{
+  "description": "Clear, user-action-focused description (1-2 sentences)",
+  "category": "functional|security|performance|reliability|usability",
+  "observableOutcomes": ["Outcome 1", "Outcome 2"],
+  "confidence": 0-100,
+  "ambiguityReasons": ["Reason (if confidence < 80)"],
+  "reasoning": "Brief explanation"
+}`;
+}
+
+function getAPIInferencePrompt(evidence: EvidenceItem, analysis: EvidenceAnalysis): string {
+  const method = evidence.metadata?.method || 'UNKNOWN';
+  const routePath = evidence.metadata?.path || '/';
+
+  return `You are analyzing an API endpoint to infer an Intent Atom.
+The atom should describe the capability this endpoint provides.
+
+## Endpoint: ${method} ${routePath}
+## Handler: ${evidence.name}
+## File: ${evidence.filePath}
+
+## Code
+\`\`\`typescript
+${evidence.code || ''}
+\`\`\`
+
+## Context
+${analysis.summary}
+Domain Concepts: ${analysis.domainConcepts.join(', ') || 'None identified'}
+
+## Instructions
+Infer the behavioral intent this API endpoint realizes.
+Focus on what capability it exposes, not the HTTP mechanics.
+
+CRITICAL: Describe the business capability, not the HTTP operation.
+- GOOD: "System allows retrieving a user's order history with pagination"
+- BAD: "GET /users/:id/orders returns a paginated JSON response"
+
+Respond with JSON only:
+{
+  "description": "Clear, capability-focused description (1-2 sentences)",
+  "category": "functional|security|performance|reliability|usability",
+  "observableOutcomes": ["Outcome 1", "Outcome 2"],
+  "confidence": 0-100,
+  "ambiguityReasons": ["Reason (if confidence < 80)"],
+  "reasoning": "Brief explanation"
+}`;
+}
+
+function getDocInferencePrompt(evidence: EvidenceItem, analysis: EvidenceAnalysis): string {
+  return `You are analyzing documentation to infer an Intent Atom.
+The atom should describe a system behavior mentioned or implied by this documentation.
+
+## Section: ${evidence.name}
+## File: ${evidence.filePath}
+
+## Content
+${evidence.code || ''}
+
+## Context
+Domain Concepts: ${analysis.domainConcepts.join(', ') || 'None identified'}
+
+## Instructions
+Infer one Intent Atom from this documentation. Only infer atoms for concrete, testable behaviors — not aspirational statements or project metadata.
+
+If the documentation describes a specific system behavior (e.g., "users can reset their password"), infer an atom for it.
+If it's purely informational (e.g., "this project uses React"), set confidence below 30.
+
+Respond with JSON only:
+{
+  "description": "Clear, behavior-focused description (1-2 sentences)",
+  "category": "functional|security|performance|reliability|usability",
+  "observableOutcomes": ["Outcome 1", "Outcome 2"],
+  "confidence": 0-100,
+  "ambiguityReasons": ["Reason (if confidence < 80)"],
+  "reasoning": "Brief explanation"
+}`;
+}
+
+function getCoverageGapInferencePrompt(evidence: EvidenceItem, analysis: EvidenceAnalysis): string {
+  const pct = evidence.metadata?.coveragePercent?.toFixed(0) || '?';
+  return `You are analyzing an untested source file to infer what Intent Atom it might realize.
+
+## File: ${evidence.filePath} (${pct}% test coverage)
+
+## Code
+\`\`\`typescript
+${evidence.code || ''}
+\`\`\`
+
+## Context
+${analysis.summary}
+Domain Concepts: ${analysis.domainConcepts.join(', ') || 'None identified'}
+
+## Instructions
+Infer what behavioral intent this untested code likely realizes.
+Set confidence proportionally lower since there are no tests to confirm the behavior.
+
+Respond with JSON only:
+{
+  "description": "Clear, behavior-focused description (1-2 sentences)",
+  "category": "functional|security|performance|reliability|usability",
+  "observableOutcomes": ["Outcome 1", "Outcome 2"],
+  "confidence": 0-100,
+  "ambiguityReasons": ["Reason"],
+  "reasoning": "Brief explanation"
+}`;
+}
+
+function getGenericEvidencePrompt(evidence: EvidenceItem, analysis: EvidenceAnalysis): string {
+  return `You are analyzing code evidence to infer an Intent Atom.
+
+## Evidence: ${evidence.name} (${evidence.type})
+## File: ${evidence.filePath}
+
+## Code
+\`\`\`
+${evidence.code || ''}
+\`\`\`
+
+## Context
+${analysis.summary}
+Domain Concepts: ${analysis.domainConcepts.join(', ') || 'None identified'}
+
+Infer the behavioral intent. Respond with JSON only:
+{
+  "description": "Clear description (1-2 sentences)",
+  "category": "functional|security|performance|reliability|usability",
+  "observableOutcomes": ["Outcome 1"],
+  "confidence": 0-100,
+  "ambiguityReasons": ["Reason"],
+  "reasoning": "Brief explanation"
+}`;
+}
+
+/**
+ * Infer atom from a non-test evidence item using LLM.
+ */
+async function inferAtomFromEvidence(
+  evidence: EvidenceItem,
+  analysis: EvidenceAnalysis,
+  config: NodeConfig,
+  minConfidence: number,
+): Promise<InferredAtom | null> {
+  const prompt = getEvidenceInferencePrompt(evidence, analysis);
+
+  const response = await config.llmService.invoke({
+    messages: [{ role: 'user', content: prompt }],
+    taskType: AgentTaskType.ANALYSIS,
+    agentName: 'infer-atoms-node',
+    purpose: 'infer-intent-atom-evidence',
+  });
+
+  const parsed = parseInferenceResponse(response.content, evidence.name);
+  if (!parsed || parsed.confidence < minConfidence) return null;
+
+  const evidenceSource: EvidenceSource = {
+    type: evidence.type,
+    filePath: evidence.filePath,
+    name: evidence.name,
+    confidence: parsed.confidence,
+  };
+
+  return {
+    tempId: `temp-${uuidv4()}`,
+    description: parsed.description,
+    category: parsed.category,
+    sourceTest: {
+      filePath: evidence.filePath,
+      testName: evidence.name,
+      lineNumber: evidence.lineNumber || 0,
+    },
+    observableOutcomes: parsed.observableOutcomes,
+    confidence: parsed.confidence,
+    ambiguityReasons: parsed.ambiguityReasons,
+    reasoning: parsed.reasoning,
+    evidenceSources: [evidenceSource],
+    primaryEvidenceType: evidence.type,
+  };
+}
+
 export function createInferAtomsNode(options: InferAtomsNodeOptions = {}) {
   const batchSize = options.batchSize || 5;
   const minConfidence = options.minConfidence || 0; // Include all by default
@@ -517,8 +789,107 @@ export function createInferAtomsNode(options: InferAtomsNodeOptions = {}) {
         );
       }
 
+      // Add evidence sources to test-inferred atoms
+      for (const atom of inferredAtoms) {
+        if (!atom.evidenceSources) {
+          atom.evidenceSources = [{
+            type: 'test',
+            filePath: atom.sourceTest.filePath,
+            name: atom.sourceTest.testName,
+            confidence: atom.confidence,
+          }];
+          atom.primaryEvidenceType = 'test';
+        }
+      }
+
       config.logger?.log(
-        `[InferAtomsNode] Inference complete: ${inferredAtoms.length} atoms from ${orphanTests.length} tests (${llmCallCount} LLM calls)`,
+        `[InferAtomsNode] Test inference complete: ${inferredAtoms.length} atoms from ${orphanTests.length} tests (${llmCallCount} LLM calls)`,
+      );
+
+      // ================================================================
+      // Phase 21C: Infer atoms from non-test evidence items
+      // ================================================================
+      const evidenceItems = state.evidenceItems || [];
+      const evidenceAnalysis = state.evidenceAnalysis || new Map<string, EvidenceAnalysis>();
+      const nonTestEvidence = evidenceItems.filter((e) => e.type !== 'test');
+
+      if (nonTestEvidence.length > 0) {
+        config.logger?.log(
+          `[InferAtomsNode] Processing ${nonTestEvidence.length} non-test evidence items`,
+        );
+
+        // Process in tiers by priority: api_endpoint → ui_component → source_export → documentation → coverage_gap
+        const tierOrder: Array<EvidenceItem['type']> = [
+          'api_endpoint', 'ui_component', 'source_export', 'documentation', 'coverage_gap',
+        ];
+
+        const evidenceByType = new Map<string, EvidenceItem[]>();
+        for (const e of nonTestEvidence) {
+          const list = evidenceByType.get(e.type) || [];
+          list.push(e);
+          evidenceByType.set(e.type, list);
+        }
+
+        let evidenceAtomCount = 0;
+
+        for (const tier of tierOrder) {
+          const tierItems = evidenceByType.get(tier) || [];
+          if (tierItems.length === 0) continue;
+
+          // Check for cancellation between tiers
+          if (config.cancellationRegistry?.isCancelled(state.runId)) {
+            config.logger?.log(`[InferAtomsNode] Cancelled during evidence inference`);
+            throw new CancellationError(state.runId);
+          }
+
+          config.logger?.log(
+            `[InferAtomsNode] Processing ${tierItems.length} ${tier} evidence items`,
+          );
+
+          // Process in batches
+          for (let i = 0; i < tierItems.length; i += batchSize) {
+            const batch = tierItems.slice(i, i + batchSize);
+
+            const batchPromises = batch.map(async (evidence) => {
+              const evidenceId = `${evidence.filePath}:${evidence.name}`;
+              const analysis = evidenceAnalysis.get(evidenceId);
+
+              if (!analysis) {
+                config.logger?.warn(
+                  `[InferAtomsNode] No analysis for evidence ${evidenceId}, skipping`,
+                );
+                return null;
+              }
+
+              try {
+                return await inferAtomFromEvidence(evidence, analysis, config, minConfidence);
+              } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                config.logger?.warn(
+                  `[InferAtomsNode] Evidence inference failed for ${evidenceId}: ${errorMessage}`,
+                );
+                return null;
+              }
+            });
+
+            const batchResults = await Promise.all(batchPromises);
+            for (const atom of batchResults) {
+              if (atom) {
+                inferredAtoms.push(atom);
+                evidenceAtomCount++;
+              }
+            }
+            llmCallCount += batch.length;
+          }
+        }
+
+        config.logger?.log(
+          `[InferAtomsNode] Evidence inference: ${evidenceAtomCount} atoms from ${nonTestEvidence.length} evidence items`,
+        );
+      }
+
+      config.logger?.log(
+        `[InferAtomsNode] Total: ${inferredAtoms.length} atoms (${llmCallCount} LLM calls)`,
       );
 
       // INV-R005: State shedding - clear raw context from contextPerTest

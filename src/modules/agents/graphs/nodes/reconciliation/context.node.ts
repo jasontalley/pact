@@ -25,6 +25,8 @@ import {
   OrphanTestInfo,
   DocChunk,
   RepoStructure,
+  EvidenceItem,
+  EvidenceAnalysis,
 } from '../../types/reconciliation-state';
 import { ContextBuilderService } from '../../../context-builder.service';
 import { ContentProvider, FilesystemContentProvider } from '../../../content';
@@ -50,7 +52,11 @@ export interface ContextNodeOptions {
 /**
  * Get or create ContentProvider from config
  */
-function getContentProvider(config: NodeConfig, runId?: string, basePath?: string): ContentProvider {
+function getContentProvider(
+  config: NodeConfig,
+  runId?: string,
+  basePath?: string,
+): ContentProvider {
   if (runId && config.contentProviderOverrides?.has(runId)) {
     return config.contentProviderOverrides.get(runId)!;
   }
@@ -248,14 +254,202 @@ function createFallbackAnalysis(test: OrphanTestInfo, _rootDirectory: string): T
   };
 }
 
+// ============================================================================
+// Evidence Analysis Builders (Phase 21C)
+// ============================================================================
+
+/**
+ * Build EvidenceAnalysis for a non-test evidence item.
+ * Pure static analysis — no LLM calls.
+ */
+function buildEvidenceAnalysis(evidence: EvidenceItem): EvidenceAnalysis {
+  const evidenceId = `${evidence.filePath}:${evidence.name}`;
+
+  switch (evidence.type) {
+    case 'source_export':
+      return buildSourceExportAnalysis(evidence, evidenceId);
+    case 'ui_component':
+      return buildUIComponentAnalysis(evidence, evidenceId);
+    case 'api_endpoint':
+      return buildAPIEndpointAnalysis(evidence, evidenceId);
+    case 'documentation':
+      return buildDocumentationAnalysis(evidence, evidenceId);
+    case 'coverage_gap':
+      return buildCoverageGapAnalysis(evidence, evidenceId);
+    default:
+      return {
+        evidenceId,
+        type: evidence.type,
+        summary: `${evidence.type}: ${evidence.name}`,
+        domainConcepts: [],
+        rawContext: evidence.code,
+      };
+  }
+}
+
+function buildSourceExportAnalysis(evidence: EvidenceItem, evidenceId: string): EvidenceAnalysis {
+  const code = evidence.code || '';
+  const exportType = evidence.metadata?.exportType || 'unknown';
+  const domainConcepts = extractDomainConceptsFromCode(evidence.name, code);
+
+  return {
+    evidenceId,
+    type: 'source_export',
+    summary: 'Exported ' + exportType + ' "' + evidence.name + '"' + (evidence.metadata?.isDefault ? ' (default)' : ''),
+    domainConcepts,
+    relatedCode: evidence.relatedFiles,
+    rawContext: code,
+  };
+}
+
+function buildUIComponentAnalysis(evidence: EvidenceItem, evidenceId: string): EvidenceAnalysis {
+  const code = evidence.code || '';
+  const framework = evidence.metadata?.framework || 'unknown';
+  const traits: string[] = [];
+  if (evidence.metadata?.hasForm) traits.push('form input');
+  if (evidence.metadata?.hasNavigation) traits.push('navigation');
+
+  const domainConcepts = extractDomainConceptsFromCode(evidence.name, code);
+
+  return {
+    evidenceId,
+    type: 'ui_component',
+    summary: `${framework} component "${evidence.name}"${traits.length > 0 ? ` (${traits.join(', ')})` : ''}`,
+    domainConcepts,
+    relatedCode: evidence.relatedFiles,
+    rawContext: code,
+  };
+}
+
+function buildAPIEndpointAnalysis(evidence: EvidenceItem, evidenceId: string): EvidenceAnalysis {
+  const code = evidence.code || '';
+  const method = evidence.metadata?.method || 'UNKNOWN';
+  const routePath = evidence.metadata?.path || '/';
+  const domainConcepts = extractDomainConceptsFromCode(evidence.name, code);
+
+  // Add route segments as domain concepts
+  const routeSegments = routePath
+    .split('/')
+    .filter((s) => s && !s.startsWith(':') && !s.startsWith('{'))
+    .map((s) => s.toLowerCase());
+  domainConcepts.push(...routeSegments);
+
+  return {
+    evidenceId,
+    type: 'api_endpoint',
+    summary: `${method} ${routePath} → ${evidence.name}()`,
+    domainConcepts: [...new Set(domainConcepts)],
+    relatedCode: evidence.relatedFiles,
+    rawContext: code,
+  };
+}
+
+function buildDocumentationAnalysis(evidence: EvidenceItem, evidenceId: string): EvidenceAnalysis {
+  const content = evidence.code || '';
+  const keywords = extractDocKeywords(content);
+
+  return {
+    evidenceId,
+    type: 'documentation',
+    summary: `Documentation: ${evidence.name}`,
+    domainConcepts: keywords,
+    rawContext: content,
+  };
+}
+
+function buildCoverageGapAnalysis(evidence: EvidenceItem, evidenceId: string): EvidenceAnalysis {
+  const pct = evidence.metadata?.coveragePercent?.toFixed(0) || '?';
+  return {
+    evidenceId,
+    type: 'coverage_gap',
+    summary: `Coverage gap in ${evidence.filePath} (${pct}% covered)`,
+    domainConcepts: extractDomainConceptsFromCode(evidence.name, evidence.code || ''),
+    rawContext: evidence.code,
+  };
+}
+
+/**
+ * Extract domain concepts from a name and code snippet.
+ * Splits camelCase/PascalCase names and looks for common domain patterns.
+ */
+function extractDomainConceptsFromCode(name: string, code: string): string[] {
+  const concepts = new Set<string>();
+
+  // Split camelCase/PascalCase name into words
+  const nameWords = name
+    .replaceAll(/([a-z])([A-Z])/g, '$1 $2')
+    .replaceAll(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[\s_-]+/)
+    .filter((w) => w.length > 2);
+  nameWords.forEach((w) => concepts.add(w));
+
+  // Scan code for common domain keywords
+  const domainPatterns = [
+    'user', 'auth', 'login', 'session', 'token', 'payment', 'order',
+    'cart', 'checkout', 'create', 'update', 'delete', 'get', 'list',
+    'validate', 'error', 'success', 'fail', 'submit', 'upload',
+    'download', 'notification', 'email', 'search', 'filter', 'sort',
+    'permission', 'role', 'admin', 'config', 'setting', 'profile',
+  ];
+  const codeLower = code.toLowerCase();
+  for (const pattern of domainPatterns) {
+    if (codeLower.includes(pattern)) {
+      concepts.add(pattern);
+    }
+  }
+
+  return Array.from(concepts).slice(0, 15);
+}
+
+/**
+ * Extract keywords from documentation content.
+ */
+function extractDocKeywords(content: string): string[] {
+  const keywords = new Set<string>();
+
+  // Headings
+  const headingRegex = /^#{1,3}\s+(.+)$/gm;
+  let match: RegExpExecArray | null;
+  while ((match = headingRegex.exec(content)) !== null) {
+    match[1]
+      .toLowerCase()
+      .split(/[\s\-_:/]+/)
+      .forEach((w) => {
+        if (w.length > 2) keywords.add(w);
+      });
+  }
+
+  // Backtick code identifiers
+  const codeRegex = /`([^`]+)`/g;
+  while ((match = codeRegex.exec(content)) !== null) {
+    const code = match[1].toLowerCase();
+    if (code.length > 2 && code.length < 50) keywords.add(code);
+  }
+
+  // Bold terms
+  const boldRegex = /\*\*([^*]+)\*\*/g;
+  while ((match = boldRegex.exec(content)) !== null) {
+    match[1]
+      .toLowerCase()
+      .split(/[\s\-_:/]+/)
+      .forEach((w) => {
+        if (w.length > 2) keywords.add(w);
+      });
+  }
+
+  return Array.from(keywords).slice(0, 20);
+}
+
 /**
  * Creates the context node for the reconciliation graph.
  *
  * This node:
  * 1. Calls the `get_test_analysis` tool for each orphan test
  * 2. Falls back to direct implementation if tool is unavailable
- * 3. Optionally indexes documentation
- * 4. Updates state with contextPerTest map
+ * 3. Builds EvidenceAnalysis for non-test evidence items (Phase 21C)
+ * 4. Optionally indexes documentation
+ * 5. Updates state with contextPerTest map and evidenceAnalysis map
  *
  * @param options - Optional customization options
  * @returns Node factory function
@@ -307,11 +501,16 @@ export function createContextNode(options: ContextNodeOptions = {}) {
       }
 
       // Pre-read mode: a per-run ContentProvider override exists — skip filesystem tools
-      const hasPreReadOverride = !!(state.runId && config.contentProviderOverrides?.has(state.runId));
+      const hasPreReadOverride = !!(
+        state.runId && config.contentProviderOverrides?.has(state.runId)
+      );
 
       // Check if tool is available (not in fixture mode or pre-read mode - no filesystem access)
       const hasTestAnalysisTool =
-        !isFixtureMode && !hasPreReadOverride && useTool && config.toolRegistry.hasTool('get_test_analysis');
+        !isFixtureMode &&
+        !hasPreReadOverride &&
+        useTool &&
+        config.toolRegistry.hasTool('get_test_analysis');
       const contextBuilderService = isFixtureMode ? undefined : options.contextBuilderService;
       const contextPerTest = new Map<string, TestAnalysis>();
       let processedCount = 0;
@@ -409,8 +608,58 @@ export function createContextNode(options: ContextNodeOptions = {}) {
 
       config.logger?.log(`[ContextNode] Context built for ${contextPerTest.size} tests`);
 
+      // ================================================================
+      // Phase 21C: Build EvidenceAnalysis for all evidence items
+      // ================================================================
+      const evidenceAnalysis = new Map<string, EvidenceAnalysis>();
+      const evidenceItems = state.evidenceItems || [];
+      const testQualityScores = state.testQualityScores;
+
+      if (evidenceItems.length > 0) {
+        config.logger?.log(
+          `[ContextNode] Building evidence analysis for ${evidenceItems.length} items`,
+        );
+
+        for (const evidence of evidenceItems) {
+          const evidenceId = `${evidence.filePath}:${evidence.name}`;
+
+          if (evidence.type === 'test') {
+            // For test evidence, mirror the test analysis into evidence analysis
+            const testKey = evidenceId;
+            const testAnalysis = contextPerTest.get(testKey);
+            const qualityScore = testQualityScores?.get(testKey);
+
+            evidenceAnalysis.set(evidenceId, {
+              evidenceId,
+              type: 'test',
+              summary: testAnalysis?.summary || `Test: ${evidence.name}`,
+              domainConcepts: testAnalysis?.domainConcepts || [],
+              relatedCode: testAnalysis?.relatedCode,
+              relatedDocs: testAnalysis?.relatedDocs,
+              rawContext: testAnalysis?.rawContext || evidence.code,
+              qualityScore: qualityScore?.overallScore,
+            });
+          } else {
+            // Non-test evidence: build analysis from static analysis
+            const analysis = buildEvidenceAnalysis(evidence);
+            evidenceAnalysis.set(evidenceId, analysis);
+          }
+        }
+
+        // Count by type for logging
+        const typeCounts = new Map<string, number>();
+        for (const analysis of evidenceAnalysis.values()) {
+          typeCounts.set(analysis.type, (typeCounts.get(analysis.type) || 0) + 1);
+        }
+        const typeStr = Array.from(typeCounts.entries())
+          .map(([t, c]) => `${c} ${t}`)
+          .join(', ');
+        config.logger?.log(`[ContextNode] Evidence analysis complete: ${typeStr}`);
+      }
+
       return {
         contextPerTest,
+        evidenceAnalysis,
         documentationIndex,
         currentPhase: 'infer',
       };

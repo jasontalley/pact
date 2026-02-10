@@ -369,7 +369,7 @@ export class ReconciliationService {
    * @returns Analysis start result with runId for tracking
    */
   async analyzeFromGitHub(dto: {
-    commitSha: string;
+    commitSha?: string;
     branch: string;
     repo?: string;
   }): Promise<AnalysisStartResult> {
@@ -377,14 +377,18 @@ export class ReconciliationService {
     const githubConfig = await this.repositoryConfigService.getGitHubConfig();
 
     if (!githubConfig.pat) {
-      throw new BadRequestException('GitHub PAT not configured. Set it in Settings → Repository → GitHub.');
+      throw new BadRequestException(
+        'GitHub PAT not configured. Set it in Settings → Repository → GitHub.',
+      );
     }
 
     const owner = githubConfig.owner;
     const repo = dto.repo ?? githubConfig.repo;
 
     if (!owner || !repo) {
-      throw new BadRequestException('GitHub owner and repo must be configured in Settings → Repository.');
+      throw new BadRequestException(
+        'GitHub owner and repo must be configured in Settings → Repository.',
+      );
     }
 
     const threadId = uuidv4();
@@ -742,7 +746,10 @@ export class ReconciliationService {
       if (contentProvider) {
         this.graphRegistry.getNodeConfig().contentProviderOverrides?.delete(runId);
         // Clean up temp clone directories (GitHubContentProvider)
-        if ('cleanup' in contentProvider && typeof (contentProvider as any).cleanup === 'function') {
+        if (
+          'cleanup' in contentProvider &&
+          typeof (contentProvider as any).cleanup === 'function'
+        ) {
           try {
             await (contentProvider as any).cleanup();
             this.logger.debug(`Cleaned up content provider resources for run ${runId}`);
@@ -783,9 +790,7 @@ export class ReconciliationService {
 
     // Allow pending_review (recovered) or running/failed (recoverable) runs
     if (run.status !== 'pending_review' && run.status !== 'running' && run.status !== 'failed') {
-      throw new NotFoundException(
-        `Run ${runId} is not waiting for review (status: ${run.status})`,
-      );
+      throw new NotFoundException(`Run ${runId} is not waiting for review (status: ${run.status})`);
     }
 
     const atoms = await this.repository.findAtomRecommendationsByRun(run.id);
@@ -796,7 +801,8 @@ export class ReconciliationService {
     }
 
     // Build InterruptPayload from DB data
-    const qualityThreshold = (run.options as Record<string, unknown>)?.qualityThreshold as number ?? 80;
+    const qualityThreshold =
+      ((run.options as Record<string, unknown>)?.qualityThreshold as number) ?? 80;
     const passCount = atoms.filter((a) => (a.qualityScore ?? 0) >= qualityThreshold).length;
     const failCount = atoms.length - passCount;
 
@@ -822,9 +828,8 @@ export class ReconciliationService {
         atomCount: m.atomRecommendationTempIds?.length ?? 0,
         confidence: m.confidence,
       })),
-      reason: run.status === 'pending_review'
-        ? 'Run recovered for review'
-        : 'Human review required',
+      reason:
+        run.status === 'pending_review' ? 'Run recovered for review' : 'Human review required',
     };
   }
 
@@ -920,9 +925,7 @@ export class ReconciliationService {
     }
 
     if (run.status !== 'pending_review' && run.status !== 'running' && run.status !== 'failed') {
-      throw new NotFoundException(
-        `Run ${runId} is not waiting for review (status: ${run.status})`,
-      );
+      throw new NotFoundException(`Run ${runId} is not waiting for review (status: ${run.status})`);
     }
 
     this.logger.log(
@@ -941,7 +944,9 @@ export class ReconciliationService {
       if (atom) {
         const status = decision.decision === 'approve' ? 'accepted' : 'rejected';
         await this.repository.updateAtomRecommendationStatus(
-          atom.id, status, undefined,
+          atom.id,
+          status,
+          undefined,
           decision.decision === 'reject' ? decision.reason : undefined,
         );
       }
@@ -953,7 +958,10 @@ export class ReconciliationService {
       if (mol) {
         const status = decision.decision === 'approve' ? 'accepted' : 'rejected';
         await this.repository.updateMoleculeRecommendationStatus(
-          mol.id, status, undefined, undefined,
+          mol.id,
+          status,
+          undefined,
+          undefined,
           decision.decision === 'reject' ? decision.reason : undefined,
         );
       }
@@ -1017,19 +1025,24 @@ export class ReconciliationService {
    *
    * @returns Array of active run information
    */
-  async listActiveRuns(): Promise<Array<{
-    runId: string;
-    threadId: string;
-    status: string;
-    startTime: Date;
-  }>> {
-    // Build map from in-memory tracked runs
-    const runMap = new Map<string, {
+  async listActiveRuns(): Promise<
+    Array<{
       runId: string;
       threadId: string;
       status: string;
       startTime: Date;
-    }>();
+    }>
+  > {
+    // Build map from in-memory tracked runs
+    const runMap = new Map<
+      string,
+      {
+        runId: string;
+        threadId: string;
+        status: string;
+        startTime: Date;
+      }
+    >();
 
     for (const run of this.activeRuns.values()) {
       runMap.set(run.runId, {

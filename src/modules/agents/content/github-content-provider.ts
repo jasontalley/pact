@@ -53,10 +53,11 @@ export class GitHubContentProvider implements ContentProvider {
 
     try {
       // Shallow clone at specified branch
-      execSync(
-        `git clone --depth 1 --branch "${branch}" -- "${url}" "${cloneDir}"`,
-        { encoding: 'utf-8', timeout: 120000, stdio: 'pipe' },
-      );
+      execSync(`git clone --depth 1 --branch "${branch}" -- "${url}" "${cloneDir}"`, {
+        encoding: 'utf-8',
+        timeout: 120000,
+        stdio: 'pipe',
+      });
 
       // If a specific commit SHA is requested and it differs from branch HEAD
       if (config.commitSha) {
@@ -101,8 +102,13 @@ export class GitHubContentProvider implements ContentProvider {
       const rawMessage = error instanceof Error ? error.message : 'Unknown error';
       // Sanitize: never let the PAT appear in error messages or logs
       const message = rawMessage.replaceAll(/x-access-token:[^@]+@/g, 'x-access-token:***@');
-      if (message.includes('Authentication failed') || message.includes('could not read Username')) {
-        throw new Error(`GitHub authentication failed for ${config.owner}/${config.repo}. Check your PAT.`);
+      if (
+        message.includes('Authentication failed') ||
+        message.includes('could not read Username')
+      ) {
+        throw new Error(
+          `GitHub authentication failed for ${config.owner}/${config.repo}. Check your PAT.`,
+        );
       }
       if (message.includes('not found') || message.includes('does not exist')) {
         throw new Error(`Repository ${config.owner}/${config.repo} not found or not accessible.`);

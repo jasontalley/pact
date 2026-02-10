@@ -11,9 +11,9 @@
  *
  * Flow:
  * ```
- * START -> structure -> discover -> context -> infer -> synthesize -> verify -> persist -> END
- *                          |                                            |
- *                 [fullscan | delta]                              [interrupt if review needed]
+ * START -> structure -> discover -> test_quality -> context -> infer -> synthesize -> verify -> persist -> END
+ *                          |                                                           |
+ *                 [fullscan | delta]                                              [interrupt if review needed]
  * ```
  *
  * @see docs/implementation-checklist-phase5.md Section 1.12
@@ -59,6 +59,7 @@ import {
   createInterimPersistNode,
   InterimPersistNodeOptions,
 } from '../nodes/reconciliation/interim-persist.node';
+import { createTestQualityNode } from '../nodes/reconciliation/test-quality.node';
 
 /**
  * Options for customizing the Reconciliation graph
@@ -89,6 +90,7 @@ export const RECONCILIATION_NODES = {
   STRUCTURE: 'structure',
   DISCOVER_FULLSCAN: 'discover_fullscan',
   DISCOVER_DELTA: 'discover_delta',
+  TEST_QUALITY: 'test_quality',
   CONTEXT: 'context',
   INFER_ATOMS: 'infer_atoms',
   SYNTHESIZE_MOLECULES: 'synthesize_molecules',
@@ -219,6 +221,7 @@ export function createReconciliationGraph(
     options.nodeOptions?.discoverFullscan,
   )(config);
   const discoverDeltaNodeBase = createDiscoverDeltaNode(options.nodeOptions?.discoverDelta)(config);
+  const testQualityNodeBase = createTestQualityNode()(config);
   const contextNodeBase = createContextNode(options.nodeOptions?.context)(config);
   const inferAtomsNodeBase = createInferAtomsNode(options.nodeOptions?.inferAtoms)(config);
   const synthesizeMoleculesNodeBase = createSynthesizeMoleculesNode(
@@ -250,6 +253,12 @@ export function createReconciliationGraph(
     discoverDeltaNodeBase,
     config,
     true,
+  );
+  const testQualityNode = wrapWithErrorHandling(
+    RECONCILIATION_NODES.TEST_QUALITY,
+    testQualityNodeBase,
+    config,
+    false,
   );
   const contextNode = wrapWithErrorHandling(
     RECONCILIATION_NODES.CONTEXT,
@@ -291,6 +300,7 @@ export function createReconciliationGraph(
     .addNode(RECONCILIATION_NODES.STRUCTURE, structureNode)
     .addNode(RECONCILIATION_NODES.DISCOVER_FULLSCAN, discoverFullscanNode)
     .addNode(RECONCILIATION_NODES.DISCOVER_DELTA, discoverDeltaNode)
+    .addNode(RECONCILIATION_NODES.TEST_QUALITY, testQualityNode)
     .addNode(RECONCILIATION_NODES.CONTEXT, contextNode)
     .addNode(RECONCILIATION_NODES.INFER_ATOMS, inferAtomsNode)
     .addNode(RECONCILIATION_NODES.SYNTHESIZE_MOLECULES, synthesizeMoleculesNode)
@@ -308,11 +318,14 @@ export function createReconciliationGraph(
       RECONCILIATION_NODES.DISCOVER_DELTA,
     ])
 
-    // discover_fullscan -> context
-    .addEdge(RECONCILIATION_NODES.DISCOVER_FULLSCAN, RECONCILIATION_NODES.CONTEXT)
+    // discover_fullscan -> test_quality
+    .addEdge(RECONCILIATION_NODES.DISCOVER_FULLSCAN, RECONCILIATION_NODES.TEST_QUALITY)
 
-    // discover_delta -> context
-    .addEdge(RECONCILIATION_NODES.DISCOVER_DELTA, RECONCILIATION_NODES.CONTEXT)
+    // discover_delta -> test_quality
+    .addEdge(RECONCILIATION_NODES.DISCOVER_DELTA, RECONCILIATION_NODES.TEST_QUALITY)
+
+    // test_quality -> context
+    .addEdge(RECONCILIATION_NODES.TEST_QUALITY, RECONCILIATION_NODES.CONTEXT)
 
     // context -> infer_atoms
     .addEdge(RECONCILIATION_NODES.CONTEXT, RECONCILIATION_NODES.INFER_ATOMS)

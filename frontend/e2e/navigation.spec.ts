@@ -35,18 +35,18 @@ test.describe('Navigation', () => {
 
       // Now navigation links should be visible in the drawer
       await expect(page.locator('nav').getByRole('link', { name: 'Dashboard' })).toBeVisible({ timeout: 5000 });
-      await expect(page.locator('nav').getByRole('link', { name: 'Canvas' })).toBeVisible();
       await expect(page.locator('nav').getByRole('link', { name: 'Atoms' })).toBeVisible();
+      await expect(page.locator('nav').getByRole('link', { name: 'Reconciliation' })).toBeVisible();
     } else {
       // On desktop, nav links should be visible directly in header
       await expect(header.getByRole('link', { name: 'Dashboard' })).toBeVisible();
-      await expect(header.getByRole('link', { name: 'Canvas' })).toBeVisible();
       await expect(header.getByRole('link', { name: 'Atoms' })).toBeVisible();
+      await expect(header.getByRole('link', { name: 'Reconciliation' })).toBeVisible();
     }
   });
 
   test('should navigate to Dashboard', async ({ page, viewport }) => {
-    await page.goto('/canvas'); // Start from a different page
+    await page.goto('/atoms'); // Start from a different page
 
     if (isMobileViewport(viewport?.width)) {
       // Open hamburger menu first
@@ -58,7 +58,7 @@ test.describe('Navigation', () => {
     await expect(page.getByRole('heading', { name: /dashboard/i })).toBeVisible();
   });
 
-  test('should navigate to Canvas', async ({ page, viewport }) => {
+  test('should navigate to Reconciliation', async ({ page, viewport }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
@@ -66,15 +66,15 @@ test.describe('Navigation', () => {
       // Open hamburger menu first
       await page.getByRole('button', { name: /open menu/i }).click();
       await page.waitForTimeout(200);
-      // On mobile, use the nav drawer link (not Quick Actions)
-      await page.locator('nav').getByRole('link', { name: 'Canvas', exact: true }).click();
+      // On mobile, use the nav drawer link
+      await page.locator('nav').getByRole('link', { name: 'Reconciliation', exact: true }).click();
     } else {
-      // On desktop, use the header link (not Quick Actions)
+      // On desktop, use the header link
       const header = page.locator('header');
-      await header.getByRole('link', { name: 'Canvas', exact: true }).click();
+      await header.getByRole('link', { name: 'Reconciliation', exact: true }).click();
     }
 
-    await expect(page).toHaveURL('/canvas');
+    await expect(page).toHaveURL('/reconciliation');
   });
 
   test('should navigate to Atoms list', async ({ page, viewport }) => {
@@ -170,15 +170,15 @@ test.describe('Navigation', () => {
     await page.getByRole('button', { name: /open menu/i }).click();
     await page.waitForTimeout(200);
 
-    // Canvas link should be visible in the nav drawer
-    const canvasLink = page.locator('nav').getByRole('link', { name: 'Canvas', exact: true });
-    await expect(canvasLink).toBeVisible();
+    // Reconciliation link should be visible in the nav drawer
+    const reconciliationLink = page.locator('nav').getByRole('link', { name: 'Reconciliation', exact: true });
+    await expect(reconciliationLink).toBeVisible();
 
     // Click a navigation link
-    await canvasLink.click();
+    await reconciliationLink.click();
 
     // Should navigate and menu should be closed
-    await expect(page).toHaveURL('/canvas');
+    await expect(page).toHaveURL('/reconciliation');
 
     // Menu should be closed (hamburger icon visible, not X)
     await expect(page.getByRole('button', { name: /open menu/i })).toBeVisible();

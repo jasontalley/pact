@@ -153,13 +153,17 @@ export class RepositoryConfigService {
         .map((line) => line.split('\t')[1]?.replace('refs/heads/', ''))
         .filter(Boolean);
 
-      const defaultBranch = config.defaultBranch && branches.includes(config.defaultBranch)
-        ? config.defaultBranch
-        : branches[0];
+      const defaultBranch =
+        config.defaultBranch && branches.includes(config.defaultBranch)
+          ? config.defaultBranch
+          : branches[0];
 
       // Update lastTestedAt
       const project = await this.projectsService.getOrCreateDefault();
-      const github = { ...(project.settings?.github ?? {}), lastTestedAt: new Date().toISOString() };
+      const github = {
+        ...(project.settings?.github ?? {}),
+        lastTestedAt: new Date().toISOString(),
+      };
       await this.projectsService.update(project.id, { settings: { github } });
 
       return {

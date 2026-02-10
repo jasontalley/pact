@@ -198,6 +198,8 @@ export class ReconciliationRepository {
         relatedDocs: atom.relatedDocs || [],
         ambiguityReasons: atom.ambiguityReasons || null,
         qualityScore: atom.qualityScore || null,
+        evidenceSources: atom.evidenceSources || [],
+        primaryEvidenceType: atom.primaryEvidenceType || null,
         status: 'pending',
       }),
     );

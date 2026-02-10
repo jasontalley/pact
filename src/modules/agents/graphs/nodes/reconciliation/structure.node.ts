@@ -18,6 +18,11 @@ import { NodeConfig } from '../types';
 import { ReconciliationGraphStateType, RepoStructure } from '../../types/reconciliation-state';
 import { RepoStructureResult } from '../../../tools/reconciliation-tools.service';
 import { ContentProvider, FilesystemContentProvider } from '../../../content';
+import {
+  COVERAGE_ARTIFACT_PATHS,
+  parseCoverageFile,
+  CoverageData,
+} from '../../../coverage/coverage-parser';
 
 /**
  * Options for customizing structure node behavior
@@ -39,6 +44,14 @@ export interface StructureNodeOptions {
 
 const DEFAULT_TEST_PATTERNS = ['**/*.spec.ts', '**/*.test.ts', '**/*.e2e-spec.ts'];
 const DEFAULT_SOURCE_PATTERNS = ['**/*.ts', '**/*.tsx'];
+const DEFAULT_UI_PATTERNS = ['**/*.tsx', '**/*.jsx', '**/*.vue', '**/*.svelte'];
+const DEFAULT_DOC_PATTERNS = [
+  '**/README.md', '**/README.rst', '**/docs/**/*.md',
+  '**/CHANGELOG.md', '**/CONTRIBUTING.md',
+];
+const DEFAULT_CONFIG_PATTERNS = [
+  'package.json', 'tsconfig.json', '.env.example',
+];
 const DEFAULT_EXCLUDE_PATTERNS = [
   'node_modules',
   'dist',
@@ -79,7 +92,11 @@ function matchesAnyPattern(filePath: string, patterns: string[]): boolean {
 /**
  * Get or create ContentProvider from config
  */
-function getContentProvider(config: NodeConfig, runId?: string, basePath?: string): ContentProvider {
+function getContentProvider(
+  config: NodeConfig,
+  runId?: string,
+  basePath?: string,
+): ContentProvider {
   if (runId && config.contentProviderOverrides?.has(runId)) {
     return config.contentProviderOverrides.get(runId)!;
   }
@@ -140,14 +157,17 @@ export function createStructureNode(options: StructureNodeOptions = {}) {
       }
 
       // Pre-read mode: a per-run ContentProvider override exists — skip filesystem tools
-      const hasPreReadOverride = !!(state.runId && config.contentProviderOverrides?.has(state.runId));
+      const hasPreReadOverride = !!(
+        state.runId && config.contentProviderOverrides?.has(state.runId)
+      );
 
       config.logger?.log(
         `[StructureNode] Scanning repository: ${rootDirectory} (useTool=${useTool}, deps=${inputIncludeDeps}, preRead=${hasPreReadOverride})`,
       );
 
       // Check if tool is available (skip in pre-read mode — tool uses singleton filesystem provider)
-      const hasStructureTool = useTool && !hasPreReadOverride && config.toolRegistry.hasTool('get_repo_structure');
+      const hasStructureTool =
+        useTool && !hasPreReadOverride && config.toolRegistry.hasTool('get_repo_structure');
 
       // Try tool-based structure analysis
       if (hasStructureTool) {
@@ -206,29 +226,101 @@ export function createStructureNode(options: StructureNodeOptions = {}) {
 
         const testFiles: string[] = [];
         const sourceFiles: string[] = [];
+        const uiFiles: string[] = [];
+        const docFiles: string[] = [];
+        const configFiles: string[] = [];
 
         for (const file of allFiles) {
           if (matchesAnyPattern(file, testPatterns)) {
             testFiles.push(file);
+          } else if (matchesAnyPattern(file, DEFAULT_DOC_PATTERNS)) {
+            docFiles.push(file);
+          } else if (matchesAnyPattern(file, DEFAULT_CONFIG_PATTERNS)) {
+            configFiles.push(file);
+          } else if (matchesAnyPattern(file, DEFAULT_UI_PATTERNS)) {
+            uiFiles.push(file);
+            sourceFiles.push(file); // UI files are also source files
           } else if (matchesAnyPattern(file, sourcePatterns)) {
             sourceFiles.push(file);
           }
         }
 
+        // Detect frameworks from package.json
+        let detectedFrameworks: string[] | undefined;
+        let packageInfo: RepoStructure['packageInfo'] | undefined;
+        try {
+          const pkgPath = allFiles.find((f) => f === 'package.json' || f.endsWith('/package.json'));
+          if (pkgPath) {
+            const pkgContent = await contentProvider.readFile(
+              pkgPath.startsWith('/') ? pkgPath : `${rootDirectory}/${pkgPath}`,
+            );
+            const pkg = JSON.parse(pkgContent);
+            const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+            const frameworks: string[] = [];
+            if (deps['react'] || deps['next']) frameworks.push('react');
+            if (deps['vue']) frameworks.push('vue');
+            if (deps['@nestjs/core']) frameworks.push('nestjs');
+            if (deps['express']) frameworks.push('express');
+            if (deps['@angular/core']) frameworks.push('angular');
+            if (deps['svelte']) frameworks.push('svelte');
+            if (deps['fastify']) frameworks.push('fastify');
+            if (frameworks.length > 0) detectedFrameworks = frameworks;
+            packageInfo = {
+              name: pkg.name,
+              description: pkg.description,
+              scripts: pkg.scripts,
+            };
+          }
+        } catch {
+          // package.json not readable or parseable — not critical
+        }
+
         const repoStructure: RepoStructure = {
           files: [...sourceFiles, ...testFiles],
           testFiles,
+          sourceFiles,
+          uiFiles: uiFiles.length > 0 ? uiFiles : undefined,
+          docFiles: docFiles.length > 0 ? docFiles : undefined,
+          configFiles: configFiles.length > 0 ? configFiles : undefined,
           dependencyEdges: undefined,
           topologicalOrder: undefined,
+          detectedFrameworks,
+          packageInfo,
         };
 
         config.logger?.log(
-          `[StructureNode] Found ${allFiles.length} files: ${sourceFiles.length} source, ${testFiles.length} test`,
+          `[StructureNode] Found ${allFiles.length} files: ${sourceFiles.length} source, ` +
+          `${testFiles.length} test, ${uiFiles.length} UI, ${docFiles.length} docs` +
+          (detectedFrameworks ? `, frameworks: [${detectedFrameworks.join(', ')}]` : ''),
         );
+
+        // Phase 21D: Scan for existing coverage artifacts
+        let coverageData: CoverageData | null = null;
+        for (const coveragePath of COVERAGE_ARTIFACT_PATHS) {
+          try {
+            const fullPath = coveragePath.startsWith('/')
+              ? coveragePath
+              : `${rootDirectory}/${coveragePath}`;
+            const coverageContent = await contentProvider.readFileOrNull(fullPath);
+            if (coverageContent !== null) {
+              coverageData = parseCoverageFile(coveragePath, coverageContent);
+              if (coverageData) {
+                config.logger?.log(
+                  `[StructureNode] Coverage found: ${coveragePath} ` +
+                    `(${coverageData.format}, ${coverageData.coveragePercent.toFixed(1)}% coverage, ${coverageData.files.length} files)`,
+                );
+                break; // Use first valid coverage artifact found
+              }
+            }
+          } catch {
+            // Coverage artifact not readable — not critical
+          }
+        }
 
         return {
           rootDirectory,
           repoStructure,
+          coverageData,
           currentPhase: 'discover',
           startTime: state.startTime || new Date(),
         };

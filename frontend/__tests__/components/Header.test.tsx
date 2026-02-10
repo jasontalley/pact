@@ -36,11 +36,6 @@ describe('Header', () => {
       // Verifies at least one Dashboard navigation link exists for user access to dashboard view
       expect(dashboardLinks.length).toBeGreaterThanOrEqual(1);
 
-      // Canvas links for accessing the intent canvas visualization
-      const canvasLinks = screen.getAllByRole('link', { name: /canvas/i });
-      // Verifies at least one Canvas navigation link exists for user access to canvas view
-      expect(canvasLinks.length).toBeGreaterThanOrEqual(1);
-
       // Atoms links for accessing the atoms management list
       const atomsLinks = screen.getAllByRole('link', { name: /atoms/i });
       // Verifies at least one Atoms navigation link exists for user access to atoms list view
