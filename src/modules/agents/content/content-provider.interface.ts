@@ -70,7 +70,7 @@ export interface ContentProvider {
   /**
    * Provider type identifier
    */
-  readonly providerType: 'filesystem' | 'pre-read' | 'hybrid';
+  readonly providerType: 'filesystem' | 'pre-read' | 'hybrid' | 'github';
 
   /**
    * List files in a directory

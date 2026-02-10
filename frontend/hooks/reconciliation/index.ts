@@ -12,4 +12,6 @@ export {
   useSubmitReview,
   useApplyRecommendations,
   useCreateChangeSetFromRun,
+  useStartPreReadReconciliation,
+  useStartGitHubReconciliation,
 } from './use-reconciliation';

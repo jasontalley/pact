@@ -158,7 +158,7 @@ describe('ReconciliationController', () => {
     // =======================================================================
 
     describe('GET runs/:runId/pending', () => {
-      it('should call reconciliationService.getPendingReview with the runId', () => {
+      it('should call reconciliationService.getPendingReview with the runId', async () => {
         const mockPayload = {
           summary: { totalAtoms: 5, passCount: 3, failCount: 2, qualityThreshold: 80 },
           pendingAtoms: [
@@ -173,9 +173,9 @@ describe('ReconciliationController', () => {
           ],
           pendingMolecules: [],
         };
-        mockReconciliationService.getPendingReview.mockReturnValue(mockPayload);
+        mockReconciliationService.getPendingReview.mockResolvedValue(mockPayload);
 
-        const result = controller.getPendingReview('REC-abc12345');
+        const result = await controller.getPendingReview('REC-abc12345');
 
         expect(mockReconciliationService.getPendingReview).toHaveBeenCalledWith('REC-abc12345');
         expect(result.summary.totalAtoms).toBe(5);
@@ -286,7 +286,7 @@ describe('ReconciliationController', () => {
     // =======================================================================
 
     describe('GET runs', () => {
-      it('should call reconciliationService.listActiveRuns and return the list', () => {
+      it('should call reconciliationService.listActiveRuns and return the list', async () => {
         const mockRuns = [
           {
             runId: 'REC-001',
@@ -301,9 +301,9 @@ describe('ReconciliationController', () => {
             startTime: new Date('2026-01-16'),
           },
         ];
-        mockReconciliationService.listActiveRuns.mockReturnValue(mockRuns);
+        mockReconciliationService.listActiveRuns.mockResolvedValue(mockRuns);
 
-        const result = controller.listRuns();
+        const result = await controller.listRuns();
 
         expect(mockReconciliationService.listActiveRuns).toHaveBeenCalled();
         expect(result).toHaveLength(2);
@@ -311,10 +311,10 @@ describe('ReconciliationController', () => {
         expect(result[1].status).toBe('interrupted');
       });
 
-      it('should return empty array when no active runs', () => {
-        mockReconciliationService.listActiveRuns.mockReturnValue([]);
+      it('should return empty array when no active runs', async () => {
+        mockReconciliationService.listActiveRuns.mockResolvedValue([]);
 
-        const result = controller.listRuns();
+        const result = await controller.listRuns();
 
         expect(result).toEqual([]);
       });

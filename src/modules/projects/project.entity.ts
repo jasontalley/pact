@@ -27,6 +27,26 @@ export interface DriftPolicies {
 }
 
 /**
+ * GitHub integration configuration
+ */
+export interface GitHubConfig {
+  /** GitHub organization or user */
+  owner?: string;
+  /** Repository name */
+  repo?: string;
+  /** Personal Access Token (encrypted at rest in production) */
+  pat?: string;
+  /** Whether a PAT has been set (for safe serialization without exposing the value) */
+  patSet?: boolean;
+  /** Default branch for reconciliation (defaults to integrationTarget) */
+  defaultBranch?: string;
+  /** Whether GitHub integration is active */
+  enabled?: boolean;
+  /** ISO timestamp of last successful connectivity test */
+  lastTestedAt?: string;
+}
+
+/**
  * Project settings interface for extensible configuration
  */
 export interface ProjectSettings {
@@ -45,6 +65,8 @@ export interface ProjectSettings {
   driftPolicies?: DriftPolicies;
   /** Path to the repository to analyze (inside the container) */
   repositoryPath?: string;
+  /** GitHub integration configuration */
+  github?: GitHubConfig;
   /** Custom metadata for project-specific needs */
   [key: string]: unknown;
 }

@@ -22,6 +22,8 @@ export interface NodeConfig {
   logger?: Logger;
   /** Content provider for filesystem abstraction (optional for backward compatibility) */
   contentProvider?: ContentProvider;
+  /** Per-run content provider overrides, keyed by runId (for pre-read mode) */
+  contentProviderOverrides?: Map<string, ContentProvider>;
   /** Write provider for file modifications (optional, used by apply service) */
   writeProvider?: WriteProvider;
   /** Cancellation registry for cooperative cancellation of long-running operations */

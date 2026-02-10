@@ -50,7 +50,10 @@ export interface ContextNodeOptions {
 /**
  * Get or create ContentProvider from config
  */
-function getContentProvider(config: NodeConfig, basePath?: string): ContentProvider {
+function getContentProvider(config: NodeConfig, runId?: string, basePath?: string): ContentProvider {
+  if (runId && config.contentProviderOverrides?.has(runId)) {
+    return config.contentProviderOverrides.get(runId)!;
+  }
   return config.contentProvider || new FilesystemContentProvider(basePath);
 }
 
@@ -285,7 +288,7 @@ export function createContextNode(options: ContextNodeOptions = {}) {
       );
 
       // Get ContentProvider for non-fixture mode file operations
-      const contentProvider = getContentProvider(config, rootDirectory);
+      const contentProvider = getContentProvider(config, state.runId, rootDirectory);
 
       // Build documentation index if requested (skip in fixture mode - use ContentProvider)
       let documentationIndex: DocChunk[] | null = null;
@@ -303,9 +306,12 @@ export function createContextNode(options: ContextNodeOptions = {}) {
         config.logger?.log('[ContextNode] Fixture mode: skipping documentation index');
       }
 
-      // Check if tool is available (not in fixture mode - no filesystem access)
+      // Pre-read mode: a per-run ContentProvider override exists — skip filesystem tools
+      const hasPreReadOverride = !!(state.runId && config.contentProviderOverrides?.has(state.runId));
+
+      // Check if tool is available (not in fixture mode or pre-read mode - no filesystem access)
       const hasTestAnalysisTool =
-        !isFixtureMode && useTool && config.toolRegistry.hasTool('get_test_analysis');
+        !isFixtureMode && !hasPreReadOverride && useTool && config.toolRegistry.hasTool('get_test_analysis');
       const contextBuilderService = isFixtureMode ? undefined : options.contextBuilderService;
       const contextPerTest = new Map<string, TestAnalysis>();
       let processedCount = 0;

@@ -45,11 +45,18 @@ import {
 import { ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import {
+  useRepositoryUploadStore,
+  browseAndReadDirectory,
+} from '@/stores/repository-upload';
+import {
   useStartReconciliation,
+  useStartPreReadReconciliation,
+  useStartGitHubReconciliation,
   useSubmitReview,
   useApplyRecommendations,
   useCreateChangeSetFromRun,
 } from '@/hooks/reconciliation';
+import { repositoryAdminApi } from '@/lib/api/repository';
 import type {
   StartReconciliationDto,
   ReconciliationMode,
@@ -60,6 +67,7 @@ import type {
   ReconciliationResult,
   AtomDecision,
   MoleculeDecision,
+  PreReadPayload,
 } from '@/types/reconciliation';
 
 interface ReconciliationWizardProps {
@@ -380,10 +388,38 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
 
   const [isCancelling, setIsCancelling] = useState(false);
 
+  // Source mode: 'server' = filesystem on server, 'browser' = upload from browser, 'github' = clone from GitHub
+  type SourceMode = 'server' | 'browser' | 'github';
+  const [sourceMode, setSourceMode] = useState<SourceMode>('browser');
+  const [githubBranch, setGithubBranch] = useState('');
+  const [githubCommitSha, setGithubCommitSha] = useState('');
+  const [githubConfigured, setGithubConfigured] = useState(false);
+  const [githubRepoLabel, setGithubRepoLabel] = useState('');
+
+  // Shared upload store (populated from Settings page or wizard browse button)
+  const uploadedFiles = useRepositoryUploadStore((s) => s.fileContents);
+  const uploadedManifest = useRepositoryUploadStore((s) => s.manifest);
+  const uploadedDirectoryName = useRepositoryUploadStore((s) => s.directoryName);
+  const isReadingFiles = useRepositoryUploadStore((s) => s.isReading);
+  const uploadSummary = useRepositoryUploadStore((s) => s.summary);
+
   const startMutation = useStartReconciliation();
+  const startPreReadMutation = useStartPreReadReconciliation();
+  const startGitHubMutation = useStartGitHubReconciliation();
   const submitReviewMutation = useSubmitReview();
   const applyMutation = useApplyRecommendations();
   const createChangeSetMutation = useCreateChangeSetFromRun();
+
+  // Load GitHub config status on mount
+  useEffect(() => {
+    repositoryAdminApi.getGitHubConfig().then((cfg) => {
+      if (cfg.owner && cfg.repo && cfg.patSet) {
+        setGithubConfigured(true);
+        setGithubRepoLabel(`${cfg.owner}/${cfg.repo}`);
+        if (cfg.defaultBranch) setGithubBranch(cfg.defaultBranch);
+      }
+    }).catch(() => { /* GitHub not configured, that's fine */ });
+  }, []);
 
   const hasAvailableProvider = providers?.availableCount ? providers.availableCount > 0 : false;
   const canStart = hasAvailableProvider && !isDailyBudgetExceeded;
@@ -488,20 +524,46 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
     }
   };
 
+  // Read files from a directory using shared store + File System Access API
+  const handleBrowseDirectory = async () => {
+    try {
+      const { directoryName, fileCount } = await browseAndReadDirectory();
+      toast.success(`Read ${fileCount} files from "${directoryName}"`);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      toast.error(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   // Handle start analysis — returns immediately, progress via WebSocket
   const handleStartAnalysis = () => {
     setStep('analyzing');
     setProgressPhase('');
     setProgressPercent(0);
     setProgressMessage('Initializing...');
-    startMutation.mutate(config, {
-      onSuccess: (data: AnalysisStartResult) => {
-        setRunId(data.runId);
-      },
-      onError: () => {
-        setStep('config');
-      },
-    });
+
+    const onSuccess = (data: AnalysisStartResult) => { setRunId(data.runId); };
+    const onError = () => { setStep('config'); };
+
+    if (sourceMode === 'github') {
+      startGitHubMutation.mutate(
+        {
+          branch: githubBranch || undefined,
+          commitSha: githubCommitSha || undefined,
+        },
+        { onSuccess, onError },
+      );
+    } else if (sourceMode === 'browser' && uploadedFiles && uploadedManifest && uploadedDirectoryName) {
+      const payload: PreReadPayload = {
+        rootDirectory: uploadedDirectoryName,
+        manifest: uploadedManifest,
+        fileContents: uploadedFiles,
+        options: config.options,
+      };
+      startPreReadMutation.mutate(payload, { onSuccess, onError });
+    } else {
+      startMutation.mutate(config, { onSuccess, onError });
+    }
   };
 
   // Initialize review decisions (auto-approve passing atoms)
@@ -730,6 +792,95 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
           {/* Step: Config */}
           {step === 'config' && (
             <div className="space-y-4">
+              {/* Source Mode */}
+              <div className="space-y-2">
+                <Label>Repository Source</Label>
+                <Select
+                  value={sourceMode}
+                  onValueChange={(value) => setSourceMode(value as SourceMode)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="browser">
+                      Upload from Browser — read files from your machine
+                    </SelectItem>
+                    <SelectItem value="server">
+                      Server Filesystem — read from mounted volume
+                    </SelectItem>
+                    {githubConfigured && (
+                      <SelectItem value="github">
+                        GitHub — clone from {githubRepoLabel}
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* GitHub Config (github mode) */}
+              {sourceMode === 'github' && (
+                <Card>
+                  <CardContent className="pt-4 space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Repository: <strong>{githubRepoLabel}</strong>
+                    </p>
+                    <div className="space-y-2">
+                      <Label htmlFor="github-branch-wizard">Branch</Label>
+                      <Input
+                        id="github-branch-wizard"
+                        placeholder="main"
+                        value={githubBranch}
+                        onChange={(e) => setGithubBranch(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="github-sha-wizard">Commit SHA (optional)</Label>
+                      <Input
+                        id="github-sha-wizard"
+                        placeholder="Leave blank for latest on branch"
+                        value={githubCommitSha}
+                        onChange={(e) => setGithubCommitSha(e.target.value)}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Directory Picker (browser mode) */}
+              {sourceMode === 'browser' && (
+                <Card>
+                  <CardContent className="pt-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <Button
+                        variant="outline"
+                        onClick={handleBrowseDirectory}
+                        disabled={isReadingFiles}
+                      >
+                        {isReadingFiles ? 'Reading files...' : uploadedFiles ? 'Re-scan Directory' : 'Browse Repository'}
+                      </Button>
+                      {uploadSummary && (
+                        <p className="text-sm text-muted-foreground">
+                          {uploadedDirectoryName && <code className="font-mono mr-2">{uploadedDirectoryName}</code>}
+                          {uploadSummary}
+                        </p>
+                      )}
+                    </div>
+                    {!uploadedFiles && !uploadedManifest && (
+                      <p className="text-xs text-muted-foreground">
+                        Select your project folder. Files will be read in your browser and sent to the backend for analysis.
+                        Excludes node_modules, .git, dist, and other build artifacts.
+                      </p>
+                    )}
+                    {!uploadedFiles && uploadedManifest && (
+                      <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                        File contents were cleared after page refresh. Click &quot;Browse Repository&quot; to reload.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Mode Selection */}
               <div className="space-y-2">
                 <Label>Analysis Mode</Label>
@@ -997,6 +1148,11 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
                     : 'Daily budget limit reached. Try again tomorrow or use local models.'}
                 </div>
               )}
+              {sourceMode === 'browser' && !uploadedFiles && canStart && (
+                <div className="p-3 bg-yellow-50 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200 rounded-lg text-sm">
+                  No repository loaded. Use the &quot;Browse Repository&quot; button above to select your project folder.
+                </div>
+              )}
             </div>
           )}
 
@@ -1227,9 +1383,16 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
             {step === 'config' && (
               <Button
                 onClick={handleStartAnalysis}
-                disabled={!canStart || startMutation.isPending}
+                disabled={
+                  !canStart ||
+                  startMutation.isPending ||
+                  startPreReadMutation.isPending ||
+                  (sourceMode === 'browser' && !uploadedFiles)
+                }
               >
-                {startMutation.isPending ? 'Starting...' : 'Start Analysis'}
+                {startMutation.isPending || startPreReadMutation.isPending
+                  ? 'Starting...'
+                  : 'Start Analysis'}
               </Button>
             )}
 

@@ -1,7 +1,7 @@
 # Pact Agents: Comprehensive Overview
 
-**Last Updated**: 2026-02-05
-**Status**: Phases 12-17 Complete, 25/25 Interview Golden Tests Passing, 14/15 Reconciliation Golden Tests Passing
+**Last Updated**: 2026-02-09
+**Status**: Phases 12-20 Complete, 25/25 Interview Golden Tests Passing, 14/15 Reconciliation Golden Tests Passing
 
 ## Executive Summary
 
@@ -31,10 +31,13 @@ Pact's agent system uses **LangGraph state machines** to bridge the gap between 
 - Stochastic tests measure variance (precision, recall, F1, consistency)
 - Golden suite + property tests + cost/latency budget tests
 
-**Recent Enhancements** (Phases 15-17):
+**Recent Enhancements** (Phases 15-20):
 - **Pact Main Governance** (Phase 15): Proposed → draft → committed → promoted to Main
 - **Drift Management** (Phase 16): 4 drift types, CI attestation, exception lanes, convergence policies
 - **Local/Remote Split** (Phase 17): ContentProvider abstraction, Client SDK, pre-read API, minimal local state
+- **CI Policy & MCP Tools** (Phase 18): `suggest_atom`, `get_implementable_atoms`, CI gate for proposed atoms
+- **Interview Enhancements** (Phase 19): Answer classification, scope-bounding, compression scoring
+- **GitHub Integration** (Phase 20): GitHubContentProvider (shallow clone), API key auth, MCP `trigger_reconciliation` / `get_reconciliation_status` tools, Batch API infrastructure
 
 ## Agent Architectures
 
@@ -255,6 +258,7 @@ proposed → draft → committed → superseded
 **Implementations**:
 - **FilesystemContentProvider**: Co-located deployment (direct fs access)
 - **PreReadContentProvider**: Remote deployment (client submits file content via API)
+- **GitHubContentProvider**: Clone from GitHub via PAT, delegate to FilesystemContentProvider (Phase 20)
 - **WriteProvider**: For apply service's @atom injection
 
 **Deployment Models**:
@@ -263,7 +267,10 @@ proposed → draft → committed → superseded
 | A: Co-located | Same machine | Same machine | FilesystemContentProvider | Canonical if CI-attested |
 | B: Local Client + Remote | VSCode ext / CLI | Remote server | Pre-read API | Local = plausible |
 | C: CI/CD Pipeline | GitHub Action | Remote server | Pre-read API | Canonical (CI-attested) |
-| D: PactHub (future) | Multiple locals | Shared remote | CI pipelines | Canonical via CI |
+| D: GitHub Clone | Dashboard / CLI / MCP | Pact server | GitHubContentProvider | Canonical (default branch) |
+| E: PactHub (future) | Multiple locals | Shared remote | CI pipelines | Canonical via CI |
+
+**Model D** is the primary production model: Pact clones the configured GitHub repository at the default branch (or a specific commit) and reconciles against it. This is the canonical reconciliation path — atoms are only fully realized against the default branch.
 
 ### Client SDK (@pact/client-sdk)
 

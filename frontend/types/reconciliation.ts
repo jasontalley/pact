@@ -310,15 +310,23 @@ export interface ActiveRun {
  * Run details
  */
 export interface RunDetails {
+  id?: string;
   runId: string;
-  threadId: string;
+  threadId?: string | null;
   status: string;
+  /** ISO string of run start time */
   startTime: string;
+  /** ISO string alias (backend sends both) */
+  createdAt?: string;
+  completedAt?: string | null;
   rootDirectory: string;
   mode: ReconciliationMode;
+  /** Backend alias */
+  reconciliationMode?: ReconciliationMode;
   options: ReconciliationOptions;
   summary?: ReconciliationSummary;
   metrics?: ReconciliationMetrics;
+  errorMessage?: string | null;
 }
 
 /**
@@ -391,4 +399,20 @@ export interface ApplyResult {
 export interface ApplyRequest {
   selections?: string[];
   injectAnnotations?: boolean;
+}
+
+/**
+ * Pre-read content payload for browser-based reconciliation.
+ * Frontend reads files from user's machine and sends them to the backend.
+ */
+export interface PreReadPayload {
+  rootDirectory: string;
+  manifest: {
+    files: string[];
+    testFiles: string[];
+    sourceFiles: string[];
+  };
+  fileContents: Record<string, string>;
+  commitHash?: string;
+  options?: ReconciliationOptions;
 }

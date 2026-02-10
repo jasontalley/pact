@@ -243,6 +243,45 @@ export async function getAtomVersionHistory(atomId: string): Promise<{
   return request(`/atoms/${atomId}/versions`);
 }
 
+// ---------- Reconciliation ----------
+
+export interface ReconciliationRunStart {
+  runId: string;
+  threadId: string;
+  completed: boolean;
+}
+
+export interface ReconciliationRunStatus {
+  runId: string;
+  status: string | null;
+}
+
+export interface ReconciliationRunSummary {
+  runId: string;
+  threadId: string;
+  status: string;
+  startTime: string;
+}
+
+export async function triggerReconciliation(params: {
+  commitSha: string;
+  branch: string;
+  repo?: string;
+}): Promise<ReconciliationRunStart> {
+  return request<ReconciliationRunStart>('/agents/reconciliation/start/github', {
+    method: 'POST',
+    body: params,
+  });
+}
+
+export async function getReconciliationRunStatus(runId: string): Promise<ReconciliationRunStatus> {
+  return request<ReconciliationRunStatus>(`/agents/reconciliation/runs/${runId}/status`);
+}
+
+export async function listReconciliationRuns(): Promise<ReconciliationRunSummary[]> {
+  return request<ReconciliationRunSummary[]>('/agents/reconciliation/runs');
+}
+
 // ---------- Conflicts ----------
 
 export interface ConflictData {

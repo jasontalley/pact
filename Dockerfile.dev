@@ -2,8 +2,8 @@ FROM node:24-slim
 
 WORKDIR /app
 
-# Install procps for NestJS hot-reload (needs 'ps' command)
-RUN apt-get update && apt-get install -y procps && rm -rf /var/lib/apt/lists/*
+# Install procps for NestJS hot-reload (needs 'ps' command) and git for GitHub integration
+RUN apt-get update && apt-get install -y procps git && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
 COPY package*.json ./

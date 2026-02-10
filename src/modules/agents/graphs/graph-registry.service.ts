@@ -87,6 +87,7 @@ export class GraphRegistryService implements OnModuleInit {
       toolRegistry: this.toolRegistry,
       logger: this.logger,
       contentProvider: contentProvider || new FilesystemContentProvider(),
+      contentProviderOverrides: new Map(),
       writeProvider: writeProvider || new FilesystemWriteProvider(),
       cancellationRegistry: this.cancellationRegistry,
     };

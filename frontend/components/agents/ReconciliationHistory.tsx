@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -112,6 +113,7 @@ export function ReconciliationHistory({
   onOpenChange,
   onRecovered,
 }: ReconciliationHistoryProps) {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [selectedRun, setSelectedRun] = useState<RecoverableRun | null>(null);
 
@@ -131,8 +133,11 @@ export function ReconciliationHistory({
     onSuccess: (result) => {
       toast.success(result.message);
       queryClient.invalidateQueries({ queryKey: ['recoverable-runs'] });
+      queryClient.invalidateQueries({ queryKey: ['reconciliation'] });
       onRecovered?.(result.runId);
       onOpenChange?.(false);
+      // Navigate to the run detail page so user can review recommendations
+      router.push(`/reconciliation/${result.runId}`);
     },
     onError: (error: Error) => {
       toast.error(`Failed to recover run: ${error.message}`);

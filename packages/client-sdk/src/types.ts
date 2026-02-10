@@ -372,6 +372,19 @@ export interface LocalReconciliationReport {
 }
 
 // ============================================================================
+// GitHub Trigger Types
+// ============================================================================
+
+export interface GitHubTriggerParams {
+  /** Git commit SHA to reconcile */
+  commitSha: string;
+  /** Branch name */
+  branch: string;
+  /** Optional repo override (owner/repo) */
+  repo?: string;
+}
+
+// ============================================================================
 // CI Attestation Types
 // ============================================================================
 

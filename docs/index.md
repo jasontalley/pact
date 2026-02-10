@@ -1,8 +1,8 @@
 # Pact System Documentation
 
-**Version**: 4.0
-**Last Updated**: 2026-02-02
-**Status**: Phase 5 (Reconciliation Agent) ~80% Complete
+**Version**: 5.0
+**Last Updated**: 2026-02-09
+**Status**: v0.2.0 — GitHub Integration, API Keys, MCP Reconciliation Tools
 
 ---
 
@@ -53,8 +53,13 @@ Pact introduces:
 **Phase 3.6**: LangGraph ReAct Agent Architecture ✅
 **Phase 3.7**: Admin Configuration UI ✅
 **Phase 4**: Molecules (Intent Composition) ✅
-**Phase 5**: Reconciliation Agent ⏳ (~80% Complete)
-**Phase 6**: Reconciliation Agent Reliability & UX ⏳
+**Phase 5**: Reconciliation Agent ✅
+**Phase 6**: Reconciliation Agent Reliability & UX ✅
+**Phase 8-13**: Foundation, Visibility, MCP, Conversation, Polish, Agent Testing ✅
+**Phase 15-17**: Governance, Drift, Local/Remote Split ✅
+**Phase 18**: CI Policy, Agent MCP Tools ✅
+**Phase 19**: Interview Agent Enhancements ✅
+**Phase 20**: Batch API, GitHub Integration, API Keys ✅
 
 **Core Features:**
 - ✅ Development infrastructure (Docker, NestJS, PostgreSQL)
@@ -93,8 +98,20 @@ Pact introduces:
 - ✅ UI wizard: config → analyzing → review → apply → complete
 - ✅ Persistence: `reconciliation_runs`, `atom_recommendations`, `test_records`, `molecule_recommendations`
 - ✅ Path filtering with glob pattern support
-- ⏳ Coupling metrics dashboard
-- ⏳ Interview/molecule creation agent
+- ✅ Coupling metrics dashboard
+- ✅ Interview agent (multi-turn, 25/25 golden tests passing)
+
+**GitHub Integration & API Keys (v0.2.0):**
+- ✅ GitHub repo configuration stored in ProjectSettings JSONB (owner, repo, PAT, default branch)
+- ✅ GitHubContentProvider: shallow clone to temp dir, delegate to FilesystemContentProvider
+- ✅ GitHub connectivity testing via `git ls-remote`
+- ✅ API key infrastructure: SHA-256 hashed keys, `pact_` prefix, NestJS guard
+- ✅ Dashboard trigger: ReconciliationWizard "GitHub" source mode
+- ✅ CI/CLI webhook: `POST /agents/reconciliation/hooks/github/push` with `@RequireApiKey()`
+- ✅ MCP tools: `trigger_reconciliation`, `get_reconciliation_status` (12 tools total)
+- ✅ Client SDK: `triggerReconciliation()` method
+- ✅ PAT security: sanitized in all error messages, removed from git remote after clone
+- ✅ Docker: `git` installed in both dev and production images
 
 ---
 
@@ -179,10 +196,11 @@ Ideas (mutable)
 ### Technology Stack
 
 - **Backend**: NestJS + TypeScript
-- **Database**: PostgreSQL (21 tables: 13 core + 4 reconciliation + 2 LLM tracking + 2 admin config)
+- **Database**: PostgreSQL (21+ tables: core + reconciliation + LLM tracking + admin config + auth)
 - **Frontend**: Next.js 16 + React 19, @xyflow/react canvas, shadcn/ui, React Query, Zustand
-- **Infrastructure**: Docker + Docker Compose
-- **AI/Agents**: LangGraph (state machines), Multi-provider LLM (OpenAI, Anthropic, Ollama), Model Context Protocol (MCP)
+- **Infrastructure**: Docker + Docker Compose, git (for GitHub clone operations)
+- **AI/Agents**: LangGraph (state machines), Multi-provider LLM (OpenAI, Anthropic, Ollama), Model Context Protocol (MCP, 12 tools)
+- **Integration**: GitHub (PAT-based clone), API key auth for CLI/CI, Client SDK (`@pact/client-sdk`)
 - **Testing**: Jest (unit), Vitest (frontend), Playwright (E2E), Supertest (API)
 
 ---
@@ -570,30 +588,32 @@ it('processes payment securely using TLS 1.3', () => {
 
 **Status**: ⏳ ~80% Complete
 
-### Phase 6: Reconciliation Agent Reliability & UX ⏳
+### Phase 6: Reconciliation Agent Reliability & UX ✅
 
-**Goal**: Polish reconciliation agent for production reliability
+**Status**: ✅ Complete — Error recovery, progress streaming, scheduling, path filtering all implemented.
 
-**Deliverables**:
+### Phases 8-20: Foundation through GitHub Integration ✅
 
-- [ ] Decoupled test detection (test refs non-existent atom)
-- [ ] Atom→code file coupling tracking
-- [ ] Reconciliation scheduling (cron/CI hook)
-- [ ] Comprehensive test coverage for all nodes
-- [ ] Error recovery and retry mechanisms
-- [ ] Progress streaming to UI
+See individual implementation checklists for details. Key milestones:
 
-**Status**: ⏳ Pending
+- **Phase 8-9**: Conflicts, epistemic metrics, coupling health dashboard
+- **Phase 10**: MCP server (12 tools, SSE + stdio transport)
+- **Phase 11-12**: Interview agent, change sets, scheduling, trends
+- **Phase 13**: Agent evaluation framework (golden tests, rubric scoring, stochastic tests)
+- **Phase 15**: Pact Main governance (proposed → committed → promoted)
+- **Phase 16**: Drift management (4 types, CI attestation, convergence policies)
+- **Phase 17**: Local/remote split (ContentProvider abstraction, Client SDK, pre-read API)
+- **Phase 18**: CI policy, agent MCP tools (suggest_atom, get_implementable_atoms)
+- **Phase 19**: Interview agent enhancements (answer classification, scope-bounding, compression scoring)
+- **Phase 20**: Batch API, GitHub integration, API key infrastructure
 
-### Future Phases: System Evolution
+### Future: System Evolution
 
 **Planned Enhancements**:
 
-- MCP Server for external coding agents (Claude, Cursor)
-- Persistent Pact-Chat with conversation compaction
-- Interview agent for multi-turn molecule creation
-- Cross-commit dependencies
-- External integrations (Git, CI/CD)
+- Cloud deployment (Docker → managed cloud service)
+- CLI wrapper for client SDK (terminal/CI usage)
+- GitHub Actions integration (auto-reconcile on push to default branch)
 - Multi-user collaboration
 
 ---

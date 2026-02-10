@@ -107,7 +107,10 @@ export interface DiscoverFullscanNodeOptions {
 /**
  * Get or create ContentProvider from config
  */
-function getContentProvider(config: NodeConfig, basePath?: string): ContentProvider {
+function getContentProvider(config: NodeConfig, runId?: string, basePath?: string): ContentProvider {
+  if (runId && config.contentProviderOverrides?.has(runId)) {
+    return config.contentProviderOverrides.get(runId)!;
+  }
   return config.contentProvider || new FilesystemContentProvider(basePath);
 }
 
@@ -325,11 +328,15 @@ export function createDiscoverFullscanNode(options: DiscoverFullscanNodeOptions 
       const isFixtureMode =
         state.fixtureMode || !!(fixtureFiles && Object.keys(fixtureFiles).length > 0);
 
-      // Try to use the tool if available and enabled (only if no filters and NOT fixture mode)
+      // Pre-read mode: a per-run ContentProvider override exists — skip filesystem tools
+      const hasPreReadOverride = !!(state.runId && config.contentProviderOverrides?.has(state.runId));
+
+      // Try to use the tool if available and enabled (only if no filters, NOT fixture mode, NOT pre-read)
       if (
         useTool &&
         !hasFilters &&
         !isFixtureMode &&
+        !hasPreReadOverride &&
         config.toolRegistry.hasTool('discover_orphans_fullscan')
       ) {
         try {
@@ -388,7 +395,7 @@ export function createDiscoverFullscanNode(options: DiscoverFullscanNodeOptions 
       }
 
       // Get ContentProvider for non-fixture mode file operations
-      const contentProvider = getContentProvider(config, rootDirectory);
+      const contentProvider = getContentProvider(config, state.runId, rootDirectory);
 
       const allOrphanTests: OrphanTestInfo[] = [];
 

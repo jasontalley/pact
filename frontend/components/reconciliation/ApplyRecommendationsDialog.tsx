@@ -34,6 +34,8 @@ interface ApplyRecommendationsDialogProps {
   moleculeDecisions: Map<string, 'approve' | 'reject'>;
   onApply: (request: ApplyRequest) => void;
   isApplying?: boolean;
+  /** Whether this run was uploaded from the browser (files not on server) */
+  isPreReadRun?: boolean;
 }
 
 /**
@@ -48,6 +50,7 @@ export function ApplyRecommendationsDialog({
   moleculeDecisions,
   onApply,
   isApplying = false,
+  isPreReadRun = false,
 }: ApplyRecommendationsDialogProps) {
   const [includeMolecules, setIncludeMolecules] = useState(true);
   const [injectAnnotations, setInjectAnnotations] = useState(false);
@@ -96,7 +99,7 @@ export function ApplyRecommendationsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[700px]">
         <DialogHeader>
           <DialogTitle>Apply Recommendations</DialogTitle>
           <DialogDescription>
@@ -179,16 +182,27 @@ export function ApplyRecommendationsDialog({
               </Label>
             </div>
 
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="inject-annotations"
-                checked={injectAnnotations}
-                onCheckedChange={(checked) => setInjectAnnotations(checked === true)}
-              />
-              <Label htmlFor="inject-annotations" className="text-sm flex items-center gap-2">
-                <FileCode className="h-4 w-4" />
-                Inject @atom annotations into test files
-              </Label>
+            <div className="space-y-1">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="inject-annotations"
+                  checked={injectAnnotations}
+                  onCheckedChange={(checked) => setInjectAnnotations(checked === true)}
+                  disabled={isPreReadRun}
+                />
+                <Label
+                  htmlFor="inject-annotations"
+                  className={`text-sm flex items-center gap-2 ${isPreReadRun ? 'text-muted-foreground' : ''}`}
+                >
+                  <FileCode className="h-4 w-4" />
+                  Inject @atom annotations into test files
+                </Label>
+              </div>
+              {isPreReadRun && (
+                <p className="text-xs text-muted-foreground ml-6">
+                  Not available for browser-uploaded repositories. Add annotations manually.
+                </p>
+              )}
             </div>
           </div>
 
@@ -197,16 +211,16 @@ export function ApplyRecommendationsDialog({
           {/* Preview */}
           <div>
             <h4 className="text-sm font-medium mb-2">What will be created:</h4>
-            <ScrollArea className="h-[150px] border rounded-md p-2">
+            <ScrollArea className="h-[200px] border rounded-md p-3">
               <div className="space-y-2">
                 {approvedAtoms.map((atom) => (
                   <div
                     key={atom.tempId}
-                    className="flex items-center gap-2 text-sm"
+                    className="flex items-start gap-2 text-sm"
                   >
-                    <Zap className="h-3 w-3 text-primary" />
-                    <span className="truncate flex-1">{atom.description}</span>
-                    <Badge variant="outline" className="text-xs">
+                    <Zap className="h-3 w-3 text-primary shrink-0 mt-0.5" />
+                    <span className="flex-1">{atom.description}</span>
+                    <Badge variant="outline" className="text-xs shrink-0">
                       {atom.category}
                     </Badge>
                   </div>
@@ -220,7 +234,7 @@ export function ApplyRecommendationsDialog({
                       <Layers className="h-3 w-3 text-primary" />
                       <span className="truncate flex-1">{mol.name}</span>
                       <Badge variant="outline" className="text-xs">
-                        {mol.atomRecommendationTempIds.length} atoms
+                        {(mol.atomRecommendationTempIds ?? []).length} atoms
                       </Badge>
                     </div>
                   ))}

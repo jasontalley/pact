@@ -103,7 +103,7 @@ function MoleculeCard({ molecule }: { molecule: MoleculeRecommendation }) {
                 Confidence: <span className="font-medium">{Math.round(molecule.confidence * 100)}%</span>
               </span>
               <span>
-                Atoms: <span className="font-medium">{molecule.atomRecommendationTempIds.length}</span>
+                Atoms: <span className="font-medium">{(molecule.atomRecommendationTempIds ?? []).length}</span>
               </span>
             </div>
           </div>
@@ -426,6 +426,7 @@ export default function RunDetailsPage() {
           molecules={recommendations.molecules}
           atomDecisions={decisions}
           moleculeDecisions={new Map()}
+          isPreReadRun={!runDetails?.rootDirectory?.startsWith('/')}
           onApply={(options) => {
             applyMutation.mutate({
               runId,

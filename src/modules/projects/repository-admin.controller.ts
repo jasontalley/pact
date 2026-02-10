@@ -1,8 +1,10 @@
-import { Controller, Get, Put, Post, Body, HttpCode, HttpStatus, Logger } from '@nestjs/common';
+import { Controller, Get, Put, Post, Patch, Body, HttpCode, HttpStatus, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { IsString, IsBoolean, IsOptional } from 'class-validator';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ProjectsService } from './projects.service';
+import { RepositoryConfigService, GitHubTestResult } from './repository-config.service';
 import {
   RepositoryConfigDto,
   UpdateRepositoryConfigDto,
@@ -10,12 +12,27 @@ import {
   ValidatePathResultDto,
 } from './dto/repository-config.dto';
 
+// =============================================================================
+// GitHub DTOs
+// =============================================================================
+
+class UpdateGitHubConfigDto {
+  @IsOptional() @IsString() owner?: string;
+  @IsOptional() @IsString() repo?: string;
+  @IsOptional() @IsString() pat?: string;
+  @IsOptional() @IsString() defaultBranch?: string;
+  @IsOptional() @IsBoolean() enabled?: boolean;
+}
+
 @ApiTags('admin/repository')
 @Controller('admin/repository')
 export class RepositoryAdminController {
   private readonly logger = new Logger(RepositoryAdminController.name);
 
-  constructor(private readonly projectsService: ProjectsService) {}
+  constructor(
+    private readonly projectsService: ProjectsService,
+    private readonly repositoryConfigService: RepositoryConfigService,
+  ) {}
 
   @Get('config')
   @ApiOperation({ summary: 'Get repository configuration' })
@@ -90,5 +107,59 @@ export class RepositoryAdminController {
     }
 
     return result;
+  }
+
+  // ===========================================================================
+  // GitHub Integration
+  // ===========================================================================
+
+  @Get('github')
+  @ApiOperation({ summary: 'Get GitHub integration configuration' })
+  async getGitHubConfig(): Promise<{
+    owner?: string;
+    repo?: string;
+    patSet: boolean;
+    defaultBranch?: string;
+    enabled?: boolean;
+    lastTestedAt?: string;
+  }> {
+    const config = await this.repositoryConfigService.getGitHubConfig();
+    return {
+      owner: config.owner,
+      repo: config.repo,
+      patSet: !!config.patSet,
+      defaultBranch: config.defaultBranch,
+      enabled: config.enabled,
+      lastTestedAt: config.lastTestedAt,
+    };
+  }
+
+  @Patch('github')
+  @ApiOperation({ summary: 'Update GitHub integration configuration' })
+  async updateGitHubConfig(@Body() dto: UpdateGitHubConfigDto): Promise<{
+    owner?: string;
+    repo?: string;
+    patSet: boolean;
+    defaultBranch?: string;
+    enabled?: boolean;
+    lastTestedAt?: string;
+  }> {
+    const result = await this.repositoryConfigService.updateGitHubConfig(dto);
+    this.logger.log(`GitHub config updated: owner=${result.owner}, repo=${result.repo}`);
+    return {
+      owner: result.owner,
+      repo: result.repo,
+      patSet: !!result.patSet,
+      defaultBranch: result.defaultBranch,
+      enabled: result.enabled,
+      lastTestedAt: result.lastTestedAt,
+    };
+  }
+
+  @Post('test-github')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Test GitHub connectivity' })
+  async testGitHub(): Promise<GitHubTestResult> {
+    return this.repositoryConfigService.testGitHubConnection();
   }
 }

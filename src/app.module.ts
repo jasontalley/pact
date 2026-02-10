@@ -22,6 +22,7 @@ import { MetricsModule } from './modules/metrics/metrics.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
 import { CoverageModule } from './modules/coverage/coverage.module';
 import { DriftModule } from './modules/drift/drift.module';
+import { AuthModule } from './common/auth/auth.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { DriftModule } from './modules/drift/drift.module';
     }),
     TypeOrmModule.forRoot(databaseConfig()),
     // Global modules loaded early
+    AuthModule,
     SafetyModule,
     ConfigurationModule,
     GatewaysModule,

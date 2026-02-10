@@ -38,6 +38,8 @@ import { getIntentHistoryTool } from './get-intent-history.tool';
 import { getConflictsTool } from './get-conflicts.tool';
 import { suggestAtomTool } from './suggest-atom.tool';
 import { getImplementableAtomsTool } from './get-implementable-atoms.tool';
+import { triggerReconciliationTool } from './trigger-reconciliation.tool';
+import { getReconciliationStatusTool } from './get-reconciliation-status.tool';
 
 /**
  * All registered MCP tools.
@@ -57,6 +59,9 @@ export const allTools: ToolDefinition[] = [
   getEpistemicStatusTool,
   getIntentHistoryTool,
   getConflictsTool,
+  // Reconciliation tools
+  triggerReconciliationTool,
+  getReconciliationStatusTool,
 ];
 
 /**

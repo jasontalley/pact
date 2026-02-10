@@ -79,7 +79,10 @@ function matchesAnyPattern(filePath: string, patterns: string[]): boolean {
 /**
  * Get or create ContentProvider from config
  */
-function getContentProvider(config: NodeConfig, basePath?: string): ContentProvider {
+function getContentProvider(config: NodeConfig, runId?: string, basePath?: string): ContentProvider {
+  if (runId && config.contentProviderOverrides?.has(runId)) {
+    return config.contentProviderOverrides.get(runId)!;
+  }
   return config.contentProvider || new FilesystemContentProvider(basePath);
 }
 
@@ -136,12 +139,15 @@ export function createStructureNode(options: StructureNodeOptions = {}) {
         } as Partial<ReconciliationGraphStateType>;
       }
 
+      // Pre-read mode: a per-run ContentProvider override exists — skip filesystem tools
+      const hasPreReadOverride = !!(state.runId && config.contentProviderOverrides?.has(state.runId));
+
       config.logger?.log(
-        `[StructureNode] Scanning repository: ${rootDirectory} (useTool=${useTool}, deps=${inputIncludeDeps})`,
+        `[StructureNode] Scanning repository: ${rootDirectory} (useTool=${useTool}, deps=${inputIncludeDeps}, preRead=${hasPreReadOverride})`,
       );
 
-      // Check if tool is available
-      const hasStructureTool = useTool && config.toolRegistry.hasTool('get_repo_structure');
+      // Check if tool is available (skip in pre-read mode — tool uses singleton filesystem provider)
+      const hasStructureTool = useTool && !hasPreReadOverride && config.toolRegistry.hasTool('get_repo_structure');
 
       // Try tool-based structure analysis
       if (hasStructureTool) {
@@ -190,7 +196,7 @@ export function createStructureNode(options: StructureNodeOptions = {}) {
 
       // Fallback: Direct implementation using ContentProvider
       try {
-        const contentProvider = getContentProvider(config, rootDirectory);
+        const contentProvider = getContentProvider(config, state.runId, rootDirectory);
 
         // Use ContentProvider to walk the directory
         const allFiles = await contentProvider.walkDirectory(rootDirectory, {

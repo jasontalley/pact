@@ -11,6 +11,7 @@ import type {
   RecommendationsResult,
   ApplyRequest,
   ApplyResult,
+  PreReadPayload,
 } from '@/types/reconciliation';
 
 /**
@@ -144,11 +145,39 @@ export const reconciliationApi = {
   },
 
   /**
+   * Start reconciliation with pre-read content (browser-uploaded files)
+   */
+  startPreRead: async (data: PreReadPayload): Promise<AnalysisStartResult> => {
+    const response = await apiClient.post<AnalysisStartResult>(
+      '/agents/reconciliation/analyze/pre-read',
+      data,
+      { timeout: RECONCILIATION_TIMEOUT }
+    );
+    return response.data;
+  },
+
+  /**
    * Cancel an active reconciliation run
    */
   cancel: async (runId: string): Promise<{ runId: string; status: string; message: string }> => {
     const response = await apiClient.post<{ runId: string; status: string; message: string }>(
       `/agents/reconciliation/runs/${runId}/cancel`
+    );
+    return response.data;
+  },
+
+  /**
+   * Start reconciliation from GitHub (clones repo on the server)
+   */
+  startFromGitHub: async (data: {
+    commitSha?: string;
+    branch?: string;
+    repo?: string;
+  }): Promise<AnalysisStartResult> => {
+    const response = await apiClient.post<AnalysisStartResult>(
+      '/agents/reconciliation/start/github',
+      data,
+      { timeout: RECONCILIATION_TIMEOUT }
     );
     return response.data;
   },

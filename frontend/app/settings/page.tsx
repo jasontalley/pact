@@ -10,6 +10,7 @@ import {
   FileCode,
   FolderOpen,
   History,
+  Key,
   ChevronRight,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,6 +34,12 @@ const settingsSections: SettingsSection[] = [
     title: 'Repository',
     description: 'Configure the target repository for analysis and reconciliation',
     icon: FolderOpen,
+  },
+  {
+    href: '/settings/api-keys',
+    title: 'API Keys',
+    description: 'Manage API keys for CLI, CI/CD, and external integrations',
+    icon: Key,
   },
   {
     href: '/settings/system',

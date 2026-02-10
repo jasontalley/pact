@@ -4,6 +4,7 @@ import type {
   StartReconciliationDto,
   SubmitReviewDto,
   ApplyRequest,
+  PreReadPayload,
 } from '@/types/reconciliation';
 import { toast } from 'sonner';
 
@@ -123,6 +124,41 @@ export function useStartReconciliation() {
     },
     onError: (error: Error) => {
       toast.error(`Reconciliation failed: ${error.message}`);
+    },
+  });
+}
+
+/**
+ * Hook to start reconciliation with pre-read content (browser-uploaded files)
+ */
+export function useStartPreReadReconciliation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: PreReadPayload) => reconciliationApi.startPreRead(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: reconciliationKeys.runs() });
+    },
+    onError: (error: Error) => {
+      toast.error(`Reconciliation failed: ${error.message}`);
+    },
+  });
+}
+
+/**
+ * Hook to start reconciliation from GitHub
+ */
+export function useStartGitHubReconciliation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: { commitSha?: string; branch?: string; repo?: string }) =>
+      reconciliationApi.startFromGitHub(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: reconciliationKeys.runs() });
+    },
+    onError: (error: Error) => {
+      toast.error(`GitHub reconciliation failed: ${error.message}`);
     },
   });
 }

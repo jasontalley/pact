@@ -47,7 +47,7 @@ import {
 } from './reconciliation.service';
 import { ApplyService, ApplyRequest, ApplyResult } from './apply.service';
 import { CIPolicyService, CIPolicyCheckResult } from './ci-policy.service';
-import { PreReadContentDto, PreReadAnalysisStartResult } from './dto/pre-read-reconciliation.dto';
+import { PreReadContentDto } from './dto/pre-read-reconciliation.dto';
 import {
   ReconciliationSchedulerService,
   ScheduleInfo,
@@ -55,10 +55,26 @@ import {
 } from './reconciliation-scheduler.service';
 import { ReconciliationResult } from './graphs/types/reconciliation-result';
 import { InterruptPayload } from './graphs/nodes/reconciliation/verify.node';
+import { RequireApiKey } from '../../common/auth/api-key.guard';
 
 // =============================================================================
 // DTOs for API
 // =============================================================================
+
+/**
+ * GitHub push/trigger data for reconciliation
+ */
+class GitHubPushDto {
+  @IsString()
+  commitSha: string;
+
+  @IsString()
+  branch: string;
+
+  @IsOptional()
+  @IsString()
+  repo?: string;
+}
 
 /**
  * Delta baseline configuration
@@ -292,8 +308,7 @@ export class ReconciliationController {
   @ApiBody({ type: PreReadContentDto })
   @ApiResponse({
     status: 200,
-    description: 'Reconciliation started with pre-read content',
-    type: PreReadAnalysisStartResult,
+    description: 'Reconciliation started with pre-read content (progress via WebSocket)',
   })
   @ApiResponse({
     status: 400,
@@ -305,9 +320,56 @@ export class ReconciliationController {
   })
   async analyzeWithPreReadContent(
     @Body() dto: PreReadContentDto,
-  ): Promise<PreReadAnalysisStartResult> {
+  ): Promise<AnalysisStartResult> {
     this.logger.log(`POST /agents/reconciliation/analyze/pre-read`);
     return this.reconciliationService.analyzeWithPreReadContent(dto);
+  }
+
+  /**
+   * Start reconciliation by cloning from GitHub.
+   *
+   * Clones the configured GitHub repository at the specified commit/branch,
+   * then runs reconciliation against the clone. The temp directory is
+   * cleaned up automatically when the run completes.
+   *
+   * This endpoint is used from the dashboard UI (no API key required).
+   */
+  @Post('start/github')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Start reconciliation from GitHub',
+    description:
+      'Clone a GitHub repository and run reconciliation. Requires GitHub PAT to be configured.',
+  })
+  async startFromGitHub(
+    @Body() dto: GitHubPushDto,
+  ): Promise<AnalysisStartResult> {
+    this.logger.log(`POST /agents/reconciliation/start/github — branch=${dto.branch}`);
+    return this.reconciliationService.analyzeFromGitHub(dto);
+  }
+
+  /**
+   * Webhook endpoint for CI/CLI-triggered reconciliation.
+   *
+   * Protected by API key authentication. Called by:
+   * - GitHub Actions (on push to default branch)
+   * - pact-cli (manual trigger)
+   * - Custom CI integrations
+   */
+  @Post('hooks/github/push')
+  @HttpCode(HttpStatus.OK)
+  @RequireApiKey()
+  @ApiOperation({
+    summary: 'Trigger reconciliation from CI/CLI (API key required)',
+    description:
+      'Webhook endpoint that triggers reconciliation from GitHub. ' +
+      'Requires Authorization: Bearer pact_<key> header.',
+  })
+  async handleGitHubPush(
+    @Body() dto: GitHubPushDto,
+  ): Promise<AnalysisStartResult> {
+    this.logger.log(`POST /agents/reconciliation/hooks/github/push — branch=${dto.branch}, commit=${dto.commitSha}`);
+    return this.reconciliationService.analyzeFromGitHub(dto);
   }
 
   // ===========================================================================
@@ -331,7 +393,7 @@ export class ReconciliationController {
     status: 404,
     description: 'Run not found or not waiting for review',
   })
-  getPendingReview(@Param('runId') runId: string): InterruptPayload {
+  async getPendingReview(@Param('runId') runId: string): Promise<InterruptPayload> {
     this.logger.log(`GET /agents/reconciliation/runs/${runId}/pending`);
     return this.reconciliationService.getPendingReview(runId);
   }
@@ -449,12 +511,12 @@ export class ReconciliationController {
     status: 200,
     description: 'List of active runs',
   })
-  listRuns(): Array<{
+  async listRuns(): Promise<Array<{
     runId: string;
     threadId: string;
     status: string;
     startTime: Date;
-  }> {
+  }>> {
     this.logger.log(`GET /agents/reconciliation/runs`);
     return this.reconciliationService.listActiveRuns();
   }

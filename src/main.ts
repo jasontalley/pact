@@ -1,6 +1,7 @@
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { spawn } from 'child_process';
+import { json } from 'express';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -8,6 +9,9 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Increase JSON body limit for pre-read reconciliation payloads (file contents)
+  app.use(json({ limit: '50mb' }));
 
   // Enable CORS for frontend
   app.enableCors({

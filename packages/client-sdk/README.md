@@ -166,6 +166,21 @@ interface ReconciliationClient {
 
   // Create governed change set (proposed atoms)
   createChangeSet(runId: string, options: CreateChangeSetOptions): Promise<ChangeSetResult>;
+
+  // Trigger GitHub-based reconciliation (requires API key auth)
+  triggerReconciliation(params: GitHubTriggerParams): Promise<ReconciliationRunStart>;
+}
+
+interface GitHubTriggerParams {
+  commitSha: string;
+  branch: string;
+  repo?: string;  // Override configured repo
+}
+
+interface ReconciliationRunStart {
+  runId: string;
+  threadId: string;
+  completed: boolean;
 }
 
 interface PreReadContentDto {
@@ -449,7 +464,14 @@ The SDK enables four deployment models:
 - **This is the canonical promotion gate** (plausible → true)
 - Drift debt updated only from CI-attested runs
 
-### Model D: PactHub (Future)
+### Model D: GitHub Clone (Primary Production Model)
+- Pact server clones configured GitHub repo via PAT
+- Uses `GitHubContentProvider` (shallow clone → FilesystemContentProvider)
+- Triggered from dashboard UI, CLI (`triggerReconciliation()`), or CI webhook
+- **Canonical reconciliation against the default branch**
+- Atoms are only fully realized against merged code
+
+### Model E: PactHub (Future)
 - Multi-tenant shared Pact server
 - Multiple teams submit CI-attested runs
 - Main state cached locally per developer

@@ -31,6 +31,7 @@ This guide covers deploying Pact in production environments using various deploy
 - **OpenAI API Key** (if using OpenAI as LLM provider)
 - **Anthropic API Key** (if using Claude as LLM provider)
 - **LangSmith API Key** (optional, for tracing and debugging)
+- **GitHub Personal Access Token** (optional, for GitHub-based reconciliation — requires `Contents: Read-only` permission on the target repo)
 
 ### System Requirements
 
@@ -82,7 +83,12 @@ ANTHROPIC_API_KEY=sk-ant-...
 # Application URLs
 NEXT_PUBLIC_API_URL=https://pact.yourdomain.com
 NEXT_PUBLIC_WS_URL=wss://pact.yourdomain.com
+
+# GitHub Integration (optional — can also be configured via Settings UI)
+GITHUB_PAT=github_pat_...  # Fine-grained token with Contents: Read-only
 ```
+
+> **Note**: GitHub configuration (owner, repo, PAT, default branch) can also be set via the Settings UI at `/settings/repository`. DB-stored values take priority over environment variables.
 
 ### Step 3: Start Services
 
@@ -532,12 +538,30 @@ docker run --rm \
 3. **SSL/TLS connections**: Enable `DATABASE_SSL=true` for encrypted connections
 4. **Least privilege**: Database user should only have necessary permissions
 
-### API Key Security
+### LLM API Key Security
 
 1. **Rotate keys regularly**: Rotate LLM API keys every 90 days
 2. **Use separate keys per environment**: Development, staging, production
 3. **Monitor usage**: Set up billing alerts for LLM API usage
 4. **Rate limiting**: Configure rate limits on LLM provider dashboards
+
+### Pact API Key Security
+
+Pact API keys (`pact_<64hex>`) authenticate CLI, CI, and webhook callers.
+
+1. **Keys are stored as SHA-256 hashes** — the raw key is shown only once at creation
+2. **Manage via Settings UI** at `/settings/api-keys` or via `POST /admin/api-keys`
+3. **Revoke compromised keys immediately** via `DELETE /admin/api-keys/:id`
+4. **Use separate keys per integration** (e.g., "CI Pipeline", "Local CLI", "GitHub Webhook")
+5. **Keys grant full API access** — treat them like passwords
+
+### GitHub PAT Security
+
+1. **Use fine-grained tokens** with minimal permissions (`Contents: Read-only` on the target repo)
+2. **PAT is never returned in API responses** — only a `patSet: boolean` flag
+3. **Error messages are sanitized** — PAT is stripped from all log output and error responses
+4. **After clone, the git remote is removed** to prevent PAT leakage from git state
+5. **DB-stored PAT takes priority** over `GITHUB_PAT` env var
 
 ### Application Security
 
@@ -673,5 +697,5 @@ For additional help:
 
 ---
 
-**Document Version**: 0.1.0
-**Last Updated**: 2026-02-06
+**Document Version**: 0.2.0
+**Last Updated**: 2026-02-09

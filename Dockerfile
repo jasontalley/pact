@@ -12,6 +12,8 @@ FROM node:24-alpine
 
 WORKDIR /app
 
+RUN apk add --no-cache git
+
 COPY package*.json ./
 RUN npm ci --only=production --legacy-peer-deps --ignore-scripts
 

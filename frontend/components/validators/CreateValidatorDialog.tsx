@@ -78,7 +78,7 @@ export function CreateValidatorDialog({ atomId, isOpen, onClose }: CreateValidat
     limit: 50,
   });
 
-  const templates = templatesData?.data || [];
+  const templates = templatesData?.items || [];
 
   if (!isOpen) return null;
 

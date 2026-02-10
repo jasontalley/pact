@@ -13,6 +13,7 @@
  * @see docs/implementation-checklist-phase5.md Section 6.2
  */
 
+import * as path from 'path';
 import {
   Injectable,
   Logger,
@@ -191,7 +192,7 @@ export class ApplyService {
 
           // Update recommendation with created atom ID
           await queryRunner.manager.update(
-            'atom_recommendation',
+            AtomRecommendation,
             { id: atomRec.id },
             { atomId: atom.id, status: 'accepted', acceptedAt: new Date() },
           );
@@ -251,7 +252,7 @@ export class ApplyService {
 
           // Update recommendation with created molecule ID
           await queryRunner.manager.update(
-            'molecule_recommendation',
+            MoleculeRecommendation,
             { id: moleculeRec.id },
             {
               moleculeId: molecule.id,
@@ -315,7 +316,7 @@ export class ApplyService {
     if (injectAnnotations && fileModifications.length > 0) {
       for (const mod of fileModifications) {
         try {
-          await this.injectAtomAnnotation(mod);
+          await this.injectAtomAnnotation(mod, run.rootDirectory);
           annotationsInjected++;
 
           operations.push({
@@ -370,7 +371,7 @@ export class ApplyService {
   ): Promise<Atom> {
     // Generate atomId (e.g., "IA-001")
     const atomIdResult = await queryRunner.manager.query(
-      `SELECT COALESCE(MAX(CAST(SUBSTRING(atom_id FROM 4) AS INTEGER)), 0) + 1 as next_id FROM atoms WHERE atom_id LIKE 'IA-%'`,
+      `SELECT COALESCE(MAX(CAST(SUBSTRING("atomId" FROM 4) AS INTEGER)), 0) + 1 as next_id FROM atoms WHERE "atomId" LIKE 'IA-%'`,
     );
     const nextId = atomIdResult[0]?.next_id || 1;
     const atomId = `IA-${String(nextId).padStart(3, '0')}`;
@@ -414,7 +415,7 @@ export class ApplyService {
   ): Promise<Molecule> {
     // Generate moleculeId (e.g., "M-001")
     const moleculeIdResult = await queryRunner.manager.query(
-      `SELECT COALESCE(MAX(CAST(SUBSTRING(molecule_id FROM 3) AS INTEGER)), 0) + 1 as next_id FROM molecules WHERE molecule_id LIKE 'M-%'`,
+      `SELECT COALESCE(MAX(CAST(SUBSTRING("moleculeId" FROM 3) AS INTEGER)), 0) + 1 as next_id FROM molecules WHERE "moleculeId" LIKE 'M-%'`,
     );
     const nextId = moleculeIdResult[0]?.next_id || 1;
     const moleculeId = `M-${String(nextId).padStart(3, '0')}`;
@@ -459,13 +460,27 @@ export class ApplyService {
    * Adds a comment like `// @atom IA-001` before the test function.
    * Uses ContentProvider for reading and WriteProvider for writing.
    */
-  private async injectAtomAnnotation(mod: FileModification): Promise<void> {
+  private async injectAtomAnnotation(mod: FileModification, rootDirectory?: string): Promise<void> {
     const { filePath, atomId, lineNumber } = mod;
 
+    // Resolve relative paths against root directory
+    let resolvedPath: string;
+    if (path.isAbsolute(filePath)) {
+      resolvedPath = filePath;
+    } else if (rootDirectory && path.isAbsolute(rootDirectory)) {
+      resolvedPath = path.resolve(rootDirectory, filePath);
+    } else {
+      // Pre-read (browser upload) run — files aren't on the server filesystem
+      throw new Error(
+        `Cannot inject annotation: file ${filePath} is not accessible on the server. ` +
+        `For browser-uploaded repositories, add annotations manually: // @atom ${atomId}`,
+      );
+    }
+
     // Check file exists and read content
-    const content = await this.contentProvider.readFileOrNull(filePath);
+    const content = await this.contentProvider.readFileOrNull(resolvedPath);
     if (content === null) {
-      throw new Error(`File not found: ${filePath}`);
+      throw new Error(`File not found: ${resolvedPath}`);
     }
 
     const lines = content.split('\n');
@@ -489,8 +504,8 @@ export class ApplyService {
 
     // Insert annotation comment using WriteProvider
     const annotation = `// @atom ${atomId}`;
-    await this.writeProvider.insertLine(filePath, lineNumber, `${indent}${annotation}`);
-    this.logger.log(`Injected @atom ${atomId} annotation in ${filePath}:${lineNumber}`);
+    await this.writeProvider.insertLine(resolvedPath, lineNumber, `${indent}${annotation}`);
+    this.logger.log(`Injected @atom ${atomId} annotation in ${resolvedPath}:${lineNumber}`);
   }
 
   // ========================================
@@ -543,7 +558,7 @@ export class ApplyService {
     try {
       // 1. Generate molecule ID for the change set
       const moleculeIdResult = await queryRunner.manager.query(
-        `SELECT COALESCE(MAX(CAST(SUBSTRING(molecule_id FROM 3) AS INTEGER)), 0) + 1 as next_id FROM molecules WHERE molecule_id LIKE 'M-%'`,
+        `SELECT COALESCE(MAX(CAST(SUBSTRING("moleculeId" FROM 3) AS INTEGER)), 0) + 1 as next_id FROM molecules WHERE "moleculeId" LIKE 'M-%'`,
       );
       const nextMoleculeId = moleculeIdResult[0]?.next_id || 1;
       const moleculeIdStr = `M-${String(nextMoleculeId).padStart(3, '0')}`;
@@ -580,7 +595,7 @@ export class ApplyService {
       for (const atomRec of atomsToApply) {
         // Generate atom ID
         const atomIdResult = await queryRunner.manager.query(
-          `SELECT COALESCE(MAX(CAST(SUBSTRING(atom_id FROM 4) AS INTEGER)), 0) + 1 as next_id FROM atoms WHERE atom_id LIKE 'IA-%'`,
+          `SELECT COALESCE(MAX(CAST(SUBSTRING("atomId" FROM 4) AS INTEGER)), 0) + 1 as next_id FROM atoms WHERE "atomId" LIKE 'IA-%'`,
         );
         const nextAtomId = atomIdResult[0]?.next_id || 1;
         const atomIdStr = `IA-${String(nextAtomId).padStart(3, '0')}`;
@@ -616,7 +631,7 @@ export class ApplyService {
 
         // Update recommendation
         await queryRunner.manager.update(
-          'atom_recommendation',
+          AtomRecommendation,
           { id: atomRec.id },
           { atomId: savedAtom.id, status: 'accepted', acceptedAt: new Date() },
         );
@@ -648,7 +663,7 @@ export class ApplyService {
         await this.createMoleculeFromRecommendation(queryRunner, moleculeRec, atomIds);
 
         await queryRunner.manager.update(
-          'molecule_recommendation',
+          MoleculeRecommendation,
           { id: moleculeRec.id },
           { atomIds, status: 'accepted', acceptedAt: new Date() },
         );

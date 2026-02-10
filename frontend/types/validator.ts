@@ -271,7 +271,7 @@ export interface TemplateUsage {
  * Paginated response wrapper (reused from atom types)
  */
 export interface PaginatedResponse<T> {
-  data: T[];
+  items: T[];
   total: number;
   page: number;
   limit: number;

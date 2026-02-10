@@ -19,6 +19,7 @@ import {
   MainStateCache,
   DriftSummary,
   CIAttestedRun,
+  GitHubTriggerParams,
   ApiResponse,
   ApiError,
   PaginatedResponse,
@@ -264,6 +265,25 @@ export class PactApiClient {
   }): Promise<PaginatedResponse<AtomTestLinkSummary>> {
     return this.request<PaginatedResponse<AtomTestLinkSummary>>('/agents/links', {
       params: filters as Record<string, string | number | boolean | undefined>,
+    });
+  }
+
+  // ===========================================================================
+  // GitHub Reconciliation Endpoints
+  // ===========================================================================
+
+  /**
+   * Trigger a reconciliation run from GitHub.
+   * Requires API key authentication (Authorization: Bearer pact_...).
+   * The server clones the repo using the stored PAT and runs reconciliation.
+   *
+   * @param params - Commit SHA, branch, and optional repo override
+   * @returns Run start result with runId
+   */
+  async triggerReconciliation(params: GitHubTriggerParams): Promise<ReconciliationRunStart> {
+    return this.request<ReconciliationRunStart>('/agents/reconciliation/hooks/github/push', {
+      method: 'POST',
+      body: params,
     });
   }
 

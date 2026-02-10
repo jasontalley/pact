@@ -11,6 +11,7 @@ import {
   IsOptional,
   IsObject,
   IsArray,
+  IsBoolean,
   IsIn,
   IsNumber,
   ValidateNested,
@@ -51,49 +52,81 @@ export class FileManifestDto {
 
 /**
  * Reconciliation options for the pre-read endpoint.
+ * Mirrors the standard ReconciliationOptions the frontend sends.
  */
-export class ReconciliationOptionsDto {
-  @ApiPropertyOptional({
-    description: 'Run mode (fullscan or delta)',
-    enum: ['fullscan', 'delta'],
-    default: 'fullscan',
-  })
+export class PreReadReconciliationOptionsDto {
+  @ApiPropertyOptional({ description: 'Analyze documentation for context enrichment' })
   @IsOptional()
-  @IsIn(['fullscan', 'delta'])
-  mode?: 'fullscan' | 'delta';
+  @IsBoolean()
+  analyzeDocs?: boolean;
 
-  @ApiPropertyOptional({
-    description: 'Include source file analysis',
-    default: true,
-  })
-  @IsOptional()
-  includeSourceFiles?: boolean;
-
-  @ApiPropertyOptional({
-    description: 'Include documentation files',
-    default: true,
-  })
-  @IsOptional()
-  includeDocs?: boolean;
-
-  @ApiPropertyOptional({
-    description: 'Maximum files to process',
-    minimum: 1,
-    maximum: 10000,
-  })
+  @ApiPropertyOptional({ description: 'Maximum number of tests to process', minimum: 1, maximum: 10000 })
   @IsOptional()
   @IsNumber()
   @Min(1)
   @Max(10000)
-  maxFiles?: number;
+  maxTests?: number;
 
-  @ApiPropertyOptional({
-    description: 'Git ref for delta mode (e.g., main, HEAD~1)',
-    example: 'main',
-  })
+  @ApiPropertyOptional({ description: 'Auto-create atoms vs storing as recommendations' })
+  @IsOptional()
+  @IsBoolean()
+  autoCreateAtoms?: boolean;
+
+  @ApiPropertyOptional({ description: 'Minimum quality threshold (0-100)', minimum: 0, maximum: 100 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  qualityThreshold?: number;
+
+  @ApiPropertyOptional({ description: 'Require human review before persisting' })
+  @IsOptional()
+  @IsBoolean()
+  requireReview?: boolean;
+
+  @ApiPropertyOptional({ description: 'Force interrupt on quality failures' })
+  @IsOptional()
+  @IsBoolean()
+  forceInterruptOnQualityFail?: boolean;
+
+  @ApiPropertyOptional({ description: 'Folder paths to include' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  includePaths?: string[];
+
+  @ApiPropertyOptional({ description: 'Folder paths to exclude' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  excludePaths?: string[];
+
+  @ApiPropertyOptional({ description: 'File name patterns to include (minimatch globs)' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  includeFilePatterns?: string[];
+
+  @ApiPropertyOptional({ description: 'File name patterns to exclude (minimatch globs)' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  excludeFilePatterns?: string[];
+
+  @ApiPropertyOptional({ description: 'Exception lane for drift convergence', enum: ['normal', 'hotfix-exception', 'spike-exception'] })
+  @IsOptional()
+  @IsIn(['normal', 'hotfix-exception', 'spike-exception'])
+  exceptionLane?: 'normal' | 'hotfix-exception' | 'spike-exception';
+
+  @ApiPropertyOptional({ description: 'Attestation type', enum: ['local', 'ci-attested'] })
+  @IsOptional()
+  @IsIn(['local', 'ci-attested'])
+  attestationType?: 'local' | 'ci-attested';
+
+  @ApiPropertyOptional({ description: 'Justification for exception lane' })
   @IsOptional()
   @IsString()
-  deltaBase?: string;
+  exceptionJustification?: string;
 }
 
 /**
@@ -136,12 +169,12 @@ export class PreReadContentDto {
 
   @ApiPropertyOptional({
     description: 'Reconciliation options',
-    type: ReconciliationOptionsDto,
+    type: PreReadReconciliationOptionsDto,
   })
   @IsOptional()
   @ValidateNested()
-  @Type(() => ReconciliationOptionsDto)
-  options?: ReconciliationOptionsDto;
+  @Type(() => PreReadReconciliationOptionsDto)
+  options?: PreReadReconciliationOptionsDto;
 }
 
 /**

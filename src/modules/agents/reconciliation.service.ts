@@ -28,7 +28,8 @@ import { GraphRegistryService } from './graphs/graph-registry.service';
 import { ReconciliationRepository } from './repositories/reconciliation.repository';
 import { RepositoryConfigService } from '../projects/repository-config.service';
 import { PreReadContentProvider } from './content/pre-read-content-provider';
-import { PreReadContentDto, PreReadAnalysisStartResult } from './dto/pre-read-reconciliation.dto';
+import { GitHubContentProvider } from './content/github-content-provider';
+import { PreReadContentDto } from './dto/pre-read-reconciliation.dto';
 import {
   ReconciliationInput,
   ReconciliationMode,
@@ -286,22 +287,15 @@ export class ReconciliationService {
    * @param dto - Pre-read content with file manifest and contents
    * @returns Analysis start result
    */
-  async analyzeWithPreReadContent(dto: PreReadContentDto): Promise<PreReadAnalysisStartResult> {
+  async analyzeWithPreReadContent(dto: PreReadContentDto): Promise<AnalysisStartResult> {
     const threadId = uuidv4();
     const runId = `REC-${threadId.substring(0, 8)}`;
     const startedAt = new Date();
 
-    this.logger.log(
-      `Starting pre-read reconciliation: runId=${runId}, files=${Object.keys(dto.fileContents).length}`,
-    );
+    const fileCount = Object.keys(dto.fileContents).length;
+    this.logger.log(`Starting pre-read reconciliation: runId=${runId}, files=${fileCount}`);
 
-    // Calculate content size
-    const contentSizeBytes = Object.values(dto.fileContents).reduce(
-      (sum, content) => sum + Buffer.byteLength(content, 'utf-8'),
-      0,
-    );
-
-    // Create PreReadContentProvider from the submitted content using the static factory
+    // Create PreReadContentProvider from the submitted content
     const contentProvider = PreReadContentProvider.fromPayload({
       fileContents: dto.fileContents,
       manifest: {
@@ -313,20 +307,26 @@ export class ReconciliationService {
       rootDirectory: dto.rootDirectory,
     });
 
-    // Determine mode
-    const mode = dto.options?.mode || 'fullscan';
+    this.logger.debug(
+      `Pre-read content provider created with ${contentProvider.getAvailablePaths().length} files`,
+    );
 
-    // Build input for graph
+    // Build input for graph — options pass through directly from frontend
     const input: ReconciliationInput = {
       rootDirectory: dto.rootDirectory,
-      reconciliationMode: mode === 'delta' ? 'delta' : 'full-scan',
+      reconciliationMode: 'full-scan',
       runId,
       options: {
-        analyzeDocs: dto.options?.includeDocs ?? true,
-        maxTests: dto.options?.maxFiles,
-        autoCreateAtoms: false,
-        qualityThreshold: 80,
-        requireReview: false,
+        analyzeDocs: dto.options?.analyzeDocs ?? true,
+        maxTests: dto.options?.maxTests,
+        autoCreateAtoms: dto.options?.autoCreateAtoms ?? false,
+        qualityThreshold: dto.options?.qualityThreshold ?? 80,
+        requireReview: dto.options?.requireReview ?? true,
+        forceInterruptOnQualityFail: dto.options?.forceInterruptOnQualityFail,
+        includePaths: dto.options?.includePaths,
+        excludePaths: dto.options?.excludePaths,
+        includeFilePatterns: dto.options?.includeFilePatterns,
+        excludeFilePatterns: dto.options?.excludeFilePatterns,
       },
     };
 
@@ -341,54 +341,122 @@ export class ReconciliationService {
     };
     this.activeRuns.set(runId, trackedRun);
 
-    // Invoke graph with custom content provider
-    // TODO: Phase 17C.4 - Add invokeWithContentProvider method to GraphRegistryService
-    // For now, we store the content provider reference for potential use
-    // The full implementation will create a fresh graph instance with the custom provider
-    this.logger.debug(
-      `Pre-read content provider created with ${contentProvider.getAvailablePaths().length} files`,
+    // Fire and forget — progress via WebSocket (same pattern as analyzeWithInterrupt)
+    this.executeGraphInBackground(
+      runId,
+      threadId,
+      input,
+      dto.rootDirectory,
+      trackedRun,
+      contentProvider,
     );
 
-    try {
-      const result = await this.graphRegistry.invoke<ReconciliationGraphStateType>(
-        RECONCILIATION_GRAPH_NAME,
-        {
-          input,
-          rootDirectory: dto.rootDirectory,
-          startTime: startedAt,
-        },
-        { configurable: { thread_id: threadId } },
-      );
+    return {
+      completed: false,
+      runId,
+      threadId,
+    };
+  }
 
-      // Extract result from output
-      const reconciliationResult = result.output as ReconciliationResult;
-      trackedRun.status = 'completed';
+  /**
+   * Analyze a repository by cloning from GitHub.
+   *
+   * Creates a GitHubContentProvider that shallow-clones the repo to a temp
+   * directory, then runs reconciliation against it. The temp directory is
+   * cleaned up automatically when the run finishes.
+   *
+   * @param dto - GitHub push/trigger data (commitSha, branch, optional repo override)
+   * @returns Analysis start result with runId for tracking
+   */
+  async analyzeFromGitHub(dto: {
+    commitSha: string;
+    branch: string;
+    repo?: string;
+  }): Promise<AnalysisStartResult> {
+    // Load GitHub config from project settings
+    const githubConfig = await this.repositoryConfigService.getGitHubConfig();
 
-      this.logger.log(
-        `Pre-read reconciliation complete: ${runId}, ` +
-          `${reconciliationResult?.summary?.inferredAtomsCount || 0} atoms inferred`,
-      );
-
-      return {
-        runId,
-        status: 'complete',
-        startedAt,
-        filesReceived: Object.keys(dto.fileContents).length,
-        contentSizeBytes,
-      };
-    } catch (error) {
-      trackedRun.status = 'failed';
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Pre-read reconciliation failed: ${errorMessage}`);
-
-      return {
-        runId,
-        status: 'failed',
-        startedAt,
-        filesReceived: Object.keys(dto.fileContents).length,
-        contentSizeBytes,
-      };
+    if (!githubConfig.pat) {
+      throw new BadRequestException('GitHub PAT not configured. Set it in Settings → Repository → GitHub.');
     }
+
+    const owner = githubConfig.owner;
+    const repo = dto.repo ?? githubConfig.repo;
+
+    if (!owner || !repo) {
+      throw new BadRequestException('GitHub owner and repo must be configured in Settings → Repository.');
+    }
+
+    const threadId = uuidv4();
+    const runId = `REC-${threadId.substring(0, 8)}`;
+
+    this.logger.log(
+      `Starting GitHub reconciliation: runId=${runId}, repo=${owner}/${repo}, branch=${dto.branch}, commit=${dto.commitSha}`,
+    );
+
+    // Emit WebSocket event: starting
+    this.gateway?.emitStarted(runId, `github:${owner}/${repo}`, 'full-scan');
+    this.gateway?.emitProgress(runId, 'structure', 2, `Cloning ${owner}/${repo}...`);
+
+    // Clone the repository
+    let contentProvider: GitHubContentProvider;
+    try {
+      contentProvider = await GitHubContentProvider.create({
+        owner,
+        repo,
+        pat: githubConfig.pat,
+        commitSha: dto.commitSha,
+        branch: dto.branch,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Clone failed';
+      this.logger.error(`GitHub clone failed: ${message}`);
+      this.gateway?.emitFailed(runId, message, 'structure');
+      throw new BadRequestException(message);
+    }
+
+    const rootDirectory = contentProvider.getCloneDir();
+
+    this.logger.log(`GitHub repo cloned to ${rootDirectory}`);
+
+    // Build input for graph
+    const input: ReconciliationInput = {
+      rootDirectory,
+      reconciliationMode: 'full-scan',
+      runId,
+      options: {
+        analyzeDocs: true,
+        qualityThreshold: 80,
+        requireReview: true,
+      },
+    };
+
+    // Track this run
+    const trackedRun: TrackedRun = {
+      runId,
+      threadId,
+      rootDirectory,
+      input,
+      startTime: new Date(),
+      status: 'running',
+    };
+    this.activeRuns.set(runId, trackedRun);
+
+    // Fire and forget — progress via WebSocket
+    this.executeGraphInBackground(
+      runId,
+      threadId,
+      input,
+      rootDirectory,
+      trackedRun,
+      contentProvider,
+    );
+
+    return {
+      completed: false,
+      runId,
+      threadId,
+    };
   }
 
   // ==========================================================================
@@ -515,8 +583,15 @@ export class ReconciliationService {
     input: ReconciliationInput,
     rootDirectory: string,
     trackedRun: TrackedRun,
+    contentProvider?: import('./content').ContentProvider,
   ): Promise<void> {
     try {
+      // Register per-run content provider override (for pre-read mode)
+      if (contentProvider) {
+        const nodeConfig = this.graphRegistry.getNodeConfig();
+        nodeConfig.contentProviderOverrides?.set(runId, contentProvider);
+      }
+
       // Emit progress: graph starting
       this.gateway?.emitProgress(runId, 'structure', 5, 'Scanning repository structure...');
 
@@ -663,34 +738,94 @@ export class ReconciliationService {
     } finally {
       // Always clean up cancellation registry
       this.cancellationRegistry.clear(runId);
+      // Clean up per-run content provider override
+      if (contentProvider) {
+        this.graphRegistry.getNodeConfig().contentProviderOverrides?.delete(runId);
+        // Clean up temp clone directories (GitHubContentProvider)
+        if ('cleanup' in contentProvider && typeof (contentProvider as any).cleanup === 'function') {
+          try {
+            await (contentProvider as any).cleanup();
+            this.logger.debug(`Cleaned up content provider resources for run ${runId}`);
+          } catch (cleanupErr) {
+            this.logger.warn(`Content provider cleanup failed for run ${runId}: ${cleanupErr}`);
+          }
+        }
+      }
     }
   }
 
   /**
-   * Get pending review data for an interrupted run.
+   * Get pending review data for an interrupted or recovered run.
    *
-   * @param runId - The run ID from analyzeWithInterrupt
+   * First checks in-memory tracked runs (live interrupt data).
+   * Falls back to DB for recovered runs or after server restart.
+   *
+   * @param runId - The run ID
    * @returns The interrupt payload with pending recommendations
-   * @throws NotFoundException if run not found or not interrupted
+   * @throws NotFoundException if run not found or has no review data
    */
-  getPendingReview(runId: string): InterruptPayload {
+  async getPendingReview(runId: string): Promise<InterruptPayload> {
+    // 1. Check in-memory tracked runs (live interrupt data)
     const trackedRun = this.activeRuns.get(runId);
+    if (trackedRun?.status === 'interrupted' && trackedRun.interruptPayload) {
+      return trackedRun.interruptPayload;
+    }
 
-    if (!trackedRun) {
+    // 2. Fall back to DB for recovered runs or after server restart
+    if (!this.repository) {
       throw new NotFoundException(`Run ${runId} not found`);
     }
 
-    if (trackedRun.status !== 'interrupted') {
+    const run = await this.repository.findRunByRunId(runId);
+    if (!run) {
+      throw new NotFoundException(`Run ${runId} not found`);
+    }
+
+    // Allow pending_review (recovered) or running/failed (recoverable) runs
+    if (run.status !== 'pending_review' && run.status !== 'running' && run.status !== 'failed') {
       throw new NotFoundException(
-        `Run ${runId} is not waiting for review (status: ${trackedRun.status})`,
+        `Run ${runId} is not waiting for review (status: ${run.status})`,
       );
     }
 
-    if (!trackedRun.interruptPayload) {
+    const atoms = await this.repository.findAtomRecommendationsByRun(run.id);
+    const molecules = await this.repository.findMoleculeRecommendationsByRun(run.id);
+
+    if (atoms.length === 0 && molecules.length === 0) {
       throw new NotFoundException(`Run ${runId} has no pending review data`);
     }
 
-    return trackedRun.interruptPayload;
+    // Build InterruptPayload from DB data
+    const qualityThreshold = (run.options as Record<string, unknown>)?.qualityThreshold as number ?? 80;
+    const passCount = atoms.filter((a) => (a.qualityScore ?? 0) >= qualityThreshold).length;
+    const failCount = atoms.length - passCount;
+
+    return {
+      summary: {
+        totalAtoms: atoms.length,
+        passCount,
+        failCount,
+        qualityThreshold,
+      },
+      pendingAtoms: atoms.map((a) => ({
+        tempId: a.tempId,
+        description: a.description,
+        category: a.category,
+        qualityScore: a.qualityScore ?? 0,
+        passes: (a.qualityScore ?? 0) >= qualityThreshold,
+        issues: a.ambiguityReasons ?? [],
+      })),
+      pendingMolecules: molecules.map((m) => ({
+        tempId: m.tempId,
+        name: m.name,
+        description: m.description || '',
+        atomCount: m.atomRecommendationTempIds?.length ?? 0,
+        confidence: m.confidence,
+      })),
+      reason: run.status === 'pending_review'
+        ? 'Run recovered for review'
+        : 'Human review required',
+    };
   }
 
   /**
@@ -707,16 +842,23 @@ export class ReconciliationService {
   ): Promise<ReconciliationResult> {
     const trackedRun = this.activeRuns.get(runId);
 
-    if (!trackedRun) {
-      throw new NotFoundException(`Run ${runId} not found`);
+    // If the run is in-memory and interrupted, resume the graph
+    if (trackedRun && trackedRun.status === 'interrupted') {
+      return this.resumeGraphWithReview(runId, trackedRun, review);
     }
 
-    if (trackedRun.status !== 'interrupted') {
-      throw new NotFoundException(
-        `Run ${runId} is not waiting for review (status: ${trackedRun.status})`,
-      );
-    }
+    // Fall back to DB-only review for recovered/restarted runs
+    return this.applyReviewDecisionsToDB(runId, review);
+  }
 
+  /**
+   * Resume a live interrupted graph with review decisions.
+   */
+  private async resumeGraphWithReview(
+    runId: string,
+    trackedRun: TrackedRun,
+    review: SubmitReviewDto,
+  ): Promise<ReconciliationResult> {
     this.logger.log(`Resuming run ${runId} with ${review.atomDecisions.length} atom decisions`);
 
     // Build human review input
@@ -761,6 +903,105 @@ export class ReconciliationService {
   }
 
   /**
+   * Apply review decisions directly to DB for recovered/restarted runs
+   * where the graph cannot be resumed.
+   */
+  private async applyReviewDecisionsToDB(
+    runId: string,
+    review: SubmitReviewDto,
+  ): Promise<ReconciliationResult> {
+    if (!this.repository) {
+      throw new NotFoundException(`Run ${runId} not found`);
+    }
+
+    const run = await this.repository.findRunByRunId(runId);
+    if (!run) {
+      throw new NotFoundException(`Run ${runId} not found`);
+    }
+
+    if (run.status !== 'pending_review' && run.status !== 'running' && run.status !== 'failed') {
+      throw new NotFoundException(
+        `Run ${runId} is not waiting for review (status: ${run.status})`,
+      );
+    }
+
+    this.logger.log(
+      `Applying review decisions to DB for run ${runId}: ${review.atomDecisions.length} atom decisions`,
+    );
+
+    // Load all recommendations for lookup
+    const atoms = await this.repository.findAtomRecommendationsByRun(run.id);
+    const molecules = await this.repository.findMoleculeRecommendationsByRun(run.id);
+    const atomByTempId = new Map(atoms.map((a) => [a.tempId, a]));
+    const molByTempId = new Map(molecules.map((m) => [m.tempId, m]));
+
+    // Apply atom decisions
+    for (const decision of review.atomDecisions) {
+      const atom = atomByTempId.get(decision.recommendationId);
+      if (atom) {
+        const status = decision.decision === 'approve' ? 'accepted' : 'rejected';
+        await this.repository.updateAtomRecommendationStatus(
+          atom.id, status, undefined,
+          decision.decision === 'reject' ? decision.reason : undefined,
+        );
+      }
+    }
+
+    // Apply molecule decisions
+    for (const decision of review.moleculeDecisions || []) {
+      const mol = molByTempId.get(decision.recommendationId);
+      if (mol) {
+        const status = decision.decision === 'approve' ? 'accepted' : 'rejected';
+        await this.repository.updateMoleculeRecommendationStatus(
+          mol.id, status, undefined, undefined,
+          decision.decision === 'reject' ? decision.reason : undefined,
+        );
+      }
+    }
+
+    const acceptedCount = review.atomDecisions.filter((d) => d.decision === 'approve').length;
+
+    // Update run status to completed with summary
+    const summary = {
+      totalOrphanTests: atoms.length,
+      inferredAtomsCount: atoms.length,
+      inferredMoleculesCount: molecules.length,
+      qualityPassCount: acceptedCount,
+      qualityFailCount: atoms.length - acceptedCount,
+    };
+    await this.repository.updateRunStatus(runId, 'completed', summary);
+
+    return {
+      runId,
+      status: 'completed',
+      summary,
+      inferredAtoms: atoms.map((a) => ({
+        tempId: a.tempId,
+        description: a.description,
+        category: a.category,
+        confidence: a.confidence,
+        qualityScore: a.qualityScore ?? 0,
+        observableOutcomes: (a.observableOutcomes || []).map((o) => o.description),
+        reasoning: a.reasoning,
+        sourceTest: {
+          filePath: a.sourceTestFilePath,
+          testName: a.sourceTestName,
+          lineNumber: a.sourceTestLineNumber,
+        },
+      })),
+      inferredMolecules: molecules.map((m) => ({
+        tempId: m.tempId,
+        name: m.name,
+        description: m.description || '',
+        confidence: m.confidence,
+        reasoning: m.reasoning,
+        atomTempIds: m.atomRecommendationTempIds ?? [],
+      })),
+      errors: [],
+    } as unknown as ReconciliationResult;
+  }
+
+  /**
    * Get the status of an active run.
    *
    * @param runId - The run ID
@@ -776,18 +1017,53 @@ export class ReconciliationService {
    *
    * @returns Array of active run information
    */
-  listActiveRuns(): Array<{
+  async listActiveRuns(): Promise<Array<{
     runId: string;
     threadId: string;
-    status: TrackedRun['status'];
+    status: string;
     startTime: Date;
-  }> {
-    return Array.from(this.activeRuns.values()).map((run) => ({
-      runId: run.runId,
-      threadId: run.threadId,
-      status: run.status,
-      startTime: run.startTime,
-    }));
+  }>> {
+    // Build map from in-memory tracked runs
+    const runMap = new Map<string, {
+      runId: string;
+      threadId: string;
+      status: string;
+      startTime: Date;
+    }>();
+
+    for (const run of this.activeRuns.values()) {
+      runMap.set(run.runId, {
+        runId: run.runId,
+        threadId: run.threadId,
+        status: run.status as string,
+        startTime: run.startTime,
+      });
+    }
+
+    // Merge with DB runs — DB status is authoritative over in-memory
+    if (this.repository) {
+      try {
+        const dbRuns = await this.repository.listRuns({ limit: 50 });
+        for (const run of dbRuns) {
+          const existing = runMap.get(run.runId);
+          if (existing) {
+            // DB status takes priority (may have been updated by review/recovery)
+            existing.status = run.status;
+          } else {
+            runMap.set(run.runId, {
+              runId: run.runId,
+              threadId: '',
+              status: run.status,
+              startTime: run.createdAt,
+            });
+          }
+        }
+      } catch {
+        // DB not available — return memory-only runs
+      }
+    }
+
+    return Array.from(runMap.values());
   }
 
   /**
@@ -936,19 +1212,26 @@ export class ReconciliationService {
       throw new NotFoundException(`Run ${runId} not found`);
     }
 
+    // Also check in-memory for threadId (not stored in DB)
+    const trackedRun = this.activeRuns.get(runId);
+
     return {
       id: run.id,
       runId: run.runId,
       rootDirectory: run.rootDirectory,
       reconciliationMode: run.reconciliationMode,
+      // Frontend-compatible aliases
+      mode: run.reconciliationMode as 'full-scan' | 'delta',
       status: run.status,
       createdAt: run.createdAt,
+      startTime: run.createdAt,
       completedAt: run.completedAt,
       summary: run.summary as Record<string, unknown> | null,
       options: run.options as Record<string, unknown>,
       currentCommitHash: run.currentCommitHash,
       deltaBaselineCommitHash: run.deltaBaselineCommitHash,
       errorMessage: run.errorMessage,
+      threadId: trackedRun?.threadId || null,
     };
   }
 
@@ -994,7 +1277,8 @@ export class ReconciliationService {
         confidence: m.confidence,
         status: m.status,
         moleculeId: m.moleculeId,
-        atomRecommendationIds: m.atomRecommendationIds,
+        atomRecommendationIds: m.atomRecommendationIds ?? [],
+        atomRecommendationTempIds: m.atomRecommendationTempIds ?? [],
       })),
     };
   }
@@ -1135,14 +1419,20 @@ export interface RunDetails {
   runId: string;
   rootDirectory: string;
   reconciliationMode: 'full-scan' | 'delta';
+  /** Frontend-compatible alias for reconciliationMode */
+  mode: 'full-scan' | 'delta';
   status: string;
   createdAt: Date;
+  /** Frontend-compatible alias for createdAt */
+  startTime: Date;
   completedAt: Date | null;
   summary: Record<string, unknown> | null;
   options: Record<string, unknown>;
   currentCommitHash: string | null;
   deltaBaselineCommitHash: string | null;
   errorMessage: string | null;
+  /** Thread ID from in-memory tracking (null if run is no longer tracked) */
+  threadId: string | null;
 }
 
 /**
@@ -1171,6 +1461,7 @@ export interface RecommendationsResult {
     status: string;
     moleculeId: string | null;
     atomRecommendationIds: string[];
+    atomRecommendationTempIds: string[];
   }>;
 }
 

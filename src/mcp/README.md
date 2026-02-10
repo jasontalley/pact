@@ -45,6 +45,28 @@ npm run start:mcp
 | `PACT_API_URL` | `http://localhost:3000` | Pact REST API base URL |
 | `MCP_PORT`     | `3002` (when started by app) | If set and not `0`, run SSE transport on this port. Omit or `0` for stdio-only. |
 
-## Tools
+## Tools (12)
 
-See the tool definitions in `tools/` and the Phase 10 checklist for the full list (e.g. `read_atom`, `list_atoms`, `get_atom_for_test`, `get_coupling_status`, `get_epistemic_status`, `get_intent_history`, `get_conflicts`, `search_atoms`).
+| Tool | Purpose |
+|------|---------|
+| `read_atom` | Read a single atom by UUID or human-readable ID (e.g. `IA-001`) |
+| `list_atoms` | List atoms with filtering by status, category, scope |
+| `search_atoms` | Full-text search across atom descriptions |
+| `get_atom_for_test` | Find the atom linked to a specific test file |
+| `suggest_atom` | Propose a new atom (created as `proposed`, requires HITL approval) |
+| `get_implementable_atoms` | Find committed atoms that need test coverage, sorted by priority |
+| `get_coupling_status` | Atom-test, test-atom, and code-atom coupling metrics |
+| `get_epistemic_status` | Epistemic certainty metrics (proven/committed/inferred/unknown) |
+| `get_intent_history` | Version history for an intent identity |
+| `get_conflicts` | List active atom conflicts |
+| `trigger_reconciliation` | Trigger a GitHub-based reconciliation run (branch + commitSha) |
+| `get_reconciliation_status` | Check status of a run by runId, or list all active runs |
+
+### Reconciliation tools
+
+The `trigger_reconciliation` and `get_reconciliation_status` tools enable AI coding agents to trigger and monitor reconciliation runs against the configured GitHub repository. These require GitHub integration to be configured in Pact settings (owner, repo, PAT).
+
+**Example flow from a coding agent:**
+1. `trigger_reconciliation` with `branch: "main"` and `commitSha: "abc123"` — returns `runId`
+2. `get_reconciliation_status` with `runId` — monitor progress until complete
+3. `get_implementable_atoms` — find newly discovered atoms to implement
