@@ -1,20 +1,21 @@
 {
   "id": "qs-006",
-  "name": "Borderline atom — vague validation description",
+  "name": "Borderline atom — related but distinct behaviors",
   "atom": {
-    "description": "System validates user input on forms before submission",
+    "description": "User registration form validates that required fields are filled and email format is correct before allowing account creation",
     "category": "functional",
-    "confidence": 70,
+    "confidence": 75,
     "observableOutcomes": [
-      "Invalid input triggers error message",
-      "Valid input allows form submission"
+      "Submitting with empty required fields shows field-specific error messages",
+      "Submitting with malformed email shows email format error",
+      "Submitting with all valid fields creates the account and redirects to dashboard"
     ],
-    "reasoning": "Inferred from form-validation.spec.ts: the test suite checks that submitting a form with empty required fields shows validation errors, and that filling all fields correctly allows the form to submit. While the atom captures a real behavior, it lacks specificity about which fields, what validation rules apply, and what the error messages contain. The outcomes are testable but broad.",
-    "sourceTestFilePath": "test/form-validation.spec.ts",
-    "sourceTestName": "should validate required fields before form submission"
+    "reasoning": "Inferred from registration-validation.spec.ts: the test suite checks field-level validation on the registration form. The atom is behavior-focused and testable, though it combines validation and creation into a single atom. The outcomes are specific enough to be falsifiable.",
+    "sourceTestFilePath": "test/registration-validation.spec.ts",
+    "sourceTestName": "should validate required fields and email format on registration"
   },
   "expectedScore": {
-    "minScore": 55,
+    "minScore": 60,
     "maxScore": 79,
     "shouldPass": false
   }
