@@ -26,6 +26,7 @@ import { isGraphInterrupt } from '@langchain/langgraph';
 import { CancellationRegistry, CancellationError } from '../../common/cancellation.registry';
 import { GraphRegistryService } from './graphs/graph-registry.service';
 import { ReconciliationRepository } from './repositories/reconciliation.repository';
+import { ReconciliationRunStatus } from './entities/reconciliation-run.entity';
 import { RepositoryConfigService } from '../projects/repository-config.service';
 import { PreReadContentProvider } from './content/pre-read-content-provider';
 import { GitHubContentProvider } from './content/github-content-provider';
@@ -779,6 +780,53 @@ export class ReconciliationService {
           }
         }
       }
+
+      // PERMANENT FIX: Always sync terminal status to DB.
+      // The persist node handles the happy path, but interrupt/cancel/error
+      // paths exit before persist runs, leaving DB stuck at 'running'.
+      await this.syncRunStatusToDb(runId, trackedRun.status);
+    }
+  }
+
+  /**
+   * Sync in-memory run status to the database.
+   *
+   * Maps internal TrackedRun statuses to DB-compatible ReconciliationRunStatus.
+   * Safe to call multiple times (idempotent) — if the persist node already
+   * wrote 'completed', re-writing 'completed' is a no-op on the status column.
+   * Summary/completedAt set by persist node are preserved (partial update).
+   *
+   * This is the SINGLE chokepoint that prevents runs from staying 'running'
+   * in the DB after executeGraphInBackground() returns.
+   */
+  private async syncRunStatusToDb(
+    runId: string,
+    inMemoryStatus: TrackedRun['status'],
+  ): Promise<void> {
+    if (!this.repository) return;
+
+    // Map in-memory statuses to DB-compatible statuses
+    const statusMap: Record<TrackedRun['status'], ReconciliationRunStatus | null> = {
+      completed: 'completed',
+      failed: 'failed',
+      interrupted: 'pending_review',
+      cancelled: 'failed',
+      cancelling: 'failed',
+      running: null, // Should not be terminal — don't overwrite
+    };
+
+    const dbStatus = statusMap[inMemoryStatus];
+    if (!dbStatus) return;
+
+    try {
+      await this.repository.updateRunStatus(runId, dbStatus);
+      this.logger.debug(`Synced run ${runId} status to DB: ${inMemoryStatus} → ${dbStatus}`);
+    } catch (e) {
+      // Don't throw — this runs in finally block. Log and move on.
+      // Common case: run crashed before interim-persist created the DB record.
+      this.logger.warn(
+        `Failed to sync run status to DB for ${runId}: ${e instanceof Error ? e.message : e}`,
+      );
     }
   }
 
