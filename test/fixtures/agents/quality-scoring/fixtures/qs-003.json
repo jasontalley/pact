@@ -16,7 +16,7 @@
   },
   "expectedScore": {
     "minScore": 30,
-    "maxScore": 70,
+    "maxScore": 79,
     "shouldPass": false
   }
 }

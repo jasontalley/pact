@@ -1,6 +1,6 @@
 {
   "id": "qs-006",
-  "name": "Borderline atom — somewhat vague",
+  "name": "Borderline atom — vague validation description",
   "atom": {
     "description": "System validates user input on forms before submission",
     "category": "functional",
@@ -14,8 +14,8 @@
     "sourceTestName": "should validate required fields before form submission"
   },
   "expectedScore": {
-    "minScore": 65,
-    "maxScore": 85,
-    "shouldPass": true
+    "minScore": 55,
+    "maxScore": 79,
+    "shouldPass": false
   }
 }

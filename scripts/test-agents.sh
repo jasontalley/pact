@@ -223,6 +223,10 @@ docker exec -i $CONTAINER_NAME sh -c "mkdir -p $RESULTS_DIR/property $RESULTS_DI
 FAILED=0
 TOTAL=0
 
+# Evaluation CLI command prefix — override NODE_OPTIONS to use a smaller heap
+# so the ts-node process doesn't OOM alongside the running NestJS app
+EVAL_CMD="NODE_OPTIONS=--max-old-space-size=3072 npx ts-node scripts/evaluate-agents.ts"
+
 # =============================================================================
 # Property Tests
 # =============================================================================
@@ -316,7 +320,7 @@ if [[ "$RUN_GOLDEN" == "true" ]]; then
         GOLDEN_ARGS="$GOLDEN_ARGS --html"
     fi
 
-    if docker exec -i $CONTAINER_NAME sh -c "npx ts-node scripts/evaluate-agents.ts --suite=golden $GOLDEN_ARGS"; then
+    if docker exec -i $CONTAINER_NAME sh -c "$EVAL_CMD --suite=golden $GOLDEN_ARGS"; then
         echo -e "${GREEN}Golden suite: PASSED${NC}"
     else
         echo -e "${RED}Golden suite: FAILED${NC}"
@@ -340,7 +344,7 @@ if [[ "$RUN_MICRO_INFERENCE" == "true" ]]; then
         MI_ARGS="$MI_ARGS --html"
     fi
 
-    if docker exec -i $CONTAINER_NAME sh -c "npx ts-node scripts/evaluate-agents.ts --suite=micro-inference $MI_ARGS"; then
+    if docker exec -i $CONTAINER_NAME sh -c "$EVAL_CMD --suite=micro-inference $MI_ARGS"; then
         echo -e "${GREEN}Micro-inference suite: PASSED${NC}"
     else
         echo -e "${RED}Micro-inference suite: FAILED${NC}"
@@ -364,7 +368,7 @@ if [[ "$RUN_QUALITY_SCORING" == "true" ]]; then
         QS_ARGS="$QS_ARGS --html"
     fi
 
-    if docker exec -i $CONTAINER_NAME sh -c "npx ts-node scripts/evaluate-agents.ts --suite=quality-scoring $QS_ARGS"; then
+    if docker exec -i $CONTAINER_NAME sh -c "$EVAL_CMD --suite=quality-scoring $QS_ARGS"; then
         echo -e "${GREEN}Quality scoring suite: PASSED${NC}"
     else
         echo -e "${RED}Quality scoring suite: FAILED${NC}"

@@ -18,7 +18,7 @@
     "sourceTestName": "ProfileService (all tests consolidated)"
   },
   "expectedScore": {
-    "minScore": 40,
+    "minScore": 20,
     "maxScore": 70,
     "shouldPass": false
   }

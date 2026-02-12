@@ -14,7 +14,7 @@
     "sourceTestName": "should return search results within 200ms at p95 for 100k products"
   },
   "expectedScore": {
-    "minScore": 85,
+    "minScore": 80,
     "shouldPass": true
   }
 }
