@@ -1,0 +1,20 @@
+{
+  "id": "qs-007",
+  "name": "Performance atom with measurable criteria",
+  "atom": {
+    "description": "Search results are returned within 200 milliseconds for queries against a catalog of up to 100,000 products",
+    "category": "performance",
+    "confidence": 88,
+    "observableOutcomes": [
+      "Search response time is under 200ms at p95",
+      "Results are returned even under peak load conditions"
+    ],
+    "reasoning": "Derived from search-performance.e2e-spec.ts: the test seeds the database with 100,000 product records and measures query response times across 1,000 search requests. The p95 latency is asserted to be below 200ms. A separate load test scenario runs 50 concurrent search requests to verify the system does not degrade under contention. This atom captures a quantifiable performance contract with clear measurement boundaries.",
+    "sourceTestFilePath": "test/search-performance.e2e-spec.ts",
+    "sourceTestName": "should return search results within 200ms at p95 for 100k products"
+  },
+  "expectedScore": {
+    "minScore": 85,
+    "shouldPass": true
+  }
+}

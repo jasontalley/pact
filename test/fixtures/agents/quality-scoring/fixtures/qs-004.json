@@ -1,0 +1,18 @@
+{
+  "id": "qs-004",
+  "name": "Vague atom with no outcomes",
+  "atom": {
+    "description": "System handles authentication properly",
+    "category": "security",
+    "confidence": 50,
+    "observableOutcomes": [],
+    "reasoning": "Inferred from a single test that asserts the auth module is defined. No specific behavioral assertions were found in the test suite to anchor this atom to concrete outcomes.",
+    "sourceTestFilePath": "test/auth.spec.ts",
+    "sourceTestName": "should be defined"
+  },
+  "expectedScore": {
+    "minScore": 20,
+    "maxScore": 60,
+    "shouldPass": false
+  }
+}

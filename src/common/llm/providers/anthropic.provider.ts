@@ -85,29 +85,6 @@ const CLAUDE_MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     maxOutputTokens: 8192,
     description: 'Fast and cost-effective for simpler tasks',
   },
-  // Legacy models (for compatibility) - these require dated versions
-  'claude-3-sonnet-20240229': {
-    contextWindow: 200000,
-    supportsVision: true,
-    supportsFunctionCalling: true,
-    supportsStreaming: true,
-    supportsReasoningEffort: false,
-    costPerInputToken: 0.000003,
-    costPerOutputToken: 0.000015,
-    maxOutputTokens: 4096,
-    description: 'Legacy Claude 3 Sonnet',
-  },
-  'claude-3-haiku-20240307': {
-    contextWindow: 200000,
-    supportsVision: true,
-    supportsFunctionCalling: true,
-    supportsStreaming: true,
-    supportsReasoningEffort: false,
-    costPerInputToken: 0.00000025,
-    costPerOutputToken: 0.00000125,
-    maxOutputTokens: 4096,
-    description: 'Legacy Claude 3 Haiku',
-  },
 };
 
 /**
@@ -297,7 +274,22 @@ export class AnthropicProvider extends BaseLLMProvider {
 
     // If we have system messages, add them as a SystemMessage
     if (systemMessages.length > 0) {
-      chatMessages.unshift(new SystemMessage(systemMessages.join('\n\n')));
+      if (request.options?.promptCaching) {
+        // Use content blocks with cache_control for Anthropic prompt caching.
+        // The LangChain Anthropic adapter passes content blocks through to the API,
+        // enabling server-side caching of the system prompt (5-min ephemeral TTL).
+        // cache_control is an Anthropic extension not in LangChain's types.
+        const contentBlocks: Array<Record<string, unknown>> = [{
+          type: 'text',
+          text: systemMessages.join('\n\n'),
+          cache_control: { type: 'ephemeral' },
+        }];
+        chatMessages.unshift(
+          new SystemMessage({ content: contentBlocks as never }),
+        );
+      } else {
+        chatMessages.unshift(new SystemMessage(systemMessages.join('\n\n')));
+      }
     }
 
     // Build callbacks array

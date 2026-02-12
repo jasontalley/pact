@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+import { parseJsonWithRecovery } from '../../../../common/llm/json-recovery';
 
 /**
  * Schema for planning phase output
@@ -59,14 +60,9 @@ export function parseLLMOutput<T>(
   fallback: T,
 ): { data: T; success: boolean; error?: string } {
   try {
-    // Handle markdown code blocks that LLMs often include
-    const jsonContent = content
-      .replace(/```json\n?/g, '')
-      .replace(/```\n?/g, '')
-      .trim();
-
-    const parsed = JSON.parse(jsonContent);
-    const validated = schema.parse(parsed);
+    const recovered = parseJsonWithRecovery(content);
+    if (!recovered) throw new Error('Failed to parse JSON from LLM response');
+    const validated = schema.parse(recovered);
     return { data: validated, success: true };
   } catch (error) {
     return {

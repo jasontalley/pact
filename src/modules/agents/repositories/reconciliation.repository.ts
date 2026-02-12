@@ -290,6 +290,7 @@ export class ReconciliationRepository {
         tempId: molecule.tempId,
         name: molecule.name,
         description: molecule.description,
+        gherkinScenario: molecule.gherkinScenario || null,
         atomRecommendationTempIds: molecule.atomTempIds,
         atomRecommendationIds,
         atomIds: null,

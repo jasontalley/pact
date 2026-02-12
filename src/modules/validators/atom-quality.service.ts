@@ -19,6 +19,8 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { LLMService } from '../../common/llm/llm.service';
+import { parseJsonWithRecovery } from '../../common/llm/json-recovery';
+import { AgentTaskType } from '../../common/llm/providers';
 
 /**
  * Type alias for quality gate decisions
@@ -264,11 +266,12 @@ Respond in JSON format:
           {
             role: 'system',
             content:
-              'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality across all dimensions simultaneously.',
+              'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality across all dimensions simultaneously. Respond with raw JSON only — no markdown fences, no explanation text before or after the JSON.',
           },
           { role: 'user', content: prompt },
         ],
         agentName: 'AtomQualityValidator',
+        taskType: AgentTaskType.CLASSIFICATION,
         purpose: 'Evaluating all atom quality dimensions in a single call',
       });
 
@@ -383,11 +386,12 @@ Respond in JSON format:
           {
             role: 'system',
             content:
-              'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality.',
+              'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality. Respond with raw JSON only — no markdown fences, no explanation text.',
           },
           { role: 'user', content: prompt },
         ],
         agentName: 'AtomQualityValidator',
+        taskType: AgentTaskType.CLASSIFICATION,
         purpose: 'Evaluating atom quality dimension',
       });
 
@@ -441,11 +445,12 @@ Respond in JSON format:
           {
             role: 'system',
             content:
-              'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality.',
+              'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality. Respond with raw JSON only — no markdown fences, no explanation text.',
           },
           { role: 'user', content: prompt },
         ],
         agentName: 'AtomQualityValidator',
+        taskType: AgentTaskType.CLASSIFICATION,
         purpose: 'Evaluating atom quality dimension',
       });
 
@@ -499,11 +504,12 @@ Respond in JSON format:
           {
             role: 'system',
             content:
-              'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality.',
+              'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality. Respond with raw JSON only — no markdown fences, no explanation text.',
           },
           { role: 'user', content: prompt },
         ],
         agentName: 'AtomQualityValidator',
+        taskType: AgentTaskType.CLASSIFICATION,
         purpose: 'Evaluating atom quality dimension',
       });
 
@@ -559,11 +565,12 @@ Respond in JSON format:
           {
             role: 'system',
             content:
-              'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality.',
+              'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality. Respond with raw JSON only — no markdown fences, no explanation text.',
           },
           { role: 'user', content: prompt },
         ],
         agentName: 'AtomQualityValidator',
+        taskType: AgentTaskType.CLASSIFICATION,
         purpose: 'Evaluating atom quality dimension',
       });
 
@@ -617,11 +624,12 @@ Respond in JSON format:
           {
             role: 'system',
             content:
-              'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality.',
+              'You are an expert in behavior-driven development and test design. Evaluate intent atoms for quality. Respond with raw JSON only — no markdown fences, no explanation text.',
           },
           { role: 'user', content: prompt },
         ],
         agentName: 'AtomQualityValidator',
+        taskType: AgentTaskType.CLASSIFICATION,
         purpose: 'Evaluating atom quality dimension',
       });
 
@@ -707,26 +715,14 @@ Respond in JSON format:
     unambiguousLanguage?: { score: number; feedback: string; suggestions: string[] };
     clearSuccessCriteria?: { score: number; feedback: string; suggestions: string[] };
   } {
-    try {
-      // Remove markdown code blocks if present
-      let cleaned = content.trim();
-      if (cleaned.startsWith('```json')) {
-        cleaned = cleaned.slice(7);
-      } else if (cleaned.startsWith('```')) {
-        cleaned = cleaned.slice(3);
-      }
-      if (cleaned.endsWith('```')) {
-        cleaned = cleaned.slice(0, -3);
-      }
-      cleaned = cleaned.trim();
-
-      return JSON.parse(cleaned);
-    } catch (error) {
-      this.logger.warn(
-        `Failed to parse LLM response as JSON: ${error}. Response preview: ${content.substring(0, 200)}...`,
-      );
-      return {};
+    const parsed = parseJsonWithRecovery(content);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as ReturnType<typeof this.parseAllDimensionsResponse>;
     }
+    this.logger.warn(
+      `Failed to parse LLM response as JSON. Response preview: ${content.substring(0, 200)}...`,
+    );
+    return {};
   }
 
   /**
@@ -738,24 +734,17 @@ Respond in JSON format:
     feedback: string;
     suggestions: string[];
   } {
-    try {
-      // Remove markdown code blocks if present
-      let cleaned = content.trim();
-      if (cleaned.startsWith('```json')) {
-        cleaned = cleaned.slice(7);
-      } else if (cleaned.startsWith('```')) {
-        cleaned = cleaned.slice(3);
-      }
-      if (cleaned.endsWith('```')) {
-        cleaned = cleaned.slice(0, -3);
-      }
-      cleaned = cleaned.trim();
-
-      return JSON.parse(cleaned);
-    } catch {
-      this.logger.warn('Failed to parse LLM response as JSON');
-      return { score: 0, feedback: 'Unable to parse evaluation', suggestions: [] };
+    const parsed = parseJsonWithRecovery(content);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const obj = parsed;
+      return {
+        score: typeof obj.score === 'number' ? obj.score : 0,
+        feedback: typeof obj.feedback === 'string' ? obj.feedback : 'Unable to parse evaluation',
+        suggestions: Array.isArray(obj.suggestions) ? (obj.suggestions as string[]) : [],
+      };
     }
+    this.logger.warn('Failed to parse LLM response as JSON');
+    return { score: 0, feedback: 'Unable to parse evaluation', suggestions: [] };
   }
 
   // ==================== Heuristic Fallbacks ====================

@@ -1,0 +1,16 @@
+{
+  "id": "mi-004",
+  "name": "SearchBar component with text input and results display",
+  "evidenceType": "ui_component",
+  "evidence": {
+    "filePath": "src/components/SearchBar/SearchBar.tsx",
+    "sourceCode": "'use client';\n\nimport { useState, useCallback } from 'react';\nimport { useDebounce } from '@/hooks/use-debounce';\nimport { SearchResults } from './SearchResults';\nimport { Input } from '@/components/ui/input';\nimport { SearchIcon, XIcon } from 'lucide-react';\n\ninterface SearchBarProps {\n  placeholder?: string;\n  onSearch: (query: string) => Promise<SearchResult[]>;\n  onSelect: (result: SearchResult) => void;\n}\n\nexport function SearchBar({ placeholder = 'Search...', onSearch, onSelect }: SearchBarProps) {\n  const [query, setQuery] = useState('');\n  const [results, setResults] = useState<SearchResult[]>([]);\n  const [isLoading, setIsLoading] = useState(false);\n  const debouncedQuery = useDebounce(query, 300);\n\n  const handleSearch = useCallback(async (searchTerm: string) => {\n    if (searchTerm.length < 2) {\n      setResults([]);\n      return;\n    }\n    setIsLoading(true);\n    const searchResults = await onSearch(searchTerm);\n    setResults(searchResults);\n    setIsLoading(false);\n  }, [onSearch]);\n\n  const handleClear = () => {\n    setQuery('');\n    setResults([]);\n  };\n\n  return (\n    <div className=\"relative w-full max-w-md\">\n      <div className=\"relative\">\n        <SearchIcon className=\"absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground\" />\n        <Input\n          value={query}\n          onChange={(e) => setQuery(e.target.value)}\n          placeholder={placeholder}\n          className=\"pl-9 pr-9\"\n          aria-label=\"Search\"\n        />\n        {query && (\n          <button onClick={handleClear} className=\"absolute right-3 top-1/2 -translate-y-1/2\">\n            <XIcon className=\"h-4 w-4\" />\n          </button>\n        )}\n      </div>\n      {results.length > 0 && <SearchResults results={results} onSelect={onSelect} />}\n    </div>\n  );\n}",
+    "lineNumber": 1
+  },
+  "expectedAtom": {
+    "descriptionContainsAny": ["search", "query", "result", "find"],
+    "categoryOneOf": ["usability", "functional"],
+    "minConfidence": 60,
+    "hasObservableOutcomes": true
+  }
+}

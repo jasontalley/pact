@@ -1,0 +1,16 @@
+{
+  "id": "mi-009",
+  "name": "TODO/HACK annotation about race condition in session manager",
+  "evidenceType": "code_comment",
+  "evidence": {
+    "filePath": "src/sessions/session-manager.ts",
+    "sourceCode": "export class SessionManager {\n  private activeSessions = new Map<string, Session>();\n\n  /**\n   * HACK: There is a race condition when two requests arrive simultaneously\n   * for the same user. Both check activeSessions, find nothing, and each\n   * creates a new session — resulting in duplicate sessions and lost state.\n   *\n   * TODO: Replace this with a proper distributed lock (Redis SETNX) or\n   * optimistic concurrency via a version column on the sessions table.\n   * See: https://github.com/example/project/issues/247\n   */\n  async getOrCreateSession(userId: string): Promise<Session> {\n    const existing = this.activeSessions.get(userId);\n    if (existing && !existing.isExpired()) {\n      return existing;\n    }\n\n    // BUG: No atomicity guarantee between check and create\n    const session = await this.sessionRepo.create({\n      userId,\n      startedAt: new Date(),\n      expiresAt: new Date(Date.now() + this.ttlMs),\n    });\n\n    this.activeSessions.set(userId, session);\n    return session;\n  }\n\n  async destroySession(userId: string): Promise<void> {\n    const session = this.activeSessions.get(userId);\n    if (session) {\n      await this.sessionRepo.softDelete(session.id);\n      this.activeSessions.delete(userId);\n    }\n  }\n}",
+    "lineNumber": 1
+  },
+  "expectedAtom": {
+    "descriptionContainsAny": ["race", "concurrent", "lock", "sync", "parallel"],
+    "categoryOneOf": ["functional", "reliability"],
+    "minConfidence": 40,
+    "hasObservableOutcomes": true
+  }
+}

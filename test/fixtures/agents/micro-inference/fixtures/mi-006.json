@@ -1,0 +1,16 @@
+{
+  "id": "mi-006",
+  "name": "README setup instructions with Docker environment",
+  "evidenceType": "documentation",
+  "evidence": {
+    "filePath": "README.md",
+    "sourceCode": "## Getting Started\n\n### Prerequisites\n\n- Docker 24+ and Docker Compose v2\n- Node.js 20 LTS (for local development scripts only)\n- A PostgreSQL 16 instance (provided via Docker Compose)\n\n### Quick Start\n\n1. Clone the repository:\n   ```bash\n   git clone https://github.com/example/project.git\n   cd project\n   ```\n\n2. Copy the environment file and configure:\n   ```bash\n   cp .env.example .env\n   # Edit .env with your API keys and database credentials\n   ```\n\n3. Start all services:\n   ```bash\n   docker-compose up -d\n   ```\n\n4. Run database migrations:\n   ```bash\n   docker exec app npx typeorm migration:run\n   ```\n\n5. Verify the application is running:\n   ```bash\n   curl http://localhost:3000/health\n   # Expected: { \"status\": \"ok\", \"database\": \"connected\" }\n   ```\n\n### Troubleshooting\n\n- If the database container fails to start, ensure port 5432 is not already in use.\n- Run `docker-compose logs db` to check PostgreSQL startup logs.\n- For permission issues on Linux, add your user to the docker group.",
+    "lineNumber": 1
+  },
+  "expectedAtom": {
+    "descriptionContainsAny": ["setup", "install", "deploy", "run", "environment"],
+    "categoryOneOf": ["reliability", "functional", "operational"],
+    "minConfidence": 40,
+    "hasObservableOutcomes": true
+  }
+}

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { LLMService } from '../../common/llm/llm.service';
+import { parseJsonWithRecovery } from '../../common/llm/json-recovery';
 
 /**
  * Inferred atom structure from orphan test analysis
@@ -128,28 +129,17 @@ Respond with ONLY the JSON object, no additional commentary.`;
    * Parse LLM response into InferredAtom structure
    */
   private parseInferenceResponse(content: string): InferredAtom {
-    // Remove markdown code fences if present
-    let jsonStr = content.trim();
-    if (jsonStr.startsWith('```json')) {
-      jsonStr = jsonStr.slice(7);
-    } else if (jsonStr.startsWith('```')) {
-      jsonStr = jsonStr.slice(3);
+    const raw = parseJsonWithRecovery(content);
+    if (!raw || Array.isArray(raw)) {
+      throw new Error('Failed to parse LLM response');
     }
-    if (jsonStr.endsWith('```')) {
-      jsonStr = jsonStr.slice(0, -3);
-    }
-    jsonStr = jsonStr.trim();
-
-    // Remove trailing commas (common LLM mistake)
-    jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
-
-    const parsed = JSON.parse(jsonStr);
+    const parsed = raw;
 
     return {
-      description: parsed.description,
-      category: parsed.category,
+      description: parsed.description as string,
+      category: parsed.category as InferredAtom['category'],
       validators: Array.isArray(parsed.validators) ? parsed.validators : [],
-      rationale: parsed.rationale,
+      rationale: parsed.rationale as string,
       confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.5,
       evidence: Array.isArray(parsed.evidence) ? parsed.evidence : [],
     };

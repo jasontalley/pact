@@ -1,0 +1,21 @@
+{
+  "id": "qs-006",
+  "name": "Borderline atom — somewhat vague",
+  "atom": {
+    "description": "System validates user input on forms before submission",
+    "category": "functional",
+    "confidence": 70,
+    "observableOutcomes": [
+      "Invalid input triggers error message",
+      "Valid input allows form submission"
+    ],
+    "reasoning": "Inferred from form-validation.spec.ts: the test suite checks that submitting a form with empty required fields shows validation errors, and that filling all fields correctly allows the form to submit. While the atom captures a real behavior, it lacks specificity about which fields, what validation rules apply, and what the error messages contain. The outcomes are testable but broad.",
+    "sourceTestFilePath": "test/form-validation.spec.ts",
+    "sourceTestName": "should validate required fields before form submission"
+  },
+  "expectedScore": {
+    "minScore": 65,
+    "maxScore": 85,
+    "shouldPass": true
+  }
+}

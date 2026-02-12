@@ -13,6 +13,7 @@ import {
   ConversationTurn,
 } from '../../types/interview-state';
 import { AgentTaskType } from '../../../../../common/llm/providers/types';
+import { parseJsonWithRecovery } from '../../../../../common/llm/json-recovery';
 
 export interface ComposeMoleculeNodeOptions {
   /** Default lens type for composed molecules */
@@ -88,9 +89,9 @@ export function createComposeMoleculeNode(options?: ComposeMoleculeNodeOptions) 
         let molecules: MoleculeCandidate[] = [];
         try {
           const content = response.content || '';
-          const jsonMatch = content.match(/\{[\s\S]*\}/);
-          const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : content);
-          molecules = (parsed.molecules || []).map(
+          const parsed = parseJsonWithRecovery(content) as Record<string, unknown> | null;
+          if (!parsed) throw new Error('No JSON in response');
+          molecules = ((parsed.molecules as unknown[]) || []).map(
             (m: { name: string; description: string; lensType?: string; atomIndices: number[] }) =>
               ({
                 name: m.name,

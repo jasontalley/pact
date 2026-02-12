@@ -6,6 +6,7 @@ import { Atom } from '../atoms/atom.entity';
 import { AgentAction } from './agent-action.entity';
 import { AtomizeIntentDto, AtomizationAnalysis, AtomizationResult } from './dto/atomize-intent.dto';
 import { LLMService } from '../../common/llm/llm.service';
+import { parseJsonWithRecovery } from '../../common/llm/json-recovery';
 import { AtomQualityService } from '../validators/atom-quality.service';
 
 @Injectable()
@@ -223,15 +224,13 @@ Respond with ONLY the JSON, no additional text.`;
         temperature: 0.2,
       });
 
-      const content = response.content;
-
-      // Extract JSON from response (LLM might wrap it in markdown)
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
+      // Extract JSON from response (handles markdown fences, trailing commas, etc.)
+      const recovered = parseJsonWithRecovery(response.content);
+      if (!recovered) {
         throw new Error('No JSON found in LLM response');
       }
 
-      const analysis: AtomizationAnalysis = JSON.parse(jsonMatch[0]);
+      const analysis: AtomizationAnalysis = recovered as unknown as AtomizationAnalysis;
 
       // Validate response
       if (

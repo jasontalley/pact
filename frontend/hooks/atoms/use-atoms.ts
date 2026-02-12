@@ -224,7 +224,6 @@ export function usePendingCount() {
   return useQuery({
     queryKey: atomKeys.pendingCount(),
     queryFn: () => atomsApi.getPendingCount(),
-    refetchInterval: 30000, // Refetch every 30 seconds
   });
 }
 

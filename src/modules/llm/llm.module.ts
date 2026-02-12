@@ -77,6 +77,37 @@ import { LLMAdminController } from './llm-admin.controller';
           service.registerProvider(new OpenAIBatchProvider(openaiKey));
         }
 
+        // Set up lazy initializer for when DB config isn't available at startup
+        // (e.g., fresh database that gets populated after app boots)
+        service.setLazyInitializer(async () => {
+          try {
+            const dbConfig = await configRepository.findOne({
+              where: { isActive: true },
+            });
+            if (dbConfig?.providerConfigs) {
+              const ak = dbConfig.providerConfigs.anthropic?.apiKey;
+              const ok = dbConfig.providerConfigs.openai?.apiKey;
+              if (ak) {
+                service.registerProvider(new AnthropicBatchProvider(ak));
+                logger.log('Lazy-loaded Anthropic API key from database for batch service');
+              }
+              if (ok) {
+                service.registerProvider(new OpenAIBatchProvider(ok));
+                logger.log('Lazy-loaded OpenAI API key from database for batch service');
+              }
+            }
+          } catch (err) {
+            logger.warn(
+              `Lazy batch config load failed: ${err instanceof Error ? err.message : err}`,
+            );
+          }
+          // Also check env vars as fallback
+          const ak = configService.get<string>('ANTHROPIC_API_KEY');
+          const ok = configService.get<string>('OPENAI_API_KEY');
+          if (ak) service.registerProvider(new AnthropicBatchProvider(ak));
+          if (ok) service.registerProvider(new OpenAIBatchProvider(ok));
+        });
+
         return service;
       },
       inject: [ConfigService, getRepositoryToken(LLMConfiguration)],

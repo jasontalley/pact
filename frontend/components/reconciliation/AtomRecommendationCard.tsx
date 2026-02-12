@@ -18,6 +18,14 @@ import {
   FileCode,
   AlertTriangle,
   Lightbulb,
+  Target,
+  FlaskConical,
+  Code,
+  Monitor,
+  Globe,
+  BookOpen,
+  SearchSlash,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AtomRecommendation, RecommendationStatus } from '@/types/reconciliation';
@@ -63,6 +71,56 @@ function getStatusBadgeVariant(status: RecommendationStatus): 'default' | 'secon
       return 'destructive';
     default:
       return 'outline';
+  }
+}
+
+/**
+ * Evidence type icon and label mapping
+ */
+function getEvidenceTypeIcon(type: string) {
+  switch (type) {
+    case 'test':
+      return <FlaskConical className="h-3 w-3" />;
+    case 'source_export':
+      return <Code className="h-3 w-3" />;
+    case 'ui_component':
+      return <Monitor className="h-3 w-3" />;
+    case 'api_endpoint':
+      return <Globe className="h-3 w-3" />;
+    case 'documentation':
+      return <BookOpen className="h-3 w-3" />;
+    case 'coverage_gap':
+      return <SearchSlash className="h-3 w-3" />;
+    case 'code_comment':
+      return <MessageSquare className="h-3 w-3" />;
+    default:
+      return <FileCode className="h-3 w-3" />;
+  }
+}
+
+function getEvidenceTypeLabel(type: string): string {
+  switch (type) {
+    case 'test': return 'Test';
+    case 'source_export': return 'Export';
+    case 'ui_component': return 'UI';
+    case 'api_endpoint': return 'API';
+    case 'documentation': return 'Docs';
+    case 'coverage_gap': return 'Gap';
+    case 'code_comment': return 'Comment';
+    default: return type;
+  }
+}
+
+function getEvidenceTypeBadgeColor(type: string): string {
+  switch (type) {
+    case 'test': return 'bg-green-100 text-green-800 border-green-200';
+    case 'source_export': return 'bg-blue-100 text-blue-800 border-blue-200';
+    case 'ui_component': return 'bg-purple-100 text-purple-800 border-purple-200';
+    case 'api_endpoint': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+    case 'documentation': return 'bg-amber-100 text-amber-800 border-amber-200';
+    case 'coverage_gap': return 'bg-red-100 text-red-800 border-red-200';
+    case 'code_comment': return 'bg-gray-100 text-gray-800 border-gray-200';
+    default: return 'bg-gray-100 text-gray-700 border-gray-200';
   }
 }
 
@@ -174,6 +232,26 @@ export function AtomRecommendationCard({
             {/* Description */}
             <p className="text-sm mb-2">{atom.description}</p>
 
+            {/* Observable Outcomes - promoted above fold */}
+            {atom.observableOutcomes && atom.observableOutcomes.length > 0 && (
+              <div className="mb-2 p-2 bg-blue-50 border border-blue-100 rounded-md">
+                <h4 className="text-xs font-medium text-blue-800 mb-1 flex items-center gap-1">
+                  <Target className="h-3 w-3" />
+                  Verifiable Outcomes ({atom.observableOutcomes.length})
+                </h4>
+                <ul className="text-xs text-blue-700 space-y-0.5 pl-4">
+                  {atom.observableOutcomes.slice(0, 3).map((outcome, idx) => (
+                    <li key={idx} className="list-disc">{outcome.description}</li>
+                  ))}
+                  {atom.observableOutcomes.length > 3 && (
+                    <li className="list-none text-blue-500 italic">
+                      +{atom.observableOutcomes.length - 3} more...
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
+
             {/* Confidence and source */}
             <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
               <span>
@@ -182,6 +260,12 @@ export function AtomRecommendationCard({
                   {Math.round(atom.confidence * 100)}%
                 </span>
               </span>
+              {atom.primaryEvidenceType && (
+                <Badge className={cn('text-xs border gap-1', getEvidenceTypeBadgeColor(atom.primaryEvidenceType))}>
+                  {getEvidenceTypeIcon(atom.primaryEvidenceType)}
+                  {getEvidenceTypeLabel(atom.primaryEvidenceType)}
+                </Badge>
+              )}
               <span className="flex items-center gap-1">
                 <FileCode className="h-3 w-3" />
                 <span className="font-mono truncate max-w-[200px]">
@@ -302,19 +386,42 @@ export function AtomRecommendationCard({
               </div>
             )}
 
-            {/* Source Test */}
-            <div>
-              <h4 className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
-                <FileCode className="h-3 w-3" />
-                Source Test
-              </h4>
-              <div className="text-sm font-mono bg-muted/50 p-2 rounded">
-                <p className="truncate">{atom.sourceTestFilePath}</p>
-                <p className="text-xs text-muted-foreground">
-                  {atom.sourceTestName} (line {atom.sourceTestLineNumber})
-                </p>
+            {/* Evidence Sources */}
+            {atom.evidenceSources && atom.evidenceSources.length > 0 ? (
+              <div>
+                <h4 className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                  <FileCode className="h-3 w-3" />
+                  Evidence Sources ({atom.evidenceSources.length})
+                </h4>
+                <div className="space-y-1">
+                  {atom.evidenceSources.map((source, idx) => (
+                    <div key={`${source.type}-${source.filePath}-${idx}`} className="flex items-center gap-2 text-sm bg-muted/50 p-2 rounded">
+                      <Badge className={cn('text-xs border gap-1 shrink-0', getEvidenceTypeBadgeColor(source.type))}>
+                        {getEvidenceTypeIcon(source.type)}
+                        {getEvidenceTypeLabel(source.type)}
+                      </Badge>
+                      <span className="font-mono text-xs truncate flex-1">{source.filePath}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {Math.round(source.confidence * 100)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div>
+                <h4 className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                  <FileCode className="h-3 w-3" />
+                  Source Test
+                </h4>
+                <div className="text-sm font-mono bg-muted/50 p-2 rounded">
+                  <p className="truncate">{atom.sourceTestFilePath}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {atom.sourceTestName} (line {atom.sourceTestLineNumber})
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Quality Issues (if score is low) */}
             {typeof atom.qualityScore === 'number' && atom.qualityScore < 60 && (

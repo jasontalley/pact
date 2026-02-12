@@ -8,6 +8,7 @@ import { AgentAction } from './agent-action.entity';
 import { TestAtomCouplingService } from './test-atom-coupling.service';
 import { AtomQualityService } from '../validators/atom-quality.service';
 import { LLMService } from '../../common/llm/llm.service';
+import { parseJsonWithRecovery } from '../../common/llm/json-recovery';
 import { ContextBuilderService, CONTENT_PROVIDER } from './context-builder.service';
 import {
   BrownfieldAnalysisDto,
@@ -392,26 +393,24 @@ If the test is too vague, implementation-specific, describes multiple behaviors,
         useCache: dto.useCache !== false, // Default to true, but allow disabling for development
       });
 
-      const jsonMatch = response.content.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
+      const parsed = parseJsonWithRecovery(response.content) as Record<string, unknown> | null;
+      if (!parsed) {
         this.logger.warn(`No JSON found in LLM response for test: ${test.testName}`);
         return null;
       }
 
-      const parsed = JSON.parse(jsonMatch[0]);
-
-      if (!parsed || !parsed.description) {
+      if (!parsed || Array.isArray(parsed) || !parsed.description) {
         return null;
       }
 
       return {
-        description: parsed.description,
-        category: parsed.category || 'functional',
-        confidence: parsed.confidence || 0.5,
-        reasoning: parsed.reasoning || 'Inferred from test code',
+        description: parsed.description as string,
+        category: (parsed.category as string) || 'functional',
+        confidence: (parsed.confidence as number) || 0.5,
+        reasoning: (parsed.reasoning as string) || 'Inferred from test code',
         sourceTest: test,
-        observableOutcomes: parsed.observableOutcomes || [],
-        relatedDocs: parsed.relatedDocs || [],
+        observableOutcomes: (parsed.observableOutcomes as string[]) || [],
+        relatedDocs: (parsed.relatedDocs as string[]) || [],
       };
     } catch (error) {
       this.logger.error(`Failed to infer atom from test ${test.testName}: ${error.message}`);

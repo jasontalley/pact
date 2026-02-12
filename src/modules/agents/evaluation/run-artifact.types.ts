@@ -307,7 +307,7 @@ export interface RunArtifact<T extends AgentType = AgentType> {
  */
 export interface EvaluationReport {
   /** Suite that was run */
-  suite: 'golden' | 'property' | 'adversarial' | 'cost';
+  suite: 'golden' | 'property' | 'adversarial' | 'cost' | 'micro-inference' | 'quality-scoring';
   /** Agent evaluated */
   agent: AgentType;
   /** ISO timestamp */

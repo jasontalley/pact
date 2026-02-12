@@ -15,3 +15,12 @@ export {
   useStartPreReadReconciliation,
   useStartGitHubReconciliation,
 } from './use-reconciliation';
+
+export {
+  manifestKeys,
+  useManifest,
+  useLatestManifest,
+  useLatestDefaultManifest,
+  useManifestList,
+  useGenerateManifest,
+} from './use-manifest';

@@ -22,6 +22,7 @@ import {
   CheckCircle,
   AlertCircle,
   RefreshCw,
+  Info,
 } from 'lucide-react';
 import type { AtomRecommendation, MoleculeRecommendation, ApplyRequest } from '@/types/reconciliation';
 
@@ -166,6 +167,15 @@ export function ApplyRecommendationsDialog({
               </div>
             </div>
           )}
+
+          {/* Guidance: Apply vs Change Set */}
+          <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <Info className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+            <div className="text-xs text-blue-800 space-y-1">
+              <p><strong>Apply Directly</strong> creates atoms as drafts. They appear in the Atoms list immediately.</p>
+              <p><strong>Create Change Set</strong> creates proposed atoms requiring approval. They appear on the Pending Review page.</p>
+            </div>
+          </div>
 
           <Separator />
 

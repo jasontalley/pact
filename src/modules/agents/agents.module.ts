@@ -8,6 +8,7 @@ import { BrownfieldAnalysisService } from './brownfield-analysis.service';
 import { ChatAgentController } from './chat-agent.controller';
 import { ChatAgentService } from './chat-agent.service';
 import { ReconciliationController } from './reconciliation.controller';
+import { ManifestController } from './manifest.controller';
 import { AtomQualityService } from '../validators/atom-quality.service';
 import { TestAtomCouplingService } from './test-atom-coupling.service';
 import { AtomicityCheckerService } from './atomicity-checker.service';
@@ -43,6 +44,9 @@ import { AtomInferenceService } from './atom-inference.service';
 import { ReconciliationAtomInferenceService } from './reconciliation-atom-inference.service';
 import { CIPolicyService } from './ci-policy.service';
 import { ReconciliationPolicy } from './entities/reconciliation-policy.entity';
+import { RepoManifest } from './entities/repo-manifest.entity';
+import { ManifestRepository } from './repositories/manifest.repository';
+import { ManifestService } from './manifest.service';
 import { CancellationRegistry } from '../../common/cancellation.registry';
 import { ProjectsModule } from '../projects/projects.module';
 
@@ -58,6 +62,7 @@ import { ProjectsModule } from '../projects/projects.module';
       MoleculeRecommendation,
       TestRecord,
       ReconciliationPolicy,
+      RepoManifest,
     ]),
     ScheduleModule.forRoot(),
     forwardRef(() => AtomsModule),
@@ -71,6 +76,7 @@ import { ProjectsModule } from '../projects/projects.module';
     BrownfieldAnalysisController,
     ChatAgentController,
     ReconciliationController,
+    ManifestController,
   ],
   providers: [
     AtomizationService,
@@ -96,6 +102,10 @@ import { ProjectsModule } from '../projects/projects.module';
     AtomInferenceService,
     ReconciliationAtomInferenceService,
     CIPolicyService,
+    ManifestRepository,
+    ManifestService,
+    // String token alias so ModuleRef.get('ManifestService') works from other modules
+    { provide: 'ManifestService', useExisting: ManifestService },
     CancellationRegistry,
   ],
   exports: [
@@ -118,6 +128,8 @@ import { ProjectsModule } from '../projects/projects.module';
     ArtifactCaptureService,
     AtomInferenceService,
     ReconciliationAtomInferenceService,
+    ManifestRepository,
+    ManifestService,
   ],
 })
 export class AgentsModule implements OnModuleInit {

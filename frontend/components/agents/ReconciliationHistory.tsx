@@ -125,7 +125,6 @@ export function ReconciliationHistory({
     queryKey: ['recoverable-runs'],
     queryFn: fetchRecoverableRuns,
     enabled: open,
-    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   const recoverMutation = useMutation({

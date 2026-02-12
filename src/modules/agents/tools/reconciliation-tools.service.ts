@@ -779,30 +779,32 @@ export class ReconciliationToolsService implements ToolExecutor {
     const clusters: Map<string, ClusteringAtomInput[]> = new Map();
 
     // Group atoms based on clustering method
-    for (const atom of atoms) {
-      let clusterKey: string;
+    if (clusteringMethod === 'domain_concept') {
+      // Domain concept clustering: extract keywords from descriptions, group by most frequent shared concept
+      this.clusterByDomainConcept(atoms, clusters);
+    } else {
+      for (const atom of atoms) {
+        let clusterKey: string;
 
-      switch (clusteringMethod) {
-        case 'module':
-          clusterKey = this.getModuleKey(atom.source_file);
-          break;
-        case 'domain_concept':
-          clusterKey = atom.category;
-          break;
-        case 'semantic': {
-          // For semantic clustering, use first two words of description
-          const words = atom.description.split(/\s+/).slice(0, 2);
-          clusterKey = words.join('-').toLowerCase() || 'uncategorized';
-          break;
+        switch (clusteringMethod) {
+          case 'module':
+            clusterKey = this.getModuleKey(atom.source_file);
+            break;
+          case 'semantic': {
+            // For semantic clustering, use first two words of description
+            const words = atom.description.split(/\s+/).slice(0, 2);
+            clusterKey = words.join('-').toLowerCase() || 'uncategorized';
+            break;
+          }
+          default:
+            clusterKey = 'default';
         }
-        default:
-          clusterKey = 'default';
-      }
 
-      if (!clusters.has(clusterKey)) {
-        clusters.set(clusterKey, []);
+        if (!clusters.has(clusterKey)) {
+          clusters.set(clusterKey, []);
+        }
+        clusters.get(clusterKey)!.push(atom);
       }
-      clusters.get(clusterKey)!.push(atom);
     }
 
     // Convert clusters to molecules
@@ -814,13 +816,20 @@ export class ReconciliationToolsService implements ToolExecutor {
       if (clusterAtoms.length < minClusterSize) continue;
 
       const moleculeName = this.generateMoleculeName(key, clusteringMethod);
+      const avgConfidence = this.computeClusterConfidence(clusterAtoms);
+      const topDescriptions = clusterAtoms.slice(0, 3).map((a) => a.description);
+      const suffix = clusterAtoms.length > 3 ? ' and more' : '';
+      const description =
+        clusterAtoms.length === 1
+          ? `Behavior related to ${key}: ${topDescriptions[0]}`
+          : `Behaviors related to ${key} including: ${topDescriptions.join('; ')}${suffix}`;
 
       molecules.push({
         temp_id: `mol-temp-${moleculeIndex++}`,
         name: moleculeName,
-        description: `Molecule containing ${clusterAtoms.length} related atoms from ${key}`,
+        description,
         atom_temp_ids: clusterAtoms.map((a) => a.temp_id),
-        confidence: 0.7, // Deterministic clustering has moderate confidence
+        confidence: avgConfidence,
         clustering_reason: `Grouped by ${clusteringMethod}: ${key}`,
       });
     }
@@ -1019,6 +1028,89 @@ export class ReconciliationToolsService implements ToolExecutor {
   /**
    * Generate molecule name from cluster key
    */
+  /**
+   * Compute average confidence from atoms in a cluster.
+   * Falls back to 0.5 if no confidence data is available.
+   */
+  private computeClusterConfidence(atoms: ClusteringAtomInput[]): number {
+    const withConfidence = atoms.filter((a) => a.confidence != null && a.confidence > 0);
+    if (withConfidence.length === 0) return 0.5;
+    const sum = withConfidence.reduce((acc, a) => acc + (a.confidence ?? 0), 0);
+    return Math.round((sum / withConfidence.length) * 100) / 100;
+  }
+
+  /**
+   * Cluster atoms by domain concepts extracted from their descriptions.
+   * Maps description keywords to domain labels and groups by most frequent shared label.
+   */
+  private clusterByDomainConcept(
+    atoms: ClusteringAtomInput[],
+    clusters: Map<string, ClusteringAtomInput[]>,
+  ): void {
+    const domainMappings: Array<[RegExp, string]> = [
+      [/\b(authenticat\w*|login|logout|signin|signup|signout|sso|oauth)\b/i, 'authentication'],
+      [/\b(user|account|profile|registration|onboarding)\b/i, 'user-management'],
+      [/\b(payment|billing|checkout|invoice|subscription|pricing|charge|refund)\b/i, 'payments'],
+      [/\b(cart|shopping|product|catalog|inventory|sku|stock)\b/i, 'product-catalog'],
+      [/\b(order|purchase|shipment|delivery|fulfillment)\b/i, 'orders'],
+      [/\b(search|filter|sort|pagination|browse|query)\b/i, 'search-discovery'],
+      [/\b(notification|email|message|alert|sms|push)\b/i, 'notifications'],
+      [/\b(dashboard|analytics|report|metric|stats|chart|graph)\b/i, 'analytics'],
+      [/\b(setting|preference|configuration|option|theme|locale)\b/i, 'settings'],
+      [/\b(upload|download|file|image|media|attachment|asset)\b/i, 'media-management'],
+      [/\b(permission|role|access|authorization|rbac|admin)\b/i, 'access-control'],
+      [/\b(validat\w*|form|input|constraint|schema)\b/i, 'validation'],
+      [/\b(cache|queue|event|webhook|api|middleware|rate[\s-]?limit)\b/i, 'infrastructure'],
+      [/\b(database|migration|schema|model|entity|repository|orm)\b/i, 'data-management'],
+      [/\b(navigation|routing|page|layout|menu|sidebar|header|footer)\b/i, 'navigation-layout'],
+      [/\b(error|exception|fallback|retry|recovery|resilience)\b/i, 'error-handling'],
+    ];
+
+    // Extract domain labels for each atom
+    const atomLabels = new Map<ClusteringAtomInput, string[]>();
+    const labelFrequency = new Map<string, number>();
+
+    for (const atom of atoms) {
+      const labels: string[] = [];
+      for (const [pattern, label] of domainMappings) {
+        if (pattern.test(atom.description)) {
+          labels.push(label);
+        }
+      }
+      atomLabels.set(atom, labels);
+      for (const label of labels) {
+        labelFrequency.set(label, (labelFrequency.get(label) || 0) + 1);
+      }
+    }
+
+    // Assign each atom to its most frequent shared label
+    for (const atom of atoms) {
+      const labels = atomLabels.get(atom) || [];
+      let clusterKey: string;
+
+      if (labels.length === 0) {
+        // No domain match — fall back to category
+        clusterKey = atom.category || 'general';
+      } else {
+        // Pick label with highest frequency across all atoms
+        clusterKey = labels[0];
+        let maxFreq = labelFrequency.get(labels[0]) || 0;
+        for (const label of labels) {
+          const freq = labelFrequency.get(label) || 0;
+          if (freq > maxFreq) {
+            maxFreq = freq;
+            clusterKey = label;
+          }
+        }
+      }
+
+      if (!clusters.has(clusterKey)) {
+        clusters.set(clusterKey, []);
+      }
+      clusters.get(clusterKey)!.push(atom);
+    }
+  }
+
   private generateMoleculeName(key: string, method: string): string {
     // Clean up the key for a readable name
     const cleaned = key

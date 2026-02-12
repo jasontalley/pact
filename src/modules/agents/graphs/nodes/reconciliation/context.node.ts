@@ -217,32 +217,16 @@ function createFallbackAnalysis(test: OrphanTestInfo, _rootDirectory: string): T
     .slice(0, 5)
     .map((a) => a.replace(/expect\([^)]+\)\./, '').substring(0, 100));
 
-  // Extract domain concepts from test name and assertions
-  const domainPatterns = [
-    'user',
-    'auth',
-    'login',
-    'session',
-    'token',
-    'payment',
-    'order',
-    'cart',
-    'checkout',
-    'create',
-    'update',
-    'delete',
-    'get',
-    'list',
-    'validate',
-    'error',
-    'success',
-    'fail',
-  ];
-
+  // Extract domain concepts from test name and assertions (using shared patterns)
   const testNameLower = test.testName.toLowerCase();
-  const domainConcepts = domainPatterns.filter(
-    (p) => testNameLower.includes(p) || testCode.toLowerCase().includes(p),
-  );
+  const codeLower = testCode.toLowerCase();
+  const domainConcepts = [
+    ...new Set(
+      DOMAIN_PATTERNS.filter(
+        (p) => testNameLower.includes(p) || codeLower.includes(p),
+      ).map((p) => CONCEPT_ALIASES[p] || p),
+    ),
+  ];
 
   return {
     testId: getTestKey(test),
@@ -276,6 +260,8 @@ function buildEvidenceAnalysis(evidence: EvidenceItem): EvidenceAnalysis {
       return buildDocumentationAnalysis(evidence, evidenceId);
     case 'coverage_gap':
       return buildCoverageGapAnalysis(evidence, evidenceId);
+    case 'code_comment':
+      return buildCodeCommentAnalysis(evidence, evidenceId);
     default:
       return {
         evidenceId,
@@ -368,9 +354,97 @@ function buildCoverageGapAnalysis(evidence: EvidenceItem, evidenceId: string): E
   };
 }
 
+function buildCodeCommentAnalysis(evidence: EvidenceItem, evidenceId: string): EvidenceAnalysis {
+  const code = evidence.code || '';
+  const commentType = evidence.metadata?.commentType || 'comment';
+  const associatedExport = evidence.metadata?.associatedExport;
+
+  const commentTypeLabels: Record<string, string> = {
+    jsdoc: 'JSDoc documentation',
+    task_annotation: 'task annotation',
+    atom_reference: '@atom reference',
+    business_logic: 'business logic comment',
+  };
+  const typeLabel = commentTypeLabels[commentType] || 'code comment';
+
+  const domainConcepts = extractDomainConceptsFromCode(evidence.name, code);
+  if (associatedExport) {
+    domainConcepts.push(...extractDomainConceptsFromCode(associatedExport, ''));
+  }
+
+  return {
+    evidenceId,
+    type: 'code_comment',
+    summary: typeLabel + ' in ' + evidence.filePath + (associatedExport ? ' (on ' + associatedExport + ')' : ''),
+    domainConcepts: [...new Set(domainConcepts)],
+    rawContext: code,
+  };
+}
+
+/**
+ * Canonical concept aliases — maps plural/verb forms to base concepts.
+ * Used by extractDomainConceptsFromCode to normalize extracted concepts
+ * so that "users", "creating", "authentication" etc. collapse to their
+ * canonical forms for clustering and dedup downstream.
+ */
+const CONCEPT_ALIASES: Record<string, string> = {
+  users: 'user', creating: 'create', creates: 'create', created: 'create',
+  updates: 'update', updating: 'update', updated: 'update',
+  deletes: 'delete', deleting: 'delete', deleted: 'delete',
+  validates: 'validate', validating: 'validate', validated: 'validate', validation: 'validate',
+  searches: 'search', searching: 'search',
+  filters: 'filter', filtering: 'filter',
+  sorts: 'sort', sorting: 'sort',
+  uploads: 'upload', uploading: 'upload',
+  downloads: 'download', downloading: 'download',
+  submits: 'submit', submitting: 'submit',
+  notifications: 'notification',
+  permissions: 'permission',
+  settings: 'setting',
+  sessions: 'session',
+  tokens: 'token',
+  payments: 'payment',
+  orders: 'order',
+  profiles: 'profile',
+  emails: 'email',
+  errors: 'error',
+  configs: 'config', configuration: 'config', configurations: 'config',
+  logins: 'login',
+  authenticating: 'auth', authentication: 'auth', authenticated: 'auth',
+  authorizing: 'auth', authorization: 'auth', authorized: 'auth',
+  products: 'product',
+  categories: 'category',
+  reviews: 'review',
+  ratings: 'rating',
+  comments: 'comment',
+  accounts: 'account',
+  addresses: 'address',
+  events: 'event',
+  webhooks: 'webhook',
+  reports: 'report',
+};
+
+/**
+ * Domain keyword patterns to scan for in code.
+ * Each matched pattern is normalized via CONCEPT_ALIASES before adding to concepts.
+ */
+const DOMAIN_PATTERNS = [
+  'user', 'auth', 'login', 'session', 'token', 'payment', 'order',
+  'cart', 'checkout', 'create', 'update', 'delete', 'get', 'list',
+  'validate', 'error', 'success', 'fail', 'submit', 'upload',
+  'download', 'notification', 'email', 'search', 'filter', 'sort',
+  'permission', 'role', 'admin', 'config', 'setting', 'profile',
+  // Extended patterns (Phase 22)
+  'product', 'category', 'price', 'inventory', 'shipping',
+  'review', 'rating', 'comment', 'address', 'account',
+  'dashboard', 'report', 'analytics', 'export', 'import',
+  'webhook', 'event', 'queue', 'cache', 'database',
+];
+
 /**
  * Extract domain concepts from a name and code snippet.
  * Splits camelCase/PascalCase names and looks for common domain patterns.
+ * Normalizes concepts via CONCEPT_ALIASES to collapse plurals/verb forms.
  */
 function extractDomainConceptsFromCode(name: string, code: string): string[] {
   const concepts = new Set<string>();
@@ -382,20 +456,24 @@ function extractDomainConceptsFromCode(name: string, code: string): string[] {
     .toLowerCase()
     .split(/[\s_-]+/)
     .filter((w) => w.length > 2);
-  nameWords.forEach((w) => concepts.add(w));
 
-  // Scan code for common domain keywords
-  const domainPatterns = [
-    'user', 'auth', 'login', 'session', 'token', 'payment', 'order',
-    'cart', 'checkout', 'create', 'update', 'delete', 'get', 'list',
-    'validate', 'error', 'success', 'fail', 'submit', 'upload',
-    'download', 'notification', 'email', 'search', 'filter', 'sort',
-    'permission', 'role', 'admin', 'config', 'setting', 'profile',
-  ];
+  // Add normalized name words
+  for (const w of nameWords) {
+    concepts.add(CONCEPT_ALIASES[w] || w);
+  }
+
+  // Scan code for domain keywords (with normalization)
   const codeLower = code.toLowerCase();
-  for (const pattern of domainPatterns) {
+  for (const pattern of DOMAIN_PATTERNS) {
     if (codeLower.includes(pattern)) {
-      concepts.add(pattern);
+      concepts.add(CONCEPT_ALIASES[pattern] || pattern);
+    }
+  }
+
+  // Also scan for aliased forms in code (e.g., "authentication" → "auth")
+  for (const [alias, canonical] of Object.entries(CONCEPT_ALIASES)) {
+    if (codeLower.includes(alias)) {
+      concepts.add(canonical);
     }
   }
 
@@ -621,11 +699,12 @@ export function createContextNode(options: ContextNodeOptions = {}) {
         );
 
         for (const evidence of evidenceItems) {
-          const evidenceId = `${evidence.filePath}:${evidence.name}`;
+          const evidenceId = `${evidence.type}:${evidence.filePath}:${evidence.name}`;
 
           if (evidence.type === 'test') {
             // For test evidence, mirror the test analysis into evidence analysis
-            const testKey = evidenceId;
+            // contextPerTest uses filePath:testName as key (no type prefix)
+            const testKey = `${evidence.filePath}:${evidence.name}`;
             const testAnalysis = contextPerTest.get(testKey);
             const qualityScore = testQualityScores?.get(testKey);
 

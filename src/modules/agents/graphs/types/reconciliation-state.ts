@@ -68,6 +68,8 @@ export type ExceptionLane = 'normal' | 'hotfix-exception' | 'spike-exception';
 export type AttestationType = 'local' | 'ci-attested';
 
 export interface ReconciliationOptions {
+  /** Manifest ID to load pre-computed deterministic analysis from */
+  manifestId?: string;
   /** Project ID for policy lookups and atom creation (Phase 18) */
   projectId?: string;
   /** Whether to analyze documentation for context enrichment */
@@ -211,6 +213,7 @@ export type EvidenceType =
   | 'ui_component'    // React/Vue/Svelte component
   | 'api_endpoint'    // Route/controller definition
   | 'documentation'   // README, docs, comments
+  | 'code_comment'    // JSDoc, task annotations, business logic comments
   | 'coverage_gap';   // Untested code identified via coverage data
 
 /**
@@ -222,6 +225,7 @@ export const EVIDENCE_CONFIDENCE_WEIGHTS: Record<EvidenceType, number> = {
   api_endpoint: 0.8,
   ui_component: 0.7,
   source_export: 0.6,
+  code_comment: 0.55,
   documentation: 0.5,
   coverage_gap: 0.4,
 };
@@ -259,6 +263,7 @@ export interface EvidenceMetadata {
   // source_export
   exportType?: 'function' | 'class' | 'const' | 'interface';
   isDefault?: boolean;
+  jsdoc?: string;
   // ui_component
   framework?: string;
   hasForm?: boolean;
@@ -268,6 +273,10 @@ export interface EvidenceMetadata {
   path?: string;
   // documentation
   section?: string;
+  // code_comment
+  commentType?: 'jsdoc' | 'task_annotation' | 'business_logic' | 'atom_reference';
+  associatedExport?: string;
+  tags?: string[];
   // coverage_gap
   uncoveredLines?: number;
   totalLines?: number;
@@ -436,6 +445,8 @@ export interface InferredMolecule {
   name: string;
   /** Description of what the molecule represents */
   description: string;
+  /** Gherkin scenario describing the molecule's behavior (Given/When/Then) */
+  gherkinScenario?: string;
   /** Temporary IDs of atoms in this molecule */
   atomTempIds: string[];
   /** Confidence score (0-100) */
@@ -715,7 +726,7 @@ export const ReconciliationGraphState = Annotation.Root({
 
   /** Atoms inferred from tests */
   inferredAtoms: Annotation<InferredAtom[]>({
-    reducer: (current, update) => [...current, ...update],
+    reducer: (_, update) => update,
     default: () => [],
   }),
 

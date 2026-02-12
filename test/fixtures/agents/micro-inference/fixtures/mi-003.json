@@ -1,0 +1,16 @@
+{
+  "id": "mi-003",
+  "name": "POST /api/users creates a new user account",
+  "evidenceType": "api_endpoint",
+  "evidence": {
+    "filePath": "src/users/users.controller.ts",
+    "sourceCode": "@Controller('api/users')\nexport class UsersController {\n  constructor(private readonly usersService: UsersService) {}\n\n  @Post()\n  @HttpCode(HttpStatus.CREATED)\n  async create(@Body() createUserDto: CreateUserDto): Promise<UserResponseDto> {\n    const user = await this.usersService.create(createUserDto);\n    return {\n      id: user.id,\n      email: user.email,\n      displayName: user.displayName,\n      createdAt: user.createdAt,\n    };\n  }\n\n  @Get(':id')\n  async findOne(@Param('id', ParseIntPipe) id: number): Promise<UserResponseDto> {\n    const user = await this.usersService.findOneOrFail(id);\n    return {\n      id: user.id,\n      email: user.email,\n      displayName: user.displayName,\n      createdAt: user.createdAt,\n    };\n  }\n}",
+    "lineNumber": 1
+  },
+  "expectedAtom": {
+    "descriptionContainsAny": ["user", "create", "account", "register"],
+    "categoryOneOf": ["functional"],
+    "minConfidence": 70,
+    "hasObservableOutcomes": true
+  }
+}

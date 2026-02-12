@@ -40,7 +40,6 @@ export function useConflictMetrics() {
   return useQuery<ConflictMetrics>({
     queryKey: conflictKeys.metrics(),
     queryFn: () => conflictsApi.getMetrics(),
-    refetchInterval: 30000,
   });
 }
 

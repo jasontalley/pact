@@ -29,7 +29,6 @@ export function useReconciliationStatus() {
   return useQuery({
     queryKey: reconciliationKeys.status(),
     queryFn: () => reconciliationApi.getStatus(),
-    refetchInterval: 30000, // Check every 30 seconds
   });
 }
 
@@ -51,6 +50,11 @@ export function useRunDetails(runId: string | null) {
     queryKey: runId ? reconciliationKeys.run(runId) : ['disabled'],
     queryFn: () => reconciliationApi.getRunDetails(runId!),
     enabled: !!runId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      if (status === 'running' || status === 'pending_review') return 5000;
+      return false;
+    },
   });
 }
 
@@ -152,7 +156,7 @@ export function useStartGitHubReconciliation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: { commitSha?: string; branch?: string; repo?: string }) =>
+    mutationFn: (data: { commitSha?: string; branch?: string; repo?: string; manifestId?: string }) =>
       reconciliationApi.startFromGitHub(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: reconciliationKeys.runs() });

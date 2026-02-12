@@ -11,8 +11,11 @@
 #   ./scripts/test-agents.sh --cost       # Run cost/latency budget tests only
 #   ./scripts/test-agents.sh --contracts  # Run contract acceptance tests only
 #   ./scripts/test-agents.sh --golden     # Run golden suite evaluation (requires LLM)
-#   ./scripts/test-agents.sh --all        # Run everything including golden
+#   ./scripts/test-agents.sh --micro-inference  # Run micro-inference tests (requires LLM)
+#   ./scripts/test-agents.sh --quality-scoring  # Run quality-scoring tests (requires LLM)
+#   ./scripts/test-agents.sh --all        # Run everything including LLM suites
 #   ./scripts/test-agents.sh --ci         # CI mode: all fast tests + JUnit output
+#   ./scripts/test-agents.sh --html       # Generate HTML report after evaluation
 #
 
 set -e
@@ -39,9 +42,12 @@ RUN_PROPERTY=false
 RUN_COST=false
 RUN_CONTRACTS=false
 RUN_GOLDEN=false
+RUN_MICRO_INFERENCE=false
+RUN_QUALITY_SCORING=false
 RUN_ALL=false
 CI_MODE=false
 UPDATE_SNAPSHOTS=false
+HTML_REPORT=false
 AGENT="all"
 
 # Parse arguments
@@ -63,6 +69,14 @@ while [[ $# -gt 0 ]]; do
             RUN_GOLDEN=true
             shift
             ;;
+        --micro-inference)
+            RUN_MICRO_INFERENCE=true
+            shift
+            ;;
+        --quality-scoring)
+            RUN_QUALITY_SCORING=true
+            shift
+            ;;
         --all)
             RUN_ALL=true
             shift
@@ -75,6 +89,10 @@ while [[ $# -gt 0 ]]; do
             UPDATE_SNAPSHOTS=true
             shift
             ;;
+        --html)
+            HTML_REPORT=true
+            shift
+            ;;
         --agent=*)
             AGENT="${1#*=}"
             shift
@@ -85,22 +103,28 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: ./scripts/test-agents.sh [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --property        Run property-based tests (invariants)"
-            echo "  --cost            Run cost/latency budget tests"
-            echo "  --contracts       Run contract acceptance tests"
-            echo "  --golden          Run golden suite evaluation (requires LLM)"
-            echo "  --all             Run all tests including golden"
-            echo "  --ci              CI mode: fast tests + JUnit XML output"
-            echo "  --update-snapshots Update golden test snapshots"
-            echo "  --agent=NAME      Test specific agent (reconciliation|interview|all)"
-            echo "  --help, -h        Show this help"
+            echo "  --property          Run property-based tests (invariants)"
+            echo "  --cost              Run cost/latency budget tests"
+            echo "  --contracts         Run contract acceptance tests"
+            echo "  --golden            Run golden suite evaluation (requires LLM)"
+            echo "  --micro-inference   Run micro-inference tests (requires LLM, ~\$0.05)"
+            echo "  --quality-scoring   Run quality-scoring tests (requires LLM, ~\$0.02)"
+            echo "  --all               Run all tests including LLM suites"
+            echo "  --ci                CI mode: fast tests + JUnit XML output"
+            echo "  --update-snapshots  Update golden test snapshots"
+            echo "  --html              Generate HTML report after evaluation"
+            echo "  --agent=NAME        Test specific agent (reconciliation|interview|all)"
+            echo "  --help, -h          Show this help"
             echo ""
             echo "Results are saved to: test-results/agents/"
             echo ""
             echo "Examples:"
             echo "  ./scripts/test-agents.sh                    # All fast tests"
             echo "  ./scripts/test-agents.sh --golden           # Golden suite (needs LLM)"
+            echo "  ./scripts/test-agents.sh --micro-inference  # Quick LLM quality check"
+            echo "  ./scripts/test-agents.sh --quality-scoring  # Quality scoring check"
             echo "  ./scripts/test-agents.sh --all              # Everything"
+            echo "  ./scripts/test-agents.sh --all --html       # Everything + HTML report"
             echo "  ./scripts/test-agents.sh --agent=reconciliation --golden"
             exit 0
             ;;
@@ -111,8 +135,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# If no specific suite selected, run all fast tests (no golden)
-if [[ "$RUN_PROPERTY" == "false" && "$RUN_COST" == "false" && "$RUN_CONTRACTS" == "false" && "$RUN_GOLDEN" == "false" && "$RUN_ALL" == "false" && "$CI_MODE" == "false" ]]; then
+# If no specific suite selected, run all fast tests (no LLM suites)
+if [[ "$RUN_PROPERTY" == "false" && "$RUN_COST" == "false" && "$RUN_CONTRACTS" == "false" && "$RUN_GOLDEN" == "false" && "$RUN_MICRO_INFERENCE" == "false" && "$RUN_QUALITY_SCORING" == "false" && "$RUN_ALL" == "false" && "$CI_MODE" == "false" ]]; then
     RUN_PROPERTY=true
     RUN_COST=true
     RUN_CONTRACTS=true
@@ -124,6 +148,8 @@ if [[ "$RUN_ALL" == "true" ]]; then
     RUN_COST=true
     RUN_CONTRACTS=true
     RUN_GOLDEN=true
+    RUN_MICRO_INFERENCE=true
+    RUN_QUALITY_SCORING=true
 fi
 
 # CI mode: fast tests with JUnit output
@@ -192,7 +218,7 @@ ensure_containers_running() {
 ensure_containers_running
 
 # Create results directories inside container
-docker exec -i $CONTAINER_NAME sh -c "mkdir -p $RESULTS_DIR/property $RESULTS_DIR/contracts $RESULTS_DIR/cost $RESULTS_DIR/golden $RESULTS_DIR/snapshots/reconciliation $RESULTS_DIR/snapshots/interview"
+docker exec -i $CONTAINER_NAME sh -c "mkdir -p $RESULTS_DIR/property $RESULTS_DIR/contracts $RESULTS_DIR/cost $RESULTS_DIR/golden $RESULTS_DIR/micro-inference $RESULTS_DIR/quality-scoring $RESULTS_DIR/reports $RESULTS_DIR/snapshots/reconciliation $RESULTS_DIR/snapshots/interview"
 
 FAILED=0
 TOTAL=0
@@ -286,10 +312,62 @@ if [[ "$RUN_GOLDEN" == "true" ]]; then
         GOLDEN_ARGS="$GOLDEN_ARGS --update-snapshots"
     fi
 
+    if [[ "$HTML_REPORT" == "true" ]]; then
+        GOLDEN_ARGS="$GOLDEN_ARGS --html"
+    fi
+
     if docker exec -i $CONTAINER_NAME sh -c "npx ts-node scripts/evaluate-agents.ts --suite=golden $GOLDEN_ARGS"; then
         echo -e "${GREEN}Golden suite: PASSED${NC}"
     else
         echo -e "${RED}Golden suite: FAILED${NC}"
+        FAILED=$((FAILED + 1))
+    fi
+
+    echo ""
+fi
+
+# =============================================================================
+# Micro-Inference Suite (requires LLM, ~$0.05, ~30s)
+# =============================================================================
+if [[ "$RUN_MICRO_INFERENCE" == "true" ]]; then
+    echo -e "${BLUE}--- Micro-Inference Suite ---${NC}"
+    echo -e "${YELLOW}Note: Micro-inference tests require LLM access (~\$0.05)${NC}"
+    TOTAL=$((TOTAL + 1))
+
+    MI_ARGS="--output=$RESULTS_DIR/micro-inference"
+
+    if [[ "$HTML_REPORT" == "true" ]]; then
+        MI_ARGS="$MI_ARGS --html"
+    fi
+
+    if docker exec -i $CONTAINER_NAME sh -c "npx ts-node scripts/evaluate-agents.ts --suite=micro-inference $MI_ARGS"; then
+        echo -e "${GREEN}Micro-inference suite: PASSED${NC}"
+    else
+        echo -e "${RED}Micro-inference suite: FAILED${NC}"
+        FAILED=$((FAILED + 1))
+    fi
+
+    echo ""
+fi
+
+# =============================================================================
+# Quality Scoring Suite (requires LLM, ~$0.02, ~3min)
+# =============================================================================
+if [[ "$RUN_QUALITY_SCORING" == "true" ]]; then
+    echo -e "${BLUE}--- Quality Scoring Suite ---${NC}"
+    echo -e "${YELLOW}Note: Quality scoring tests require LLM access (~\$0.02)${NC}"
+    TOTAL=$((TOTAL + 1))
+
+    QS_ARGS="--output=$RESULTS_DIR/quality-scoring"
+
+    if [[ "$HTML_REPORT" == "true" ]]; then
+        QS_ARGS="$QS_ARGS --html"
+    fi
+
+    if docker exec -i $CONTAINER_NAME sh -c "npx ts-node scripts/evaluate-agents.ts --suite=quality-scoring $QS_ARGS"; then
+        echo -e "${GREEN}Quality scoring suite: PASSED${NC}"
+    else
+        echo -e "${RED}Quality scoring suite: FAILED${NC}"
         FAILED=$((FAILED + 1))
     fi
 
@@ -310,7 +388,9 @@ docker exec -i $CONTAINER_NAME sh -c "cat > $RESULTS_DIR/summary-$TIMESTAMP.json
     \"property\": $RUN_PROPERTY,
     \"contracts\": $RUN_CONTRACTS,
     \"cost\": $RUN_COST,
-    \"golden\": $RUN_GOLDEN
+    \"golden\": $RUN_GOLDEN,
+    \"micro_inference\": $RUN_MICRO_INFERENCE,
+    \"quality_scoring\": $RUN_QUALITY_SCORING
   },
   \"total\": $TOTAL,
   \"failed\": $FAILED,

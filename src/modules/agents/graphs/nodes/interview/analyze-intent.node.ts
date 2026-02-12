@@ -8,6 +8,7 @@
 import { NodeConfig } from '../types';
 import { InterviewGraphStateType, ConversationTurn } from '../../types/interview-state';
 import { AgentTaskType } from '../../../../../common/llm/providers/types';
+import { parseJsonWithRecovery } from '../../../../../common/llm/json-recovery';
 
 export interface AnalyzeIntentNodeOptions {
   /** Custom system prompt override */
@@ -65,8 +66,9 @@ export function createAnalyzeIntentNode(options?: AnalyzeIntentNodeOptions) {
 
         try {
           const content = response.content || '';
-          const jsonMatch = content.match(/\{[\s\S]*\}/);
-          analysis = JSON.parse(jsonMatch ? jsonMatch[0] : content);
+          const recovered = parseJsonWithRecovery(content);
+          if (!recovered) throw new Error('No JSON in response');
+          analysis = recovered as typeof analysis;
         } catch {
           logger?.warn('AnalyzeIntent: Failed to parse LLM response, using fallback');
           analysis = {

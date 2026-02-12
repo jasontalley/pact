@@ -15,6 +15,5 @@ export function useEpistemicMetrics() {
   return useQuery<EpistemicMetrics>({
     queryKey: epistemicKeys.metrics(),
     queryFn: () => metricsApi.getEpistemic(),
-    refetchInterval: 30000,
   });
 }

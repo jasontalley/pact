@@ -235,7 +235,6 @@ export class AnthropicBatchProvider implements BatchProvider {
         'x-api-key': this.apiKey,
         'anthropic-version': API_VERSION,
         'content-type': 'application/json',
-        'anthropic-beta': 'message-batches-2024-09-24',
       },
     };
 

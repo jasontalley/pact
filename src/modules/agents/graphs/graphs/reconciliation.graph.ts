@@ -60,6 +60,10 @@ import {
   InterimPersistNodeOptions,
 } from '../nodes/reconciliation/interim-persist.node';
 import { createTestQualityNode } from '../nodes/reconciliation/test-quality.node';
+import {
+  createLoadManifestNode,
+  LoadManifestNodeOptions,
+} from '../nodes/reconciliation/load-manifest.node';
 
 /**
  * Options for customizing the Reconciliation graph
@@ -76,6 +80,7 @@ export interface ReconciliationGraphOptions {
     interimPersist?: InterimPersistNodeOptions;
     verify?: VerifyNodeOptions;
     persist?: PersistNodeOptions;
+    loadManifest?: LoadManifestNodeOptions;
   };
   /** Custom checkpointer for state persistence (default: MemorySaver) */
   checkpointer?: BaseCheckpointSaver;
@@ -96,6 +101,7 @@ export const RECONCILIATION_NODES = {
   SYNTHESIZE_MOLECULES: 'synthesize_molecules',
   INTERIM_PERSIST: 'interim_persist',
   VERIFY: 'verify',
+  LOAD_MANIFEST: 'load_manifest',
   PERSIST: 'persist',
 } as const;
 
@@ -196,6 +202,20 @@ function afterVerify(
 }
 
 /**
+ * Conditional router at START.
+ * If a manifestId is provided, skip the deterministic phases and
+ * load the pre-computed manifest. Otherwise, run the full pipeline.
+ */
+function startRouter(
+  state: ReconciliationGraphStateType,
+): typeof RECONCILIATION_NODES.LOAD_MANIFEST | typeof RECONCILIATION_NODES.STRUCTURE {
+  if (state.input?.options?.manifestId) {
+    return RECONCILIATION_NODES.LOAD_MANIFEST;
+  }
+  return RECONCILIATION_NODES.STRUCTURE;
+}
+
+/**
  * Creates the Reconciliation Agent graph.
  *
  * This graph implements the 7-phase reconciliation flow:
@@ -230,6 +250,7 @@ export function createReconciliationGraph(
   const interimPersistNodeBase = createInterimPersistNode(options.nodeOptions?.interimPersist)(
     config,
   );
+  const loadManifestNodeBase = createLoadManifestNode(options.nodeOptions?.loadManifest)(config);
   const verifyNodeBase = createVerifyNode(options.nodeOptions?.verify)(config);
   const persistNodeBase = createPersistNode(options.nodeOptions?.persist)(config);
 
@@ -291,12 +312,20 @@ export function createReconciliationGraph(
     config,
     false,
   );
+  // load_manifest is critical — if it fails, the graph can't proceed
+  const loadManifestNode = wrapWithErrorHandling(
+    RECONCILIATION_NODES.LOAD_MANIFEST,
+    loadManifestNodeBase,
+    config,
+    true,
+  );
   // Persist node is not wrapped - it must always try to save what we have
   const persistNode = persistNodeBase;
 
   // Build graph
   const workflow = new StateGraph(ReconciliationGraphState)
     // Add nodes
+    .addNode(RECONCILIATION_NODES.LOAD_MANIFEST, loadManifestNode)
     .addNode(RECONCILIATION_NODES.STRUCTURE, structureNode)
     .addNode(RECONCILIATION_NODES.DISCOVER_FULLSCAN, discoverFullscanNode)
     .addNode(RECONCILIATION_NODES.DISCOVER_DELTA, discoverDeltaNode)
@@ -309,8 +338,14 @@ export function createReconciliationGraph(
     .addNode(RECONCILIATION_NODES.PERSIST, persistNode)
 
     // Add edges
-    // START -> structure
-    .addEdge(START, RECONCILIATION_NODES.STRUCTURE)
+    // START -> [load_manifest | structure] (conditional on manifestId)
+    .addConditionalEdges(START, startRouter, [
+      RECONCILIATION_NODES.LOAD_MANIFEST,
+      RECONCILIATION_NODES.STRUCTURE,
+    ])
+
+    // load_manifest -> infer_atoms (skip deterministic phases)
+    .addEdge(RECONCILIATION_NODES.LOAD_MANIFEST, RECONCILIATION_NODES.INFER_ATOMS)
 
     // structure -> [discover_fullscan | discover_delta] (conditional)
     .addConditionalEdges(RECONCILIATION_NODES.STRUCTURE, discoverRouter, [

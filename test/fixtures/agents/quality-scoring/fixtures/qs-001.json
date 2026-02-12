@@ -1,0 +1,21 @@
+{
+  "id": "qs-001",
+  "name": "High-quality functional atom",
+  "atom": {
+    "description": "User can add items to their shopping cart and the cart total updates to reflect the sum of all item prices",
+    "category": "functional",
+    "confidence": 90,
+    "observableOutcomes": [
+      "Cart displays updated total after item addition",
+      "Cart total equals sum of all item prices",
+      "Cart item count increments by one"
+    ],
+    "reasoning": "Inferred from test evidence in cart.spec.ts: the test suite verifies that adding products to the cart triggers a recalculation of the total price. The test creates a cart instance, adds two items with known prices ($10.99 and $24.50), and asserts that the displayed total equals $35.49. A separate assertion confirms the item count increases from 0 to 1 after each addition. This atom captures a single, observable, user-facing behavior with clear success criteria.",
+    "sourceTestFilePath": "test/cart.spec.ts",
+    "sourceTestName": "should update cart total when items are added"
+  },
+  "expectedScore": {
+    "minScore": 85,
+    "shouldPass": true
+  }
+}

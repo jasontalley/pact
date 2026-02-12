@@ -91,6 +91,10 @@ class GitHubStartDto {
   @IsOptional()
   @IsString()
   repo?: string;
+
+  @IsOptional()
+  @IsString()
+  manifestId?: string;
 }
 
 /**
@@ -185,6 +189,10 @@ class StartAnalysisDto implements ReconciliationDto {
   @ValidateNested()
   @Type(() => ReconciliationOptionsDto)
   options?: ReconciliationOptionsDto;
+
+  @IsOptional()
+  @IsString()
+  manifestId?: string;
 }
 
 /**
@@ -362,6 +370,7 @@ export class ReconciliationController {
       commitSha: dto.commitSha,
       branch: dto.branch || 'main',
       repo: dto.repo,
+      manifestId: dto.manifestId,
     });
   }
 
@@ -459,9 +468,9 @@ export class ReconciliationController {
     status: 200,
     description: 'Run status',
   })
-  getRunStatus(@Param('runId') runId: string): { runId: string; status: string | null } {
+  async getRunStatus(@Param('runId') runId: string): Promise<{ runId: string; status: string | null }> {
     this.logger.log(`GET /agents/reconciliation/runs/${runId}/status`);
-    const status = this.reconciliationService.getRunStatus(runId);
+    const status = await this.reconciliationService.getRunStatus(runId);
     return { runId, status };
   }
 

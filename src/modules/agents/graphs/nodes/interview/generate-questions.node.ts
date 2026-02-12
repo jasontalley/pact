@@ -18,6 +18,7 @@ import {
   CompletionReason,
 } from '../../types/interview-state';
 import { AgentTaskType } from '../../../../../common/llm/providers/types';
+import { parseJsonWithRecovery } from '../../../../../common/llm/json-recovery';
 
 export interface GenerateQuestionsNodeOptions {
   /** Maximum questions per round */
@@ -192,9 +193,9 @@ async function generateQuestions(
 
   try {
     const content = response.content || '';
-    const jsonMatch = /\{[\s\S]*\}/.exec(content);
-    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : content);
-    return (parsed.questions || []).slice(0, maxQuestions).map(
+    const parsed = parseJsonWithRecovery(content) as Record<string, unknown> | null;
+    if (!parsed) throw new Error('No JSON in response');
+    return ((parsed.questions as unknown[]) || []).slice(0, maxQuestions).map(
       (q: { question: string; rationale: string; category: string }) =>
         ({
           id: uuidv4(),

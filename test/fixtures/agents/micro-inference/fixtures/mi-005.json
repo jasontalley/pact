@@ -1,0 +1,18 @@
+{
+  "id": "mi-005",
+  "name": "calculateDiscount function applies pricing rules",
+  "evidenceType": "source_export",
+  "evidence": {
+    "filePath": "src/pricing/discount.service.ts",
+    "sourceCode": "export interface DiscountRule {\n  type: 'percentage' | 'fixed' | 'buy_x_get_y';\n  value: number;\n  minQuantity?: number;\n  maxDiscount?: number;\n  applicableSkus?: string[];\n}\n\nexport function calculateDiscount(\n  originalPrice: number,\n  quantity: number,\n  rules: DiscountRule[],\n): { finalPrice: number; savings: number; appliedRule: string | null } {\n  let bestDiscount = 0;\n  let appliedRule: string | null = null;\n\n  for (const rule of rules) {\n    if (rule.minQuantity && quantity < rule.minQuantity) continue;\n\n    let discount = 0;\n    if (rule.type === 'percentage') {\n      discount = originalPrice * (rule.value / 100);\n    } else if (rule.type === 'fixed') {\n      discount = rule.value;\n    } else if (rule.type === 'buy_x_get_y') {\n      const freeItems = Math.floor(quantity / (rule.value + 1));\n      discount = freeItems * (originalPrice / quantity);\n    }\n\n    if (rule.maxDiscount) discount = Math.min(discount, rule.maxDiscount);\n    if (discount > bestDiscount) {\n      bestDiscount = discount;\n      appliedRule = rule.type;\n    }\n  }\n\n  return {\n    finalPrice: Math.max(0, originalPrice - bestDiscount),\n    savings: bestDiscount,\n    appliedRule,\n  };\n}",
+    "lineNumber": 1
+  },
+  "expectedAtom": {
+    "descriptionContainsAny": ["discount", "price", "calculate", "apply"],
+    "categoryOneOf": ["functional"],
+    "minConfidence": 70,
+    "hasObservableOutcomes": true,
+    "implementationAgnostic": true,
+    "notContainsAny": ["calculateDiscount", "function"]
+  }
+}

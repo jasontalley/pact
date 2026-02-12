@@ -166,6 +166,13 @@ export class Molecule {
   changeSetMetadata: ChangeSetMetadata | null;
 
   /**
+   * Gherkin scenario describing the molecule's behavior (Given/When/Then).
+   * Helps product managers reason about the molecule in familiar BDD terms.
+   */
+  @Column('text', { nullable: true })
+  gherkinScenario: string | null;
+
+  /**
    * Additional metadata for extensibility
    */
   @Column('jsonb', { default: {} })

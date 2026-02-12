@@ -1,0 +1,22 @@
+{
+  "id": "qs-002",
+  "name": "High-quality security atom",
+  "atom": {
+    "description": "System rejects authentication attempts with invalid credentials and returns a 401 Unauthorized response without revealing whether the username or password was incorrect",
+    "category": "security",
+    "confidence": 92,
+    "observableOutcomes": [
+      "Login request with wrong password returns HTTP 401 status",
+      "Login request with non-existent username returns HTTP 401 status",
+      "Error response body contains generic 'Invalid credentials' message for both wrong password and wrong username cases",
+      "No information about account existence is leaked in the response headers or body"
+    ],
+    "reasoning": "Derived from auth.e2e-spec.ts: the test suite sends POST /auth/login with invalid credentials and asserts a 401 response. Two separate test cases cover wrong-password and unknown-username scenarios, both expecting identical error messages. This prevents user enumeration attacks by ensuring the system does not differentiate between invalid username and invalid password in its response. The atom is security-critical and captures a single, well-bounded defensive behavior.",
+    "sourceTestFilePath": "test/auth.e2e-spec.ts",
+    "sourceTestName": "should return 401 for invalid credentials without leaking account info"
+  },
+  "expectedScore": {
+    "minScore": 85,
+    "shouldPass": true
+  }
+}

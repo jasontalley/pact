@@ -12,6 +12,7 @@ import { CommitmentArtifact } from '../commitments/commitment.entity';
 import { CommitmentPreviewDto } from '../commitments/dto/commitment-preview.dto';
 import { CheckContext } from '../invariants/checkers/interfaces';
 import { LLMService } from '../../common/llm/llm.service';
+import { parseJsonWithRecovery } from '../../common/llm/json-recovery';
 
 /**
  * DTO for proposing atoms from molecular intent
@@ -382,15 +383,12 @@ Respond in JSON format:
         temperature: 0.3,
       });
 
-      // Extract JSON from response (LLM might wrap it in markdown)
-      const content = response.content;
-      const jsonMatch = /\{[\s\S]*\}/.exec(content);
-      if (!jsonMatch) {
+      // Extract JSON from response (handles markdown fences, trailing commas, etc.)
+      const result = parseJsonWithRecovery(response.content);
+      if (!result || Array.isArray(result)) {
         throw new Error('No JSON found in LLM response');
       }
-
-      const result = JSON.parse(jsonMatch[0]);
-      return result;
+      return result as unknown as { success: boolean; atomicIntents: Array<{ description: string; category?: string; observableOutcomes?: Array<{ description: string }>; falsifiabilityCriteria?: Array<{ condition: string; expectedBehavior: string }> }>; analysis: string; suggestions?: string[]; confidence: number };
     } catch (error) {
       this.logger.error(`Failed to decompose molecular intent: ${error}`);
       return {

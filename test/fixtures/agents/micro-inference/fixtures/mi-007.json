@@ -1,0 +1,16 @@
+{
+  "id": "mi-007",
+  "name": "JSDoc with @throws for validation errors",
+  "evidenceType": "code_comment",
+  "evidence": {
+    "filePath": "src/orders/order-validation.service.ts",
+    "sourceCode": "/**\n * Validates an order before submission to the payment gateway.\n *\n * Checks that:\n * - All line items have positive quantities\n * - The shipping address contains required fields (street, city, zip, country)\n * - The total amount matches the sum of line items plus tax and shipping\n * - The customer email is a valid format\n *\n * @param order - The order to validate\n * @returns The validated order with normalized address fields\n * @throws {ValidationError} When any line item has quantity <= 0\n * @throws {ValidationError} When the shipping address is incomplete\n * @throws {ValidationError} When the computed total does not match order.totalAmount\n * @throws {InvalidEmailError} When the customer email fails format validation\n */\nexport function validateOrder(order: PendingOrder): ValidatedOrder {\n  if (order.lineItems.some(item => item.quantity <= 0)) {\n    throw new ValidationError('All line items must have a positive quantity');\n  }\n\n  const requiredFields = ['street', 'city', 'zip', 'country'];\n  for (const field of requiredFields) {\n    if (!order.shippingAddress[field]) {\n      throw new ValidationError(`Shipping address missing required field: ${field}`);\n    }\n  }\n\n  const computedTotal = computeOrderTotal(order.lineItems, order.tax, order.shippingCost);\n  if (Math.abs(computedTotal - order.totalAmount) > 0.01) {\n    throw new ValidationError('Order total does not match computed sum');\n  }\n\n  return { ...order, validated: true, normalizedAddress: normalizeAddress(order.shippingAddress) };\n}",
+    "lineNumber": 1
+  },
+  "expectedAtom": {
+    "descriptionContainsAny": ["valid", "error", "reject", "input"],
+    "categoryOneOf": ["reliability", "functional"],
+    "minConfidence": 50,
+    "hasObservableOutcomes": true
+  }
+}

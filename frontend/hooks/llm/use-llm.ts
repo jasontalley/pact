@@ -41,8 +41,7 @@ export function useProviders() {
   return useQuery({
     queryKey: llmKeys.providers(),
     queryFn: () => llmApi.getProviders(),
-    staleTime: 30000, // Consider stale after 30s
-    refetchInterval: 60000, // Refetch every 60s for health updates
+    staleTime: 60000,
   });
 }
 

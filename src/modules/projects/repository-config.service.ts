@@ -1,8 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ModuleRef } from '@nestjs/core';
 import { execSync } from 'child_process';
 import { ProjectsService } from './projects.service';
 import type { GitHubConfig } from './project.entity';
+import type { ManifestService } from '../agents/manifest.service';
 
 export interface GitHubTestResult {
   success: boolean;
@@ -24,6 +26,7 @@ export class RepositoryConfigService {
   constructor(
     private readonly projectsService: ProjectsService,
     private readonly configService: ConfigService,
+    private readonly moduleRef: ModuleRef,
   ) {}
 
   /**
@@ -86,9 +89,9 @@ export class RepositoryConfigService {
 
     const updated: GitHubConfig = {
       ...existing,
-      ...(dto.owner !== undefined ? { owner: dto.owner } : {}),
-      ...(dto.repo !== undefined ? { repo: dto.repo } : {}),
-      ...(dto.defaultBranch !== undefined ? { defaultBranch: dto.defaultBranch } : {}),
+      ...(dto.owner !== undefined ? { owner: dto.owner.trim() } : {}),
+      ...(dto.repo !== undefined ? { repo: dto.repo.trim() } : {}),
+      ...(dto.defaultBranch !== undefined ? { defaultBranch: dto.defaultBranch.trim() } : {}),
       ...(dto.enabled !== undefined ? { enabled: dto.enabled } : {}),
     };
 
@@ -111,6 +114,11 @@ export class RepositoryConfigService {
     this.logger.log(
       `GitHub config updated: owner=${updated.owner}, repo=${updated.repo}, patSet=${updated.patSet}`,
     );
+
+    // Auto-generate manifest when a repo is connected
+    if (updated.enabled && updated.owner && updated.repo && updated.patSet) {
+      this.triggerManifestGeneration(project.id);
+    }
 
     // Return safe version (no PAT)
     return {
@@ -190,5 +198,27 @@ export class RepositoryConfigService {
         latencyMs,
       };
     }
+  }
+
+  /**
+   * Fire-and-forget manifest generation for a project.
+   * Uses ModuleRef to lazily resolve ManifestService, avoiding circular dependency.
+   */
+  private triggerManifestGeneration(projectId: string): void {
+    let manifestService: ManifestService;
+    try {
+      manifestService = this.moduleRef.get('ManifestService', { strict: false });
+    } catch {
+      this.logger.warn('ManifestService not available — skipping auto-manifest');
+      return;
+    }
+    manifestService
+      .generate({ projectId, contentSource: 'github' })
+      .then((m) => this.logger.log(`Auto-manifest generated: ${m.id} for project ${projectId}`))
+      .catch((err: unknown) =>
+        this.logger.warn(
+          `Auto-manifest failed for project ${projectId}: ${err instanceof Error ? err.message : err}`,
+        ),
+      );
   }
 }

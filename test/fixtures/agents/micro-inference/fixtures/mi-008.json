@@ -1,0 +1,17 @@
+{
+  "id": "mi-008",
+  "name": "Response time under 200ms performance test",
+  "evidenceType": "test",
+  "evidence": {
+    "filePath": "test/performance/api-latency.spec.ts",
+    "testName": "should respond within 200ms for product listing",
+    "sourceCode": "describe('API Response Time', () => {\n  const LATENCY_BUDGET_MS = 200;\n  const WARM_UP_REQUESTS = 3;\n  const SAMPLE_SIZE = 20;\n\n  beforeAll(async () => {\n    // Warm up the connection pool and JIT\n    for (let i = 0; i < WARM_UP_REQUESTS; i++) {\n      await request(app.getHttpServer()).get('/api/products');\n    }\n  });\n\n  it('should respond within 200ms for product listing', async () => {\n    const durations: number[] = [];\n\n    for (let i = 0; i < SAMPLE_SIZE; i++) {\n      const start = performance.now();\n      const res = await request(app.getHttpServer())\n        .get('/api/products?page=1&limit=25')\n        .expect(200);\n      const elapsed = performance.now() - start;\n      durations.push(elapsed);\n    }\n\n    const p95 = durations.sort((a, b) => a - b)[Math.floor(SAMPLE_SIZE * 0.95)];\n    const avg = durations.reduce((sum, d) => sum + d, 0) / durations.length;\n\n    expect(p95).toBeLessThan(LATENCY_BUDGET_MS);\n    expect(avg).toBeLessThan(LATENCY_BUDGET_MS * 0.75);\n  });\n\n  it('should respond within 200ms for single product lookup', async () => {\n    const start = performance.now();\n    await request(app.getHttpServer())\n      .get('/api/products/1')\n      .expect(200);\n    const elapsed = performance.now() - start;\n\n    expect(elapsed).toBeLessThan(LATENCY_BUDGET_MS);\n  });\n});",
+    "lineNumber": 1
+  },
+  "expectedAtom": {
+    "descriptionContainsAny": ["response", "time", "latency", "performance", "200", "fast"],
+    "categoryOneOf": ["performance"],
+    "minConfidence": 75,
+    "hasObservableOutcomes": true
+  }
+}

@@ -117,6 +117,7 @@ export interface Molecule {
   moleculeId: string;
   name: string;
   description: string | null;
+  gherkinScenario?: string | null;
   lensType: LensType;
   lensLabel: string | null;
   parentMoleculeId: string | null;

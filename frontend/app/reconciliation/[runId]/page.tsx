@@ -2,8 +2,10 @@
 
 import { useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout';
-import { useRunDetails, useRecommendations, useApplyRecommendations } from '@/hooks/reconciliation';
+import { useRunDetails, useRecommendations, useApplyRecommendations, reconciliationKeys } from '@/hooks/reconciliation';
+import { useReconciliationEvents } from '@/hooks/socket/use-reconciliation-events';
 import { AtomRecommendationCard, ApplyRecommendationsDialog } from '@/components/reconciliation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -77,11 +79,26 @@ function getStatusIcon(status: string) {
 }
 
 /**
- * Molecule recommendation card
+ * Molecule recommendation card with approve/reject actions
  */
-function MoleculeCard({ molecule }: { molecule: MoleculeRecommendation }) {
+function MoleculeCard({
+  molecule,
+  decision,
+  onApprove,
+  onReject,
+  disabled,
+}: {
+  molecule: MoleculeRecommendation;
+  decision?: 'approve' | 'reject';
+  onApprove?: () => void;
+  onReject?: () => void;
+  disabled?: boolean;
+}) {
+  const isApproved = decision === 'approve' || molecule.status === 'approved';
+  const isRejected = decision === 'reject' || molecule.status === 'rejected';
+
   return (
-    <Card className="mb-3">
+    <Card className={`mb-3 transition-all ${isApproved ? 'border-green-300 bg-green-50/50' : isRejected ? 'border-red-300 bg-red-50/50' : ''}`}>
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
@@ -98,14 +115,42 @@ function MoleculeCard({ molecule }: { molecule: MoleculeRecommendation }) {
             </div>
             <p className="font-medium mb-1">{molecule.name}</p>
             <p className="text-sm text-muted-foreground mb-2">{molecule.description}</p>
+            {molecule.gherkinScenario && (
+              <pre className="text-xs bg-muted/50 rounded-md p-3 mb-2 whitespace-pre-wrap font-mono overflow-x-auto">
+                {molecule.gherkinScenario}
+              </pre>
+            )}
             <div className="flex items-center gap-4 text-xs text-muted-foreground">
               <span>
-                Confidence: <span className="font-medium">{Math.round(molecule.confidence * 100)}%</span>
+                Confidence: <span className="font-medium">{Math.round(molecule.confidence)}%</span>
               </span>
               <span>
                 Atoms: <span className="font-medium">{(molecule.atomRecommendationTempIds ?? []).length}</span>
               </span>
             </div>
+          </div>
+          {/* Approve/Reject actions */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Button
+              size="sm"
+              variant={isApproved ? 'default' : 'outline'}
+              className={isApproved ? 'bg-green-600 hover:bg-green-700 gap-1' : 'gap-1'}
+              onClick={onApprove}
+              disabled={disabled}
+            >
+              <CheckCircle className="h-4 w-4" />
+              {isApproved ? 'Approved' : 'Approve'}
+            </Button>
+            <Button
+              size="sm"
+              variant={isRejected ? 'destructive' : 'outline'}
+              className="gap-1"
+              onClick={onReject}
+              disabled={disabled}
+            >
+              <XCircle className="h-4 w-4" />
+              {isRejected ? 'Rejected' : 'Reject'}
+            </Button>
           </div>
         </div>
       </CardContent>
@@ -118,13 +163,28 @@ export default function RunDetailsPage() {
   const router = useRouter();
   const runId = params.runId as string;
 
+  const queryClient = useQueryClient();
+
   // Decision tracking state
   const [decisions, setDecisions] = useState<Map<string, 'approve' | 'reject'>>(new Map());
+  const [moleculeDecisions, setMoleculeDecisions] = useState<Map<string, 'approve' | 'reject'>>(new Map());
   const [showApplyDialog, setShowApplyDialog] = useState(false);
 
   const { data: runDetails, isLoading: detailsLoading, error: detailsError } = useRunDetails(runId);
   const { data: recommendations, isLoading: recsLoading } = useRecommendations(runId);
   const applyMutation = useApplyRecommendations();
+
+  // WebSocket subscription to update status when run completes
+  const isRunning = runDetails?.status === 'running';
+  useReconciliationEvents(isRunning ? runId : null, {
+    onCompleted: () => {
+      queryClient.invalidateQueries({ queryKey: reconciliationKeys.run(runId) });
+      queryClient.invalidateQueries({ queryKey: reconciliationKeys.runRecommendations(runId) });
+    },
+    onFailed: () => {
+      queryClient.invalidateQueries({ queryKey: reconciliationKeys.run(runId) });
+    },
+  });
 
   const isLoading = detailsLoading || recsLoading;
 
@@ -155,12 +215,46 @@ export default function RunDetailsPage() {
     setDecisions(newDecisions);
   }, [recommendations, decisions]);
 
+  // Handle individual molecule decision
+  const handleMoleculeDecision = useCallback((molId: string, decision: 'approve' | 'reject') => {
+    setMoleculeDecisions(prev => new Map(prev).set(molId, decision));
+  }, []);
+
+  // Bulk approve all molecules
+  const handleApproveAllMolecules = useCallback(() => {
+    if (!recommendations) return;
+    const newDecisions = new Map(moleculeDecisions);
+    recommendations.molecules.forEach(m => {
+      newDecisions.set(m.tempId, 'approve');
+    });
+    setMoleculeDecisions(newDecisions);
+  }, [recommendations, moleculeDecisions]);
+
+  // Bulk reject all molecules
+  const handleRejectAllMolecules = useCallback(() => {
+    if (!recommendations) return;
+    const newDecisions = new Map(moleculeDecisions);
+    recommendations.molecules.forEach(m => {
+      newDecisions.set(m.tempId, 'reject');
+    });
+    setMoleculeDecisions(newDecisions);
+  }, [recommendations, moleculeDecisions]);
+
   // Calculate decision summary
+  const moleculeApproved = recommendations
+    ? recommendations.molecules.filter(m => moleculeDecisions.get(m.tempId) === 'approve' || m.status === 'approved').length
+    : 0;
+  const moleculeRejected = recommendations
+    ? recommendations.molecules.filter(m => moleculeDecisions.get(m.tempId) === 'reject' || m.status === 'rejected').length
+    : 0;
+
   const decisionSummary = recommendations ? {
     approved: recommendations.atoms.filter(a => decisions.get(a.tempId) === 'approve' || a.status === 'approved').length,
     rejected: recommendations.atoms.filter(a => decisions.get(a.tempId) === 'reject' || a.status === 'rejected').length,
     pending: recommendations.atoms.filter(a => !decisions.has(a.tempId) && a.status === 'pending').length,
-  } : { approved: 0, rejected: 0, pending: 0 };
+    moleculesApproved: moleculeApproved,
+    moleculesRejected: moleculeRejected,
+  } : { approved: 0, rejected: 0, pending: 0, moleculesApproved: 0, moleculesRejected: 0 };
 
   if (detailsError) {
     return (
@@ -353,11 +447,45 @@ export default function RunDetailsPage() {
 
                     <TabsContent value="molecules" className="mt-4">
                       {recommendations.molecules.length > 0 ? (
-                        <ScrollArea className="h-[500px] pr-4">
-                          {recommendations.molecules.map((molecule) => (
-                            <MoleculeCard key={molecule.id} molecule={molecule} />
-                          ))}
-                        </ScrollArea>
+                        <>
+                          {/* Bulk Actions */}
+                          <div className="flex items-center gap-2 mb-4">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleApproveAllMolecules}
+                              disabled={applyMutation.isPending}
+                            >
+                              <CheckCheck className="h-4 w-4 mr-1" />
+                              Approve All Molecules
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleRejectAllMolecules}
+                              disabled={applyMutation.isPending}
+                            >
+                              <XCircle className="h-4 w-4 mr-1" />
+                              Reject All Molecules
+                            </Button>
+                            <span className="text-xs text-muted-foreground ml-2">
+                              <span className="text-green-600 font-medium">{decisionSummary.moleculesApproved}</span> approved,{' '}
+                              <span className="text-red-600 font-medium">{decisionSummary.moleculesRejected}</span> rejected
+                            </span>
+                          </div>
+                          <ScrollArea className="h-[500px] pr-4">
+                            {recommendations.molecules.map((molecule) => (
+                              <MoleculeCard
+                                key={molecule.id}
+                                molecule={molecule}
+                                decision={moleculeDecisions.get(molecule.tempId)}
+                                onApprove={() => handleMoleculeDecision(molecule.tempId, 'approve')}
+                                onReject={() => handleMoleculeDecision(molecule.tempId, 'reject')}
+                                disabled={applyMutation.isPending}
+                              />
+                            ))}
+                          </ScrollArea>
+                        </>
                       ) : (
                         <div className="text-center py-8 text-muted-foreground">
                           No molecule recommendations
@@ -425,7 +553,7 @@ export default function RunDetailsPage() {
           atoms={recommendations.atoms}
           molecules={recommendations.molecules}
           atomDecisions={decisions}
-          moleculeDecisions={new Map()}
+          moleculeDecisions={moleculeDecisions}
           isPreReadRun={!runDetails?.rootDirectory?.startsWith('/')}
           onApply={(options) => {
             applyMutation.mutate({

@@ -101,8 +101,10 @@ export interface BatchSubmitOptions {
  * Options for submitAndWait
  */
 export interface BatchWaitOptions extends BatchSubmitOptions {
-  /** How often to poll status (ms). Default: 30000 */
+  /** Initial poll interval (ms). Doubles each poll up to maxPollIntervalMs. Default: 30000 */
   pollIntervalMs?: number;
+  /** Maximum poll interval after backoff (ms). Default: 720000 (12 min) */
+  maxPollIntervalMs?: number;
   /** Maximum wait time (ms). Default: 3600000 (1 hour) */
   timeoutMs?: number;
   /** Callback for progress updates */

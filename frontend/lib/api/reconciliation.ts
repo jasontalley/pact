@@ -12,6 +12,7 @@ import type {
   ApplyRequest,
   ApplyResult,
   PreReadPayload,
+  RepoManifest,
 } from '@/types/reconciliation';
 
 /**
@@ -173,6 +174,7 @@ export const reconciliationApi = {
     commitSha?: string;
     branch?: string;
     repo?: string;
+    manifestId?: string;
   }): Promise<AnalysisStartResult> => {
     const response = await apiClient.post<AnalysisStartResult>(
       '/agents/reconciliation/start/github',
@@ -194,6 +196,72 @@ export const reconciliationApi = {
     const response = await apiClient.post<{ changeSetId: string; atomCount: number; moleculeId: string }>(
       `/agents/reconciliation/runs/${runId}/create-change-set`,
       data
+    );
+    return response.data;
+  },
+};
+
+// =============================================================================
+// Manifest API
+// =============================================================================
+
+export const manifestApi = {
+  /**
+   * Trigger manifest generation for a project
+   */
+  generate: async (data: {
+    projectId?: string;
+    rootDirectory?: string;
+    contentSource?: string;
+  }): Promise<RepoManifest> => {
+    const response = await apiClient.post<RepoManifest>(
+      '/agents/manifest/generate',
+      data,
+      { timeout: RECONCILIATION_TIMEOUT }
+    );
+    return response.data;
+  },
+
+  /**
+   * Get manifest by ID
+   */
+  get: async (id: string): Promise<RepoManifest> => {
+    const response = await apiClient.get<RepoManifest>(
+      `/agents/manifest/${id}`
+    );
+    return response.data;
+  },
+
+  /**
+   * Get latest completed manifest for a project
+   */
+  latest: async (projectId: string): Promise<RepoManifest | null> => {
+    try {
+      const response = await apiClient.get<RepoManifest>(
+        `/agents/manifest/project/${projectId}/latest`
+      );
+      return response.data;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Get latest completed manifest for the default project (no projectId needed)
+   */
+  latestDefault: async (): Promise<RepoManifest | null> => {
+    const response = await apiClient.get<RepoManifest | null>(
+      '/agents/manifest/latest'
+    );
+    return response.data;
+  },
+
+  /**
+   * List manifests for a project
+   */
+  list: async (projectId: string): Promise<RepoManifest[]> => {
+    const response = await apiClient.get<RepoManifest[]>(
+      `/agents/manifest/project/${projectId}`
     );
     return response.data;
   },

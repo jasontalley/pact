@@ -64,9 +64,10 @@ async function cleanupApp(): Promise<void> {
 // ============================================================================
 
 interface CliArgs {
-  suite: 'golden' | 'stochastic' | 'property' | 'adversarial' | 'cost' | 'all';
+  suite: 'golden' | 'stochastic' | 'property' | 'adversarial' | 'cost' | 'micro-inference' | 'quality-scoring' | 'all';
   agent: AgentType | 'all';
   updateSnapshots: boolean;
+  html: boolean;
   model?: string;
   temperature?: number;
   fixtureIds?: string[];
@@ -80,6 +81,7 @@ function parseArgs(): CliArgs {
     suite: 'golden',
     agent: 'all',
     updateSnapshots: false,
+    html: false,
     outputDir: path.resolve(__dirname, '../test-results/agents'),
     verbose: false,
   };
@@ -91,6 +93,8 @@ function parseArgs(): CliArgs {
       parsed.agent = arg.split('=')[1] as CliArgs['agent'];
     } else if (arg === '--update-snapshots') {
       parsed.updateSnapshots = true;
+    } else if (arg === '--html') {
+      parsed.html = true;
     } else if (arg.startsWith('--model=')) {
       parsed.model = arg.split('=')[1];
     } else if (arg.startsWith('--temperature=')) {
@@ -118,9 +122,11 @@ Usage:
   npx ts-node scripts/evaluate-agents.ts [options]
 
 Options:
-  --suite=<suite>       Suite to run: golden, stochastic, property, adversarial, cost, all (default: golden)
+  --suite=<suite>       Suite to run: golden, stochastic, property, adversarial, cost,
+                        micro-inference, quality-scoring, all (default: golden)
   --agent=<agent>       Agent to evaluate: reconciliation, interview, all (default: all)
   --update-snapshots    Update baseline snapshots instead of comparing
+  --html                Generate HTML report after evaluation
   --model=<model>       Pinned model for LLM-in-the-loop tests
   --temperature=<temp>  Temperature override (default: 0 for deterministic)
   --fixtures=<ids>      Comma-separated fixture/scenario IDs to run
@@ -271,6 +277,44 @@ async function runCostSuite(args: CliArgs): Promise<EvaluationReport[]> {
   return [];
 }
 
+async function runMicroInferenceSuite(args: CliArgs): Promise<EvaluationReport[]> {
+  console.log('\n--- Micro-Inference Suite ---');
+  const { runMicroInference } = await import(
+    '../src/modules/agents/evaluation/micro-inference.runner'
+  );
+
+  const { app } = await getAppAndCaptureService();
+  const llmService = app.get(LLMService);
+
+  const report = await runMicroInference(llmService, {
+    fixtureIds: args.fixtureIds,
+    model: args.model,
+    temperature: args.temperature,
+  });
+
+  printReportSummary(report);
+  return [report];
+}
+
+async function runQualityScoringsSuite(args: CliArgs): Promise<EvaluationReport[]> {
+  console.log('\n--- Quality Scoring Suite ---');
+  const { runQualityScoring } = await import(
+    '../src/modules/agents/evaluation/quality-scoring.runner'
+  );
+
+  const { app } = await getAppAndCaptureService();
+  const llmService = app.get(LLMService);
+
+  const report = await runQualityScoring(llmService, {
+    fixtureIds: args.fixtureIds,
+    model: args.model,
+    temperature: args.temperature,
+  });
+
+  printReportSummary(report);
+  return [report];
+}
+
 // ============================================================================
 // Output Formatting
 // ============================================================================
@@ -356,6 +400,12 @@ async function main(): Promise<void> {
       case 'cost':
         reports = await runCostSuite(args);
         break;
+      case 'micro-inference':
+        reports = await runMicroInferenceSuite(args);
+        break;
+      case 'quality-scoring':
+        reports = await runQualityScoringsSuite(args);
+        break;
       case 'adversarial':
         console.log('Adversarial suite not yet implemented');
         break;
@@ -365,6 +415,8 @@ async function main(): Promise<void> {
           ...(await runStochasticSuite(args)),
           ...(await runPropertySuite(args)),
           ...(await runCostSuite(args)),
+          ...(await runMicroInferenceSuite(args)),
+          ...(await runQualityScoringsSuite(args)),
         ];
         break;
     }
@@ -372,6 +424,15 @@ async function main(): Promise<void> {
     // Save reports
     if (reports.length > 0) {
       saveReports(reports, args.outputDir);
+
+      // Generate HTML report if requested
+      if (args.html) {
+        const { generateHtmlReport } = await import(
+          '../src/modules/agents/evaluation/report-generator'
+        );
+        const htmlPath = generateHtmlReport(reports, args.outputDir);
+        console.log(`HTML report: ${htmlPath}`);
+      }
     }
 
     // Exit with failure code if any tests failed

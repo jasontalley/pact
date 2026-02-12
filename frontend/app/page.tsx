@@ -12,8 +12,12 @@ import { QuickActions } from '@/components/dashboard/QuickActions';
 import { DriftDebtCard } from '@/components/dashboard/DriftDebtCard';
 import { CommitmentBacklogCard } from '@/components/dashboard/CommitmentBacklogCard';
 import { DriftTrendChart } from '@/components/dashboard/DriftTrendChart';
+import { ManifestViewer } from '@/components/reconciliation';
+import { useLatestDefaultManifest } from '@/hooks/reconciliation';
 
 export default function DashboardPage() {
+  const { data: manifest, isLoading: manifestLoading } = useLatestDefaultManifest();
+
   return (
     <AppLayout showSidebar={false}>
       <div className="container mx-auto px-4 py-8">
@@ -23,6 +27,13 @@ export default function DashboardPage() {
             Overview of your Intent Atoms and system health
           </p>
         </div>
+
+        {/* Repository Manifest */}
+        {!manifestLoading && manifest && (
+          <div className="mb-8">
+            <ManifestViewer manifest={manifest} />
+          </div>
+        )}
 
         {/* Epistemic Stack + Coupling Health */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">

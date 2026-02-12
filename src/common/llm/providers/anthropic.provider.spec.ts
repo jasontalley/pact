@@ -66,11 +66,6 @@ describe('AnthropicProvider', () => {
       expect(provider.supportedModels).toContain('claude-haiku-4-5');
     });
 
-    it('should support legacy Claude 3 models', () => {
-      expect(provider.supportedModels).toContain('claude-3-sonnet-20240229');
-      expect(provider.supportedModels).toContain('claude-3-haiku-20240307');
-    });
-
     it('should accept custom configuration', () => {
       const config: AnthropicProviderConfig = {
         apiKey: 'custom-key',

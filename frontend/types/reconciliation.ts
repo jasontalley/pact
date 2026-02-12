@@ -126,6 +126,99 @@ export interface StartReconciliationDto {
   mode?: ReconciliationMode;
   deltaBaseline?: DeltaBaseline;
   options?: ReconciliationOptions;
+  /** Explicit manifest ID to skip deterministic phases */
+  manifestId?: string;
+}
+
+// =============================================================================
+// RepoManifest Types
+// =============================================================================
+
+export type ManifestContentSource = 'filesystem' | 'github' | 'pre_read';
+
+export interface ManifestIdentity {
+  name: string | null;
+  description: string | null;
+  languages: string[];
+  frameworks: string[];
+  commitHash: string | null;
+  repositoryUrl: string | null;
+}
+
+export interface DirectoryTreeNode {
+  name: string;
+  type: 'file' | 'directory';
+  children?: DirectoryTreeNode[];
+  count?: number;
+}
+
+export interface ManifestStructure {
+  totalFiles: number;
+  sourceFileCount: number;
+  testFileCount: number;
+  uiFileCount: number;
+  docFileCount: number;
+  configFileCount: number;
+  filesByExtension: Record<string, number>;
+  directoryTree: DirectoryTreeNode[];
+  entryPoints: string[];
+  testFilePatterns: string[];
+}
+
+export interface ManifestEvidenceInventory {
+  summary: { total: number; byType: Record<string, number> };
+  tests: { count: number; orphanCount: number; linkedCount: number };
+  sourceExports: { count: number; byExportType: Record<string, number> };
+  uiComponents: { count: number; frameworks: string[] };
+  apiEndpoints: { count: number; byMethod: Record<string, number> };
+  documentation: { count: number; files: string[] };
+  codeComments: { count: number; byCommentType: Record<string, number> };
+  coverageGaps: { count: number; avgCoveragePercent: number | null };
+}
+
+export interface ManifestDomainModel {
+  entities: Array<{ name: string; filePath: string; type: string }>;
+  apiSurface: Array<{ method: string; path: string; handler: string; filePath: string }>;
+  uiSurface: Array<{ name: string; filePath: string; framework: string; traits: string[] }>;
+}
+
+export interface ManifestHealthSignals {
+  testQuality: {
+    averageScore: number;
+    passRate: number;
+    dimensionAverages: Record<string, number>;
+  } | null;
+  coverage: {
+    overallPercent: number;
+    format: string;
+    fileCount: number;
+  } | null;
+  couplingScore: number | null;
+  dependencyCount: number;
+}
+
+export interface ManifestDomainConcepts {
+  concepts: Array<{ name: string; frequency: number; sources: string[] }>;
+  clusters: Array<{ name: string; concepts: string[]; fileCount: number }>;
+}
+
+export interface RepoManifest {
+  id: string;
+  projectId: string | null;
+  commitHash: string | null;
+  status: 'generating' | 'complete' | 'failed';
+  identity: ManifestIdentity;
+  structure: ManifestStructure;
+  evidenceInventory: ManifestEvidenceInventory;
+  domainModel: ManifestDomainModel;
+  healthSignals: ManifestHealthSignals;
+  domainConcepts: ManifestDomainConcepts;
+  rootDirectory: string;
+  contentSource: ManifestContentSource;
+  generationDurationMs: number | null;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /**
@@ -246,6 +339,7 @@ export interface InferredMolecule {
   tempId: string;
   name: string;
   description: string;
+  gherkinScenario?: string;
   atomTempIds: string[];
   confidence: number;
   reasoning: string;
@@ -345,6 +439,13 @@ export interface AtomRecommendation {
   sourceTestName: string;
   sourceTestLineNumber: number;
   observableOutcomes: Array<{ description: string; measurementCriteria?: string }>;
+  evidenceSources?: Array<{
+    type: string;
+    filePath: string;
+    name: string;
+    confidence: number;
+  }>;
+  primaryEvidenceType?: string | null;
 }
 
 /**
@@ -355,6 +456,7 @@ export interface MoleculeRecommendation {
   tempId: string;
   name: string;
   description: string;
+  gherkinScenario?: string;
   confidence: number;
   reasoning: string;
   status: RecommendationStatus;

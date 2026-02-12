@@ -1,0 +1,19 @@
+{
+  "id": "mi-001",
+  "name": "Cart total updates when items added or removed",
+  "evidenceType": "test",
+  "evidence": {
+    "filePath": "src/cart/__tests__/cart.spec.ts",
+    "testName": "should update cart total when items are added",
+    "sourceCode": "describe('Cart', () => {\n  it('should update cart total when items are added', () => {\n    const cart = createEmptyCart();\n\n    addItem(cart, { id: 'SKU-100', name: 'Widget', price: 29.99, quantity: 2 });\n    addItem(cart, { id: 'SKU-200', name: 'Gadget', price: 14.50, quantity: 1 });\n\n    expect(getCartTotal(cart)).toBe(74.48);\n    expect(getItemCount(cart)).toBe(3);\n  });\n\n  it('should update cart total when items are removed', () => {\n    const cart = createEmptyCart();\n    addItem(cart, { id: 'SKU-100', name: 'Widget', price: 29.99, quantity: 2 });\n    addItem(cart, { id: 'SKU-200', name: 'Gadget', price: 14.50, quantity: 1 });\n\n    removeItem(cart, 'SKU-100');\n\n    expect(getCartTotal(cart)).toBe(14.50);\n    expect(getItemCount(cart)).toBe(1);\n  });\n\n  it('should return zero total for an empty cart', () => {\n    const cart = createEmptyCart();\n    expect(getCartTotal(cart)).toBe(0);\n    expect(getItemCount(cart)).toBe(0);\n  });\n});",
+    "lineNumber": 1
+  },
+  "expectedAtom": {
+    "descriptionContainsAny": ["cart", "total", "update", "item"],
+    "categoryOneOf": ["functional"],
+    "minConfidence": 70,
+    "hasObservableOutcomes": true,
+    "implementationAgnostic": true,
+    "notContainsAny": ["CartService", "calculateTotal", "reduce"]
+  }
+}

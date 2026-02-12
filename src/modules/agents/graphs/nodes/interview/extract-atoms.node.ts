@@ -12,6 +12,7 @@ import {
   ConversationTurn,
 } from '../../types/interview-state';
 import { AgentTaskType } from '../../../../../common/llm/providers/types';
+import { parseJsonWithRecovery as canonicalParseJson } from '../../../../../common/llm/json-recovery';
 
 export interface ExtractAtomsNodeOptions {
   /** Minimum confidence for inclusion (0-100) */
@@ -209,35 +210,22 @@ function buildConversationContext(state: InterviewGraphStateType): string {
 }
 
 /**
- * Parse JSON from LLM response with layered recovery.
+ * Parse JSON from LLM response using canonical recovery + domain-specific fallback.
  *
- * Layer 1: Extract JSON object using brace counting, then JSON.parse()
- * Layer 2: Apply targeted repairs (trailing commas, newlines, etc.) and retry
- * Layer 3: Attempt to extract individual atom objects as fallback
+ * Uses the canonical parseJsonWithRecovery (3-layer: direct, strip fences, repair).
+ * Falls back to extracting individual atom objects via regex if canonical fails.
  */
 function parseJsonWithRecovery(
   content: string,
   logger?: { log?: (msg: string) => void; warn: (msg: string) => void },
 ): { atoms: unknown[] } {
-  // Layer 1: Standard extraction + parse
-  const jsonText = extractJsonText(content, logger);
-  if (jsonText) {
-    try {
-      return JSON.parse(jsonText) as { atoms: unknown[] };
-    } catch {
-      // Layer 2: Apply targeted repairs
-      const repaired = repairJson(jsonText, logger);
-      if (repaired) {
-        try {
-          return JSON.parse(repaired) as { atoms: unknown[] };
-        } catch {
-          // Fall through to Layer 3
-        }
-      }
-    }
+  // Use canonical JSON recovery (handles fences, trailing commas, truncation)
+  const parsed = canonicalParseJson(content);
+  if (parsed && typeof parsed === 'object' && 'atoms' in parsed) {
+    return parsed as { atoms: unknown[] };
   }
 
-  // Layer 3: Extract individual atom objects
+  // Fallback: extract individual atom objects via regex
   const atoms = extractIndividualAtoms(content, logger);
   if (atoms.length > 0) {
     logger?.log?.(`ExtractAtoms: Recovered ${atoms.length} atom(s) via individual extraction`);
@@ -246,94 +234,6 @@ function parseJsonWithRecovery(
 
   logger?.warn('ExtractAtoms: All JSON parsing layers failed');
   throw new Error('Failed to parse JSON from LLM response');
-}
-
-/**
- * Extract the outermost JSON object from content using brace counting.
- */
-function extractJsonText(content: string, logger?: { warn: (msg: string) => void }): string | null {
-  const startIdx = content.indexOf('{');
-  if (startIdx === -1) {
-    logger?.warn('ExtractAtoms: No JSON object found in response');
-    return null;
-  }
-
-  const endIdx = findMatchingBrace(content, startIdx);
-
-  if (endIdx === -1) {
-    logger?.warn('ExtractAtoms: Unbalanced braces, attempting truncated recovery');
-    return content.substring(startIdx) + ']}';
-  }
-
-  return content.substring(startIdx, endIdx + 1);
-}
-
-/**
- * Find the index of the closing brace that matches the opening brace at startIdx.
- * Returns -1 if no matching brace is found.
- */
-function findMatchingBrace(content: string, startIdx: number): number {
-  let braceCount = 0;
-  let inString = false;
-  let escapeNext = false;
-
-  for (let i = startIdx; i < content.length; i++) {
-    const c = content[i];
-
-    if (escapeNext) {
-      escapeNext = false;
-    } else if (c === '\\' && inString) {
-      escapeNext = true;
-    } else if (c === '"') {
-      inString = !inString;
-    } else if (!inString) {
-      if (c === '{') braceCount++;
-      if (c === '}') braceCount--;
-      if (braceCount === 0) return i;
-    }
-  }
-
-  return -1;
-}
-
-/**
- * Apply targeted JSON repairs for common LLM output issues.
- */
-function repairJson(
-  jsonText: string,
-  logger?: { log?: (msg: string) => void; warn: (msg: string) => void },
-): string | null {
-  let repaired = jsonText;
-
-  // Repair 1: Remove trailing commas before ] or }
-  repaired = repaired.replaceAll(/,\s*([}\]])/g, '$1');
-
-  // Repair 2: Replace unescaped newlines inside string values
-  repaired = repaired.replaceAll(/(?<="[^"]*)\n(?=[^"]*")/g, String.raw`\n`);
-
-  // Repair 3: Replace single quotes used as string delimiters
-  // Only when the pattern clearly indicates single-quoted strings
-  repaired = repaired.replaceAll(/:\s*'([^']*)'/g, ': "$1"');
-
-  // Repair 4: Handle truncated output — close open structures
-  const openBraces = (repaired.match(/{/g) || []).length;
-  const closeBraces = (repaired.match(/}/g) || []).length;
-  const openBrackets = (repaired.match(/\[/g) || []).length;
-  const closeBrackets = (repaired.match(/]/g) || []).length;
-
-  for (let i = 0; i < openBrackets - closeBrackets; i++) {
-    repaired += ']';
-  }
-  for (let i = 0; i < openBraces - closeBraces; i++) {
-    repaired += '}';
-  }
-
-  if (repaired === jsonText) {
-    return null;
-  }
-
-  logger?.log?.('ExtractAtoms: Applied JSON repairs');
-  return repaired;
 }
 
 /**

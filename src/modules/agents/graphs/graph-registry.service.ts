@@ -15,6 +15,7 @@ import { CompiledStateGraph } from '@langchain/langgraph';
 import { LLMService } from '../../../common/llm/llm.service';
 import { ToolRegistryService } from '../tools/tool-registry.service';
 import { ReconciliationRepository } from '../repositories/reconciliation.repository';
+import { ManifestRepository } from '../repositories/manifest.repository';
 import { ReconciliationAtomInferenceService } from '../reconciliation-atom-inference.service';
 import {
   ContentProvider,
@@ -81,6 +82,7 @@ export class GraphRegistryService implements OnModuleInit {
     @Optional() @Inject(WRITE_PROVIDER) writeProvider?: WriteProvider,
     @Optional() private readonly batchLlmService?: BatchLlmService,
     @Optional() private readonly cancellationRegistry?: CancellationRegistry,
+    @Optional() private readonly manifestRepository?: ManifestRepository,
   ) {
     this.nodeConfig = {
       llmService: this.llmService,
@@ -143,6 +145,9 @@ export class GraphRegistryService implements OnModuleInit {
           repository: this.reconciliationRepository,
           persistToDatabase: !!this.reconciliationRepository,
           reconciliationAtomInferenceService: this.reconciliationAtomInferenceService,
+        },
+        loadManifest: {
+          manifestRepository: this.manifestRepository,
         },
       },
     }) as any;

@@ -25,6 +25,9 @@ import {
   InferredMolecule,
   EvidenceSource,
 } from '../../types/reconciliation-state';
+import { AgentTaskType } from '../../../../../common/llm/providers/types';
+import { parseJsonWithRecovery } from '../../../../../common/llm/json-recovery';
+import { computeTextSimilarity } from './text-similarity';
 
 /**
  * Available clustering methods
@@ -45,6 +48,8 @@ export interface SynthesizeMoleculesNodeOptions {
   useTool?: boolean;
   /** Similarity threshold for semantic clustering (0-1, default: 0.7) */
   semanticSimilarityThreshold?: number;
+  /** Similarity threshold for cross-evidence atom deduplication (0-1, default: 0.35) */
+  crossEvidenceDedupThreshold?: number;
 }
 
 /**
@@ -266,32 +271,7 @@ function clusterByDomainConcept(atoms: InferredAtom[]): Map<string, InferredAtom
   return clusters;
 }
 
-/**
- * Simple text-based similarity for semantic clustering
- * Uses word overlap (Jaccard similarity) as a simple approximation
- */
-function computeTextSimilarity(text1: string, text2: string): number {
-  const words1 = new Set(
-    text1
-      .toLowerCase()
-      .split(/\s+/)
-      .filter((w) => w.length > 2),
-  );
-  const words2 = new Set(
-    text2
-      .toLowerCase()
-      .split(/\s+/)
-      .filter((w) => w.length > 2),
-  );
-
-  if (words1.size === 0 && words2.size === 0) return 1;
-  if (words1.size === 0 || words2.size === 0) return 0;
-
-  const intersection = new Set([...words1].filter((w) => words2.has(w)));
-  const union = new Set([...words1, ...words2]);
-
-  return intersection.size / union.size;
-}
+// computeTextSimilarity imported from ./text-similarity
 
 /**
  * Get text representation of an atom for similarity computation
@@ -555,18 +535,162 @@ function clusterAtomsDirect(
   return inferredMolecules;
 }
 
+/**
+ * Build a text summary of a molecule's atoms for the LLM naming prompt.
+ * Includes evidence type breakdown for context-aware naming.
+ */
+function buildMoleculeSummary(
+  mol: InferredMolecule,
+  groupIndex: number,
+  atomByTempId: Map<string, InferredAtom>,
+  maxAtoms: number,
+): string {
+  const atoms = mol.atomTempIds
+    .map((id) => atomByTempId.get(id))
+    .filter(Boolean) as InferredAtom[];
+
+  // Build evidence type summary
+  const evidenceTypeCounts = new Map<string, number>();
+  for (const atom of atoms) {
+    for (const src of atom.evidenceSources || []) {
+      evidenceTypeCounts.set(src.type, (evidenceTypeCounts.get(src.type) || 0) + 1);
+    }
+  }
+  const evidenceSummary = evidenceTypeCounts.size > 0
+    ? Array.from(evidenceTypeCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([type, count]) => `${count} ${type}`)
+        .join(', ')
+    : 'unknown';
+
+  const atomDescriptions = atoms
+    .slice(0, maxAtoms)
+    .map((a) => `  - ${a.description}`);
+  const extra = atoms.length > maxAtoms
+    ? `\n  - ... and ${atoms.length - maxAtoms} more`
+    : '';
+  return `Group ${groupIndex + 1} (${atoms.length} atoms, evidence: ${evidenceSummary}):\n${atomDescriptions.join('\n')}${extra}`;
+}
+
+/**
+ * Apply LLM-generated names, descriptions, and Gherkin from parsed JSON response.
+ */
+function applyLLMNames(
+  parsed: unknown[],
+  refined: InferredMolecule[],
+  batchOffset: number,
+  batchSize: number,
+): void {
+  for (const entry of parsed) {
+    const record = entry as Record<string, unknown>;
+    const idx = Number(record.index) - 1; // 1-indexed in prompt
+    if (idx < 0 || idx >= batchSize || typeof record.name !== 'string') continue;
+    const updates: Partial<InferredMolecule> = { name: record.name };
+    if (typeof record.description === 'string') {
+      updates.description = record.description;
+    }
+    if (typeof record.gherkin === 'string') {
+      updates.gherkinScenario = record.gherkin;
+    }
+    refined[batchOffset + idx] = { ...refined[batchOffset + idx], ...updates };
+  }
+}
+
+/**
+ * System prompt for molecule naming LLM calls.
+ * Extracted as a constant for Anthropic prompt caching (reused across batches).
+ */
+const MOLECULE_NAMING_SYSTEM_PROMPT = `You are naming groups of Intent Atoms (behavioral specifications of a software product).
+Each group should get a product-focused name, description, and Gherkin scenario.
+
+For each group, provide:
+1. A name (2-5 words) — the product capability
+2. A description (1-2 sentences) — what users or the system can do
+3. A Gherkin scenario — Given/When/Then format covering the key behaviors
+
+CRITICAL RULES:
+- Names MUST reflect user-facing capabilities or product features
+- GOOD names: "User Authentication", "Product Search & Filtering", "Shopping Cart Management"
+- BAD names: "Auth Module", "Components Functionality", "Prisma Module"
+- Descriptions should summarize WHAT users or the system can DO, not code structure
+- Gherkin scenarios should use standard format: Feature/Scenario/Given/When/Then
+- Include multiple Given/When/Then steps to cover the group's atoms
+- Use "And" for additional steps within Given/When/Then
+
+Example Gherkin:
+Feature: Shopping Cart Management
+  Scenario: User manages shopping cart
+    Given a logged-in user with products in catalog
+    When the user adds a product to their cart
+    Then the cart total is updated
+    And the product appears in the cart summary
+    When the user removes an item from the cart
+    Then the cart total decreases accordingly
+
+Respond with a JSON array only. Use newline characters in the gherkin field:
+[{"index": 1, "name": "...", "description": "...", "gherkin": "Feature: Name` + String.raw`\n  Scenario: ...\n    Given ...\n    When ...\n    Then ...` + `"}, ...]`;
+
+/**
+ * Use LLM to refine molecule names and descriptions based on their constituent atoms.
+ * Processes in batches to minimize LLM calls. Falls back to original names on failure.
+ */
+async function refineMoleculeNamesWithLLM(
+  molecules: InferredMolecule[],
+  atomByTempId: Map<string, InferredAtom>,
+  config: NodeConfig,
+): Promise<InferredMolecule[]> {
+  const BATCH_SIZE = 5;
+  const refined = [...molecules];
+
+  for (let i = 0; i < refined.length; i += BATCH_SIZE) {
+    const batch = refined.slice(i, i + BATCH_SIZE);
+
+    const moleculeSummaries = batch.map((mol, idx) =>
+      buildMoleculeSummary(mol, idx, atomByTempId, 8),
+    );
+
+    try {
+      const response = await config.llmService.invoke({
+        messages: [
+          { role: 'system', content: MOLECULE_NAMING_SYSTEM_PROMPT },
+          { role: 'user', content: moleculeSummaries.join('\n\n') },
+        ],
+        taskType: AgentTaskType.ANALYSIS,
+        agentName: 'synthesize-molecules-node',
+        purpose: 'refine-molecule-names',
+        promptCaching: true,
+      });
+
+      const parsed = parseJsonWithRecovery(response.content);
+      if (Array.isArray(parsed)) {
+        applyLLMNames(parsed, refined, i, batch.length);
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      config.logger?.warn(
+        `[SynthesizeMoleculesNode] LLM naming failed for batch ${i / BATCH_SIZE + 1}, keeping template names: ${msg}`,
+      );
+      // Keep original names — graceful degradation per INV-R004
+    }
+  }
+
+  return refined;
+}
+
 export function createSynthesizeMoleculesNode(options: SynthesizeMoleculesNodeOptions = {}) {
-  const clusteringMethod = options.clusteringMethod || 'module';
+  const clusteringMethod = options.clusteringMethod || 'domain_concept';
   const minAtomsPerMolecule = options.minAtomsPerMolecule || 1;
   const useTool = options.useTool ?? true;
+  const useLLMForNaming = options.useLLMForNaming ?? true;
   const semanticSimilarityThreshold = options.semanticSimilarityThreshold ?? 0.3;
+  const crossEvidenceDedupThreshold = options.crossEvidenceDedupThreshold ?? 0.35;
 
   return (config: NodeConfig) =>
     async (state: ReconciliationGraphStateType): Promise<Partial<ReconciliationGraphStateType>> => {
       const rawAtoms = state.inferredAtoms || [];
 
       // Phase 21C: Deduplicate atoms from different evidence sources
-      const inferredAtoms = deduplicateAcrossEvidence(rawAtoms, 0.4, config.logger);
+      const inferredAtoms = deduplicateAcrossEvidence(rawAtoms, crossEvidenceDedupThreshold, config.logger);
 
       config.logger?.log(
         `[SynthesizeMoleculesNode] Clustering ${inferredAtoms.length} atoms using method: ${clusteringMethod} (useTool=${useTool})`,
@@ -581,12 +705,13 @@ export function createSynthesizeMoleculesNode(options: SynthesizeMoleculesNodeOp
         try {
           config.logger?.log('[SynthesizeMoleculesNode] Using cluster_atoms_for_molecules tool');
 
-          // Prepare atoms for tool (convert to expected format)
+          // Prepare atoms for tool (convert to expected format, include confidence)
           const atomsForTool = inferredAtoms.map((a) => ({
             temp_id: a.tempId,
             description: a.description,
             category: a.category,
             source_file: a.sourceTest.filePath,
+            confidence: a.confidence,
           }));
 
           const toolResult = (await config.toolRegistry.executeTool('cluster_atoms_for_molecules', {
@@ -632,6 +757,22 @@ export function createSynthesizeMoleculesNode(options: SynthesizeMoleculesNodeOp
           minAtomsPerMolecule,
           config.logger,
           semanticSimilarityThreshold,
+        );
+      }
+
+      // Refine molecule names/descriptions with LLM for product-intent focus
+      if (useLLMForNaming && inferredMolecules.length > 0) {
+        config.logger?.log(
+          `[SynthesizeMoleculesNode] Refining ${inferredMolecules.length} molecule names with LLM`,
+        );
+        const atomByTempId = new Map<string, InferredAtom>();
+        for (const atom of inferredAtoms) {
+          atomByTempId.set(atom.tempId, atom);
+        }
+        inferredMolecules = await refineMoleculeNamesWithLLM(
+          inferredMolecules,
+          atomByTempId,
+          config,
         );
       }
 

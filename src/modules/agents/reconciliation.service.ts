@@ -41,6 +41,8 @@ import {
 import { ReconciliationResult } from './graphs/types/reconciliation-result';
 import { RECONCILIATION_GRAPH_NAME } from './graphs/graphs/reconciliation.graph';
 import { InterruptPayload } from './graphs/nodes/reconciliation/verify.node';
+import { ManifestService } from './manifest.service';
+import { ProjectsService } from '../projects/projects.service';
 
 /**
  * DTO for starting a reconciliation analysis
@@ -57,6 +59,8 @@ export interface ReconciliationDto {
   };
   /** Analysis options */
   options?: ReconciliationOptions;
+  /** Explicit manifest ID to skip deterministic phases */
+  manifestId?: string;
 }
 
 /**
@@ -152,6 +156,8 @@ export class ReconciliationService {
     private readonly cancellationRegistry: CancellationRegistry,
     @Optional() private readonly repository?: ReconciliationRepository,
     @Optional() private readonly gateway?: ReconciliationGateway,
+    @Optional() private readonly manifestService?: ManifestService,
+    @Optional() private readonly projectsService?: ProjectsService,
   ) {}
 
   /**
@@ -170,6 +176,9 @@ export class ReconciliationService {
       `Starting reconciliation analysis: mode=${mode}, root=${rootDirectory}, runId=${runId}`,
     );
 
+    // Resolve manifest (explicit or auto-detect)
+    const manifestId = await this.resolveManifestId(dto.manifestId);
+
     // Build input for graph
     const input: ReconciliationInput = {
       rootDirectory,
@@ -182,6 +191,7 @@ export class ReconciliationService {
         autoCreateAtoms: dto.options?.autoCreateAtoms ?? false,
         qualityThreshold: dto.options?.qualityThreshold ?? 80,
         requireReview: dto.options?.requireReview ?? false,
+        manifestId,
       },
     };
 
@@ -372,6 +382,7 @@ export class ReconciliationService {
     commitSha?: string;
     branch: string;
     repo?: string;
+    manifestId?: string;
   }): Promise<AnalysisStartResult> {
     // Load GitHub config from project settings
     const githubConfig = await this.repositoryConfigService.getGitHubConfig();
@@ -382,8 +393,8 @@ export class ReconciliationService {
       );
     }
 
-    const owner = githubConfig.owner;
-    const repo = dto.repo ?? githubConfig.repo;
+    const owner = (githubConfig.owner ?? '').trim();
+    const repo = (dto.repo ?? githubConfig.repo ?? '').trim();
 
     if (!owner || !repo) {
       throw new BadRequestException(
@@ -423,6 +434,9 @@ export class ReconciliationService {
 
     this.logger.log(`GitHub repo cloned to ${rootDirectory}`);
 
+    // Resolve manifest (explicit or auto-detect)
+    const manifestId = await this.resolveManifestId(dto.manifestId);
+
     // Build input for graph
     const input: ReconciliationInput = {
       rootDirectory,
@@ -432,6 +446,7 @@ export class ReconciliationService {
         analyzeDocs: true,
         qualityThreshold: 80,
         requireReview: true,
+        manifestId,
       },
     };
 
@@ -491,9 +506,14 @@ export class ReconciliationService {
       `Starting reconciliation with interrupt support: mode=${mode}, threadId=${threadId}`,
     );
 
+    // Resolve manifest (explicit or auto-detect)
+    const manifestId = await this.resolveManifestId(dto.manifestId);
+
     // Emit WebSocket event: starting
     this.gateway?.emitStarted(runId, rootDirectory, mode);
-    this.gateway?.emitProgress(runId, 'starting', 0, 'Initializing reconciliation...');
+    this.gateway?.emitProgress(runId, 'starting', 0, manifestId
+      ? 'Loading pre-computed manifest...'
+      : 'Initializing reconciliation...');
 
     // Build input for graph
     const input: ReconciliationInput = {
@@ -513,6 +533,7 @@ export class ReconciliationService {
         includeFilePatterns: dto.options?.includeFilePatterns,
         excludeFilePatterns: dto.options?.excludeFilePatterns,
         forceInterruptOnQualityFail: dto.options?.forceInterruptOnQualityFail,
+        manifestId,
       },
     };
 
@@ -1015,9 +1036,15 @@ export class ReconciliationService {
    * @param runId - The run ID
    * @returns Run status or null if not found
    */
-  getRunStatus(runId: string): TrackedRun['status'] | null {
+  async getRunStatus(runId: string): Promise<TrackedRun['status'] | null> {
     const trackedRun = this.activeRuns.get(runId);
-    return trackedRun?.status ?? null;
+    if (trackedRun) return trackedRun.status;
+    // Fall back to DB for completed/recovered runs
+    if (this.repository) {
+      const run = await this.repository.findRunByRunId(runId);
+      if (run) return run.status as TrackedRun['status'];
+    }
+    return null;
   }
 
   /**
@@ -1105,6 +1132,49 @@ export class ReconciliationService {
     }
 
     return cleanedCount;
+  }
+
+  // ==========================================================================
+  // Manifest Auto-Detection
+  // ==========================================================================
+
+  /**
+   * Resolve the manifest ID to use for a reconciliation run.
+   *
+   * Priority:
+   * 1. Explicit manifestId from the DTO (user override)
+   * 2. Latest completed manifest for the default project (auto-detect)
+   * 3. undefined — graph will run the full deterministic pipeline
+   */
+  private async resolveManifestId(explicitManifestId?: string): Promise<string | undefined> {
+    // 1. Explicit override
+    if (explicitManifestId) {
+      this.logger.log(`Using explicit manifest: ${explicitManifestId}`);
+      return explicitManifestId;
+    }
+
+    // 2. Auto-detect from default project
+    if (!this.manifestService || !this.projectsService) {
+      return undefined;
+    }
+
+    try {
+      const project = await this.projectsService.getOrCreateDefault();
+      const manifest = await this.manifestService.getLatestForProject(project.id);
+
+      if (manifest?.status === 'complete') {
+        this.logger.log(
+          `Auto-detected manifest ${manifest.id} for project ${project.id} (commit: ${manifest.commitHash})`,
+        );
+        return manifest.id;
+      }
+    } catch (err) {
+      this.logger.debug(
+        `Manifest auto-detection failed: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    return undefined;
   }
 
   // ==========================================================================
@@ -1281,6 +1351,11 @@ export class ReconciliationService {
         atomId: a.atomId,
         sourceTestFilePath: a.sourceTestFilePath,
         sourceTestName: a.sourceTestName,
+        sourceTestLineNumber: a.sourceTestLineNumber,
+        observableOutcomes: a.observableOutcomes ?? [],
+        reasoning: a.reasoning,
+        evidenceSources: a.evidenceSources ?? [],
+        primaryEvidenceType: a.primaryEvidenceType ?? null,
       })),
       molecules: moleculeRecs.map((m) => ({
         id: m.id,
@@ -1292,6 +1367,8 @@ export class ReconciliationService {
         moleculeId: m.moleculeId,
         atomRecommendationIds: m.atomRecommendationIds ?? [],
         atomRecommendationTempIds: m.atomRecommendationTempIds ?? [],
+        gherkinScenario: m.gherkinScenario ?? null,
+        reasoning: m.reasoning,
       })),
     };
   }

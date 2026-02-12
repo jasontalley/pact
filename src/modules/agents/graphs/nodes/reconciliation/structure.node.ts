@@ -239,41 +239,46 @@ export function createStructureNode(options: StructureNodeOptions = {}) {
             configFiles.push(file);
           } else if (matchesAnyPattern(file, DEFAULT_UI_PATTERNS)) {
             uiFiles.push(file);
-            sourceFiles.push(file); // UI files are also source files
           } else if (matchesAnyPattern(file, sourcePatterns)) {
             sourceFiles.push(file);
           }
         }
 
-        // Detect frameworks from package.json
+        // Detect frameworks from all package.json files (monorepo support)
         let detectedFrameworks: string[] | undefined;
         let packageInfo: RepoStructure['packageInfo'] | undefined;
-        try {
-          const pkgPath = allFiles.find((f) => f === 'package.json' || f.endsWith('/package.json'));
-          if (pkgPath) {
+        const allPkgPaths = allFiles.filter(
+          (f) => f === 'package.json' || f.endsWith('/package.json'),
+        );
+        const frameworkSet = new Set<string>();
+
+        for (const pkgPath of allPkgPaths) {
+          try {
             const pkgContent = await contentProvider.readFile(
               pkgPath.startsWith('/') ? pkgPath : `${rootDirectory}/${pkgPath}`,
             );
             const pkg = JSON.parse(pkgContent);
             const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-            const frameworks: string[] = [];
-            if (deps['react'] || deps['next']) frameworks.push('react');
-            if (deps['vue']) frameworks.push('vue');
-            if (deps['@nestjs/core']) frameworks.push('nestjs');
-            if (deps['express']) frameworks.push('express');
-            if (deps['@angular/core']) frameworks.push('angular');
-            if (deps['svelte']) frameworks.push('svelte');
-            if (deps['fastify']) frameworks.push('fastify');
-            if (frameworks.length > 0) detectedFrameworks = frameworks;
-            packageInfo = {
+            if (deps['react'] || deps['next']) frameworkSet.add('react');
+            if (deps['vue']) frameworkSet.add('vue');
+            if (deps['@nestjs/core']) frameworkSet.add('nestjs');
+            if (deps['express']) frameworkSet.add('express');
+            if (deps['@angular/core']) frameworkSet.add('angular');
+            if (deps['svelte']) frameworkSet.add('svelte');
+            if (deps['fastify']) frameworkSet.add('fastify');
+            if (deps['graphql'] || deps['@nestjs/graphql'] || deps['@apollo/server']) frameworkSet.add('graphql');
+
+            // Use root package.json for packageInfo (first match)
+            packageInfo ??= {
               name: pkg.name,
               description: pkg.description,
               scripts: pkg.scripts,
             };
+          } catch {
+            // package.json not readable or parseable — not critical
           }
-        } catch {
-          // package.json not readable or parseable — not critical
         }
+        if (frameworkSet.size > 0) detectedFrameworks = Array.from(frameworkSet);
 
         const repoStructure: RepoStructure = {
           files: [...sourceFiles, ...testFiles],

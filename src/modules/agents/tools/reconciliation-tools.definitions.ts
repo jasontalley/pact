@@ -217,7 +217,7 @@ export const RECONCILIATION_TOOLS: ToolDefinition[] = [
         atoms: {
           type: 'string',
           description:
-            'JSON array of atoms to cluster. Each atom: {temp_id, description, category, source_file}',
+            'JSON array of atoms to cluster. Each atom: {temp_id, description, category, source_file, confidence?}',
         },
         clustering_method: {
           type: 'string',
@@ -276,6 +276,7 @@ export interface ClusteringAtomInput {
   description: string;
   category: string;
   source_file: string;
+  confidence?: number;
 }
 
 /**

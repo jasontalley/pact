@@ -1,0 +1,22 @@
+{
+  "id": "qs-003",
+  "name": "Atom with implementation detail leakage",
+  "atom": {
+    "description": "The UserService.createUser() method inserts a new record into the users table using Prisma ORM and returns the created user object",
+    "category": "functional",
+    "confidence": 80,
+    "observableOutcomes": [
+      "Prisma client insert is called with the correct user data",
+      "The users table contains a new row after the method completes",
+      "The returned object matches the Prisma User model shape"
+    ],
+    "reasoning": "Extracted from user.service.spec.ts: the test mocks the Prisma client and verifies that prisma.user.create() is called with the provided DTO. The assertion checks the returned value matches the mocked Prisma response. This test is tightly coupled to the Prisma ORM implementation rather than describing user-facing behavior.",
+    "sourceTestFilePath": "test/user.service.spec.ts",
+    "sourceTestName": "should call prisma.user.create with the correct DTO"
+  },
+  "expectedScore": {
+    "minScore": 30,
+    "maxScore": 70,
+    "shouldPass": false
+  }
+}

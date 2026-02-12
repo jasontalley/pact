@@ -116,13 +116,49 @@ export interface ReconciliationCancelledEvent {
   timestamp: Date;
 }
 
+/**
+ * Manifest progress event
+ */
+export interface ManifestProgressEvent {
+  type: 'manifest:progress';
+  manifestId: string;
+  phase: string;
+  progress: number; // 0-100
+  timestamp: Date;
+}
+
+/**
+ * Manifest completed event
+ */
+export interface ManifestCompletedEvent {
+  type: 'manifest:completed';
+  manifestId: string;
+  projectId: string | null;
+  durationMs: number;
+  evidenceCount: number;
+  timestamp: Date;
+}
+
+/**
+ * Manifest failed event
+ */
+export interface ManifestFailedEvent {
+  type: 'manifest:failed';
+  manifestId: string;
+  error: string;
+  timestamp: Date;
+}
+
 export type ReconciliationEvent =
   | ReconciliationProgressEvent
   | ReconciliationStartedEvent
   | ReconciliationCompletedEvent
   | ReconciliationFailedEvent
   | ReconciliationInterruptedEvent
-  | ReconciliationCancelledEvent;
+  | ReconciliationCancelledEvent
+  | ManifestProgressEvent
+  | ManifestCompletedEvent
+  | ManifestFailedEvent;
 
 /**
  * WebSocket Gateway for real-time reconciliation progress updates
@@ -311,5 +347,59 @@ export class ReconciliationGateway
     };
     this.server?.emit('reconciliation:cancelled', event);
     this.logger.log(`[${runId}] Reconciliation cancelled: ${reason}`);
+  }
+
+  // ===========================================================================
+  // Manifest Events
+  // ===========================================================================
+
+  /**
+   * Emit manifest generation progress
+   */
+  emitManifestProgress(manifestId: string, phase: string, progress: number): void {
+    const event: ManifestProgressEvent = {
+      type: 'manifest:progress',
+      manifestId,
+      phase,
+      progress,
+      timestamp: new Date(),
+    };
+    this.server?.emit('manifest:progress', event);
+    this.logger.debug(`[manifest:${manifestId}] Progress: ${phase} (${progress}%)`);
+  }
+
+  /**
+   * Emit manifest generation completed
+   */
+  emitManifestCompleted(
+    manifestId: string,
+    projectId: string | null,
+    durationMs: number,
+    evidenceCount: number,
+  ): void {
+    const event: ManifestCompletedEvent = {
+      type: 'manifest:completed',
+      manifestId,
+      projectId,
+      durationMs,
+      evidenceCount,
+      timestamp: new Date(),
+    };
+    this.server?.emit('manifest:completed', event);
+    this.logger.log(`[manifest:${manifestId}] Manifest completed (${durationMs}ms)`);
+  }
+
+  /**
+   * Emit manifest generation failed
+   */
+  emitManifestFailed(manifestId: string, error: string): void {
+    const event: ManifestFailedEvent = {
+      type: 'manifest:failed',
+      manifestId,
+      error,
+      timestamp: new Date(),
+    };
+    this.server?.emit('manifest:failed', event);
+    this.logger.error(`[manifest:${manifestId}] Manifest failed: ${error}`);
   }
 }

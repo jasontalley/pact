@@ -86,6 +86,8 @@ export interface ProviderRequestOptions {
   reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   /** GPT-5.2 specific: verbosity control */
   verbosity?: 'concise' | 'balanced' | 'detailed';
+  /** Enable Anthropic prompt caching on system messages (ephemeral, 5-min TTL) */
+  promptCaching?: boolean;
   /** Arbitrary provider-specific options */
   providerOptions?: Record<string, unknown>;
 }

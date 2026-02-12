@@ -1,5 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { LLMService } from '../../common/llm/llm.service';
+import { parseJsonWithRecovery } from '../../common/llm/json-recovery';
 
 /**
  * Result of atomicity analysis
@@ -555,12 +556,12 @@ Respond with JSON:
       temperature: 0.2,
     });
 
-    const jsonMatch = response.content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
+    const parsed = parseJsonWithRecovery(response.content);
+    if (!parsed || Array.isArray(parsed)) {
       throw new Error('No JSON in LLM response');
     }
 
-    return JSON.parse(jsonMatch[0]);
+    return parsed as unknown as LLMAtomicityAnalysis;
   }
 
   /**

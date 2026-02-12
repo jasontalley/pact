@@ -1,0 +1,25 @@
+{
+  "id": "qs-005",
+  "name": "Atom combining multiple behaviors",
+  "atom": {
+    "description": "User can create, read, update, and delete their profile information, change their password, and manage their notification preferences",
+    "category": "functional",
+    "confidence": 75,
+    "observableOutcomes": [
+      "User profile is created with name, email, and avatar fields",
+      "User can retrieve their profile via GET request",
+      "User can update individual profile fields via PATCH request",
+      "User can delete their account permanently",
+      "Password change requires current password verification before accepting new password",
+      "Notification preferences can be toggled individually for email, push, and SMS channels"
+    ],
+    "reasoning": "Consolidated from the entire profile.spec.ts test suite which covers six distinct describe blocks: profile creation, profile retrieval, profile updates, account deletion, password management, and notification settings. Each describe block tests independent behaviors that should likely be separate atoms. The combination makes this atom difficult to test atomically and violates the single-behavior principle.",
+    "sourceTestFilePath": "test/profile.spec.ts",
+    "sourceTestName": "ProfileService (all tests consolidated)"
+  },
+  "expectedScore": {
+    "minScore": 40,
+    "maxScore": 70,
+    "shouldPass": false
+  }
+}

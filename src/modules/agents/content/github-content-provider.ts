@@ -48,8 +48,10 @@ export class GitHubContentProvider implements ContentProvider {
    */
   static async create(config: GitHubCloneConfig): Promise<GitHubContentProvider> {
     const cloneDir = path.join(os.tmpdir(), `pact-github-${uuidv4()}`);
-    const branch = config.branch ?? 'main';
-    const url = `https://x-access-token:${config.pat}@github.com/${config.owner}/${config.repo}.git`;
+    const branch = (config.branch ?? 'main').trim();
+    const owner = config.owner.trim();
+    const repo = config.repo.trim();
+    const url = `https://x-access-token:${config.pat}@github.com/${owner}/${repo}.git`;
 
     try {
       // Shallow clone at specified branch

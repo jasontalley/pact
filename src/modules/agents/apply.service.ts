@@ -424,6 +424,7 @@ export class ApplyService {
       moleculeId,
       name: moleculeRec.name,
       description: moleculeRec.description,
+      gherkinScenario: moleculeRec.gherkinScenario || null,
       lensType: 'feature', // Default lens type for reconciliation-generated molecules
       ownerId: 'reconciliation-agent',
       tags: [],

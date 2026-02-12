@@ -1,0 +1,22 @@
+{
+  "id": "qs-008",
+  "name": "Atom with class name in description",
+  "atom": {
+    "description": "The PaymentController processes credit card transactions through the StripeGateway service and stores transaction records in the payments table",
+    "category": "functional",
+    "confidence": 85,
+    "observableOutcomes": [
+      "StripeGateway.charge() is called with the correct amount and currency",
+      "A new row is inserted into the payments table with status 'completed'",
+      "The PaymentController returns a 200 response with the transaction ID"
+    ],
+    "reasoning": "Extracted from payment.controller.spec.ts: the test mocks the StripeGateway dependency and verifies the controller calls stripe.charge() with the expected payload. A second assertion checks that the repository's save method is called with a Payment entity. The test is coupled to the StripeGateway class name, the payments table structure, and the controller class — all implementation details that could change without affecting the user-facing behavior of processing a payment.",
+    "sourceTestFilePath": "test/payment.controller.spec.ts",
+    "sourceTestName": "should process payment through StripeGateway and persist transaction"
+  },
+  "expectedScore": {
+    "minScore": 30,
+    "maxScore": 65,
+    "shouldPass": false
+  }
+}

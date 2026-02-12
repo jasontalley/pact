@@ -18,6 +18,7 @@
 
 import { NodeConfig } from '../types';
 import { CancellationError } from '../../../../../common/cancellation.registry';
+import { parseJsonWithRecovery } from '../../../../../common/llm/json-recovery';
 import {
   ReconciliationGraphStateType,
   ReconciliationDecision,
@@ -142,11 +143,33 @@ interface QualityRule {
  *
  * Total possible: 100 points
  */
+const DESCRIPTION_VERBS = new Set([
+  'can', 'will', 'shall', 'must', 'should',
+  'allow', 'allows', 'enable', 'enables', 'provide', 'provides',
+  'support', 'supports', 'create', 'creates', 'validate', 'validates',
+  'process', 'processes', 'manage', 'manages', 'display', 'displays',
+  'send', 'sends', 'receive', 'receives', 'handle', 'handles',
+]);
+
+function descriptionHasVerb(description: string): boolean {
+  const words = description.toLowerCase().split(/\W+/);
+  return words.some((w) => DESCRIPTION_VERBS.has(w));
+}
+
 const DEFAULT_QUALITY_RULES: QualityRule[] = [
   {
     name: 'has_description',
-    weight: 25,
-    check: (atom) => !!atom.description && atom.description.length > 5,
+    weight: 20,
+    check: (atom) => !!atom.description && atom.description.length >= 15,
+  },
+  {
+    name: 'description_quality',
+    weight: 10,
+    // Good descriptions are 30+ chars and contain a behavioral verb
+    check: (atom) =>
+      !!atom.description &&
+      atom.description.length >= 30 &&
+      descriptionHasVerb(atom.description),
   },
   {
     name: 'has_outcomes',
@@ -166,8 +189,8 @@ const DEFAULT_QUALITY_RULES: QualityRule[] = [
   {
     name: 'has_confidence',
     weight: 15,
-    // Confidence is stored as 0-1 (e.g., 0.7), not 0-100
-    check: (atom) => atom.confidence >= 0.5,
+    // Confidence is stored as 0-100 (e.g., 70), normalized in infer-atoms node
+    check: (atom) => atom.confidence >= 50,
   },
   {
     name: 'no_ambiguity',
@@ -176,7 +199,7 @@ const DEFAULT_QUALITY_RULES: QualityRule[] = [
   },
   {
     name: 'has_source_test',
-    weight: 10,
+    weight: 5,
     check: (atom) => !!atom.sourceTest?.filePath && !!atom.sourceTest?.testName,
   },
 ];
@@ -414,24 +437,28 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
         try {
           const batchAvailable = await options.batchService.isAvailable();
           if (batchAvailable) {
-            config.logger?.log(`[VerifyNode] Using batch mode for ${inferredAtoms.length} atoms`);
-
             const batchRequests = inferredAtoms.map((atom) => ({
               customId: atom.tempId,
               userPrompt: buildBatchQualityPrompt(atom),
             }));
 
+            config.logger?.log(
+              `[VerifyNode] Using batch mode for ${inferredAtoms.length} atoms`,
+            );
+
+            const progressCb = options.onBatchProgress
+              ? (job: { completedRequests: number; totalRequests: number; failedRequests: number }) => {
+                  options.onBatchProgress!({
+                    runId: state.input?.runId,
+                    completed: job.completedRequests,
+                    total: job.totalRequests,
+                    failed: job.failedRequests,
+                  });
+                }
+              : undefined;
+
             const batchResults = await options.batchService.submitAndWait(batchRequests, {
-              onProgress: options.onBatchProgress
-                ? (job) => {
-                    options.onBatchProgress!({
-                      runId: state.input?.runId,
-                      completed: job.completedRequests,
-                      total: job.totalRequests,
-                      failed: job.failedRequests,
-                    });
-                  }
-                : undefined,
+              onProgress: progressCb,
             });
 
             // Process batch results
@@ -440,7 +467,8 @@ export function createVerifyNode(options: VerifyNodeOptions = {}) {
               const batchResult = resultMap.get(atom.tempId);
               if (batchResult?.success && batchResult.content) {
                 try {
-                  const parsed = JSON.parse(batchResult.content);
+                  const parsed = parseJsonWithRecovery(batchResult.content) as Record<string, unknown> | null;
+                  if (!parsed || typeof parsed.totalScore !== 'number') throw new Error('Invalid quality response');
                   atom.qualityScore = parsed.totalScore;
                   if (parsed.totalScore >= inputThreshold) {
                     passCount++;

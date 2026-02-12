@@ -28,8 +28,72 @@ import {
   EvidenceItem,
   EvidenceAnalysis,
   EvidenceSource,
+  EvidenceType,
   cleanupPhaseState,
 } from '../../types/reconciliation-state';
+import { computeTextSimilarity } from './text-similarity';
+import { parseJsonWithRecovery } from '../../../../../common/llm/json-recovery';
+
+/**
+ * Shared system prompt for all atom inference calls.
+ * Extracted as a constant so Anthropic prompt caching can reuse it across calls.
+ * Must be >= 1024 tokens for cache eligibility on Claude Sonnet.
+ */
+const ATOM_INFERENCE_SYSTEM_PROMPT = `You are an Intent Atom inference engine for a software product analysis system.
+
+## What is an Intent Atom?
+An Intent Atom is an irreducible behavioral specification — it describes WHAT a system does, not HOW it's implemented. Atoms are observable, falsifiable, and implementation-agnostic. They are the atomic unit of committed product intent.
+
+## Critical Requirements
+
+1. **Observable Outcomes Only**: Describe WHAT happens from a user or system perspective, not HOW it's implemented internally.
+   - GOOD: "User receives email notification within 5 minutes of order placement"
+   - GOOD: "Login with invalid credentials returns 401 Unauthorized"
+   - BAD: "EmailService.send() is called with correct parameters"
+   - BAD: "The function queries the database with a JOIN"
+
+2. **Testable and Falsifiable**: The atom must describe a behavior that can be verified through testing or observation.
+   - GOOD: "Passwords are stored securely with one-way hashing"
+   - GOOD: "Cart total updates when items are added or removed"
+   - BAD: "System handles authentication properly"
+   - BAD: "The code is well-organized"
+
+3. **Implementation Agnostic**: No mentions of specific classes, methods, functions, libraries, or internal technologies.
+   - GOOD: "Users can search products by name, category, or price range"
+   - BAD: "ProductService.search() uses Elasticsearch with fuzzy matching"
+   - BAD: "The Prisma client queries the PostgreSQL database"
+
+4. **Single Behavior**: One atom = one verifiable behavior. Do not combine multiple distinct behaviors.
+   - GOOD: "User can reset password using email link"
+   - BAD: "User authentication including login, logout, and password reset"
+
+## Evidence Type Guidelines
+You will analyze different types of evidence. Adapt your inference accordingly:
+- **Test**: Infer the behavioral intent that the test validates. The test assertion reveals what behavior is expected.
+- **Source export**: Infer what capability this exported function, class, or constant enables the system to provide.
+- **UI component**: Infer what the user can DO with this component. Focus on user actions and observable outcomes.
+- **API endpoint**: Infer what system capability this endpoint exposes to consumers.
+- **Documentation**: Extract the behavioral intent described in the documentation section.
+- **Code comment**: Extract behavioral intent from JSDoc documentation, task annotations, business rules, or atom references.
+- **Coverage gap**: Infer what untested behavior this uncovered code likely implements. Use lower confidence.
+
+## Confidence Scale (0-100)
+- 90-100: Clear, unambiguous behavioral intent with strong evidence
+- 70-89: Reasonable inference with minor ambiguity or interpretation
+- 50-69: Moderate confidence, some interpretation required
+- 30-49: Low confidence, speculative inference from limited evidence
+- Below 30: Very speculative, mostly guesswork
+
+## Response Format
+Respond with JSON only. Do not include markdown fences, explanations, or any text outside the JSON object:
+{
+  "description": "Clear, behavior-focused description (1-2 sentences)",
+  "category": "functional|security|performance|reliability|usability",
+  "observableOutcomes": ["Outcome 1 that can be verified", "Outcome 2 if applicable"],
+  "confidence": 0-100,
+  "ambiguityReasons": ["Reason for uncertainty (if confidence < 80)"],
+  "reasoning": "Brief explanation of how you derived this atom from the evidence"
+}`;
 
 /**
  * Options for customizing infer atoms node behavior
@@ -47,6 +111,10 @@ export interface InferAtomsNodeOptions {
   useDependencyContext?: boolean;
   /** Confidence boost for foundational modules (0-20, default: 10) */
   foundationalBoost?: number;
+  /** Similarity threshold for pre-LLM evidence dedup (0-1, default: 0.6). Set to 0 to disable. */
+  preLlmDedupThreshold?: number;
+  /** Max evidence items to process per type. Uncapped types process all items. */
+  evidenceCaps?: Partial<Record<EvidenceType, number>>;
 }
 
 /**
@@ -223,13 +291,10 @@ Respond with JSON only (no markdown, no explanation):
  */
 function parseInferenceResponse(response: string, testName: string): InferenceResponse | null {
   try {
-    // Try to extract JSON from response
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
+    const parsed = parseJsonWithRecovery(response) as InferenceResponse | null;
+    if (!parsed) {
       return null;
     }
-
-    const parsed = JSON.parse(jsonMatch[0]) as InferenceResponse;
 
     // Validate required fields
     if (!parsed.description || !parsed.category || !parsed.observableOutcomes) {
@@ -326,10 +391,14 @@ async function inferAtomWithLLM(
     );
 
   const response = await config.llmService.invoke({
-    messages: [{ role: 'user', content: prompt }],
+    messages: [
+      { role: 'system', content: ATOM_INFERENCE_SYSTEM_PROMPT },
+      { role: 'user', content: prompt },
+    ],
     taskType: AgentTaskType.ANALYSIS,
     agentName: 'infer-atoms-node',
     purpose: 'infer-intent-atom',
+    promptCaching: true,
   });
 
   const parsed = parseInferenceResponse(response.content, test.testName);
@@ -377,6 +446,8 @@ function getEvidenceInferencePrompt(evidence: EvidenceItem, analysis: EvidenceAn
       return getAPIInferencePrompt(evidence, analysis);
     case 'documentation':
       return getDocInferencePrompt(evidence, analysis);
+    case 'code_comment':
+      return getCodeCommentInferencePrompt(evidence, analysis);
     case 'coverage_gap':
       return getCoverageGapInferencePrompt(evidence, analysis);
     default:
@@ -560,6 +631,50 @@ Respond with JSON only:
 }`;
 }
 
+function getCodeCommentInferencePrompt(evidence: EvidenceItem, analysis: EvidenceAnalysis): string {
+  const commentType = evidence.metadata?.commentType || 'comment';
+  const commentTypeLabels: Record<string, string> = {
+    jsdoc: 'JSDoc documentation',
+    task_annotation: 'task annotation',
+    atom_reference: '@atom reference',
+    business_logic: 'business logic comment',
+  };
+  const typeLabel = commentTypeLabels[commentType] || 'business logic comment';
+
+  return `You are analyzing an inline code comment to infer an Intent Atom.
+The comment may describe behavioral intent, business rules, or system constraints.
+
+## Comment Type: ${typeLabel}
+## File: ${evidence.filePath}
+
+## Comment
+${evidence.code || ''}
+
+## Context
+${analysis.summary}
+Domain Concepts: ${analysis.domainConcepts.join(', ') || 'None identified'}
+
+## Instructions
+Infer the behavioral intent described or implied by this comment.
+- JSDoc: Extract the behavioral capability the documented code provides
+- Task annotations: Infer what behavior is incomplete or needs attention
+- Business logic: Extract the rule or constraint being enforced
+- @atom references: Describe the behavior the referenced atom represents
+
+Only infer an atom if the comment describes a concrete, testable behavior.
+If the comment is purely technical (e.g., "increase buffer size") with no user-facing behavior, set confidence below 30.
+
+Respond with JSON only:
+{
+  "description": "Clear, behavior-focused description (1-2 sentences)",
+  "category": "functional|security|performance|reliability|usability",
+  "observableOutcomes": ["Outcome 1", "Outcome 2"],
+  "confidence": 0-100,
+  "ambiguityReasons": ["Reason (if confidence < 80)"],
+  "reasoning": "Brief explanation"
+}`;
+}
+
 function getGenericEvidencePrompt(evidence: EvidenceItem, analysis: EvidenceAnalysis): string {
   return `You are analyzing code evidence to infer an Intent Atom.
 
@@ -598,10 +713,14 @@ async function inferAtomFromEvidence(
   const prompt = getEvidenceInferencePrompt(evidence, analysis);
 
   const response = await config.llmService.invoke({
-    messages: [{ role: 'user', content: prompt }],
+    messages: [
+      { role: 'system', content: ATOM_INFERENCE_SYSTEM_PROMPT },
+      { role: 'user', content: prompt },
+    ],
     taskType: AgentTaskType.ANALYSIS,
     agentName: 'infer-atoms-node',
     purpose: 'infer-intent-atom-evidence',
+    promptCaching: true,
   });
 
   const parsed = parseInferenceResponse(response.content, evidence.name);
@@ -632,12 +751,93 @@ async function inferAtomFromEvidence(
   };
 }
 
+/**
+ * Apply per-type caps to evidence items, keeping the highest-confidence items.
+ */
+function applyEvidenceCaps(
+  evidenceByType: Map<string, EvidenceItem[]>,
+  caps: Record<string, number>,
+  logger?: NodeConfig['logger'],
+): void {
+  for (const [type, items] of evidenceByType) {
+    const cap = caps[type];
+    if (cap && items.length > cap) {
+      items.sort((a, b) => b.baseConfidence - a.baseConfidence);
+      const removed = items.length - cap;
+      evidenceByType.set(type, items.slice(0, cap));
+      logger?.log(`[InferAtomsNode] Capped ${type}: ${items.length} → ${cap} (removed ${removed})`);
+    }
+  }
+}
+
+/**
+ * Deduplicate evidence items before sending to LLM.
+ * Groups by file path for efficient comparison, then removes near-duplicates
+ * within each file (e.g., a JSDoc comment and its associated export).
+ */
+function deduplicateEvidenceItems(
+  items: EvidenceItem[],
+  threshold: number,
+  logger?: NodeConfig['logger'],
+): EvidenceItem[] {
+  if (threshold <= 0 || items.length <= 1) return items;
+
+  const byFile = new Map<string, EvidenceItem[]>();
+  for (const item of items) {
+    const list = byFile.get(item.filePath) || [];
+    list.push(item);
+    byFile.set(item.filePath, list);
+  }
+
+  const kept: EvidenceItem[] = [];
+  let deduped = 0;
+
+  for (const [, fileItems] of byFile) {
+    const representatives: EvidenceItem[] = [];
+    for (const item of fileItems) {
+      const itemText = `${item.name} ${item.code || ''}`;
+      let isDuplicate = false;
+      for (let r = 0; r < representatives.length; r++) {
+        const repText = `${representatives[r].name} ${representatives[r].code || ''}`;
+        if (computeTextSimilarity(itemText, repText) >= threshold) {
+          // Keep the one with higher baseConfidence
+          if (item.baseConfidence > representatives[r].baseConfidence) {
+            representatives[r] = item;
+          }
+          isDuplicate = true;
+          deduped++;
+          break;
+        }
+      }
+      if (!isDuplicate) representatives.push(item);
+    }
+    kept.push(...representatives);
+  }
+
+  if (deduped > 0) {
+    logger?.log(
+      `[InferAtomsNode] Pre-LLM dedup: removed ${deduped} duplicate evidence items (${items.length} → ${kept.length})`,
+    );
+  }
+  return kept;
+}
+
 export function createInferAtomsNode(options: InferAtomsNodeOptions = {}) {
   const batchSize = options.batchSize || 5;
   const minConfidence = options.minConfidence || 0; // Include all by default
   const useTool = options.useTool ?? true;
   const useDependencyContext = options.useDependencyContext ?? true;
   const foundationalBoost = options.foundationalBoost ?? 10;
+  const preLlmDedupThreshold = options.preLlmDedupThreshold ?? 0.6;
+  const defaultCaps: Record<string, number> = {
+    api_endpoint: 200,
+    ui_component: 150,
+    source_export: 150,
+    code_comment: 100,
+    documentation: 50,
+    coverage_gap: 50,
+  };
+  const evidenceCaps = { ...defaultCaps, ...options.evidenceCaps };
 
   return (config: NodeConfig) =>
     async (state: ReconciliationGraphStateType): Promise<Partial<ReconciliationGraphStateType>> => {
@@ -814,21 +1014,27 @@ export function createInferAtomsNode(options: InferAtomsNodeOptions = {}) {
       const nonTestEvidence = evidenceItems.filter((e) => e.type !== 'test');
 
       if (nonTestEvidence.length > 0) {
+        // Phase 22: Pre-LLM dedup removes near-duplicate evidence within the same file
+        const dedupedEvidence = deduplicateEvidenceItems(nonTestEvidence, preLlmDedupThreshold, config.logger);
+
         config.logger?.log(
-          `[InferAtomsNode] Processing ${nonTestEvidence.length} non-test evidence items`,
+          `[InferAtomsNode] Processing ${dedupedEvidence.length} non-test evidence items`,
         );
 
-        // Process in tiers by priority: api_endpoint → ui_component → source_export → documentation → coverage_gap
+        // Process in tiers by priority: api_endpoint → ui_component → source_export → code_comment → documentation → coverage_gap
         const tierOrder: Array<EvidenceItem['type']> = [
-          'api_endpoint', 'ui_component', 'source_export', 'documentation', 'coverage_gap',
+          'api_endpoint', 'ui_component', 'source_export', 'code_comment', 'documentation', 'coverage_gap',
         ];
 
         const evidenceByType = new Map<string, EvidenceItem[]>();
-        for (const e of nonTestEvidence) {
+        for (const e of dedupedEvidence) {
           const list = evidenceByType.get(e.type) || [];
           list.push(e);
           evidenceByType.set(e.type, list);
         }
+
+        // Phase 22: Apply per-type caps (sort by baseConfidence desc, keep top N)
+        applyEvidenceCaps(evidenceByType, evidenceCaps, config.logger);
 
         let evidenceAtomCount = 0;
 
@@ -851,7 +1057,7 @@ export function createInferAtomsNode(options: InferAtomsNodeOptions = {}) {
             const batch = tierItems.slice(i, i + batchSize);
 
             const batchPromises = batch.map(async (evidence) => {
-              const evidenceId = `${evidence.filePath}:${evidence.name}`;
+              const evidenceId = `${evidence.type}:${evidence.filePath}:${evidence.name}`;
               const analysis = evidenceAnalysis.get(evidenceId);
 
               if (!analysis) {

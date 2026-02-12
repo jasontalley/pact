@@ -65,6 +65,8 @@ export interface LLMRequest {
   timeout?: number;
   // Skip retries and fail fast to fallback (useful for synthesize with long context)
   skipRetries?: boolean;
+  // Enable Anthropic prompt caching on system messages
+  promptCaching?: boolean;
 }
 
 export interface LLMResponse {
@@ -539,6 +541,7 @@ export class LLMService implements OnModuleInit, OnModuleDestroy {
         maxTokens: request.maxTokens,
         timeout: effectiveTimeout,
         reasoningEffort: decision.reasoningEffort || request.reasoningEffort,
+        promptCaching: request.promptCaching,
       },
       metadata: {
         requestId,

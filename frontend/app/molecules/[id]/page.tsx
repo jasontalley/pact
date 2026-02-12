@@ -223,6 +223,16 @@ export default function MoleculeDetailPage({ params }: MoleculeDetailPageProps) 
           </div>
         )}
 
+        {/* Gherkin Scenario */}
+        {molecule.gherkinScenario && (
+          <div className="bg-card rounded-lg border p-6 mb-6">
+            <h2 className="text-lg font-semibold mb-3">Gherkin Scenario</h2>
+            <pre className="text-sm bg-muted/50 rounded-md p-4 whitespace-pre-wrap font-mono overflow-x-auto">
+              {molecule.gherkinScenario}
+            </pre>
+          </div>
+        )}
+
         {/* Metrics Summary */}
         {metrics && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

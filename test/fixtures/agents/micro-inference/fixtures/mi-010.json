@@ -1,0 +1,16 @@
+{
+  "id": "mi-010",
+  "name": "Auth middleware with token verification and role extraction",
+  "evidenceType": "source_export",
+  "evidence": {
+    "filePath": "src/middleware/auth.middleware.ts",
+    "sourceCode": "import { Injectable, NestMiddleware } from '@nestjs/common';\nimport { Request, Response, NextFunction } from 'express';\nimport { JwtService } from '@nestjs/jwt';\n\n@Injectable()\nexport class AuthMiddleware implements NestMiddleware {\n  constructor(private readonly jwtService: JwtService) {}\n\n  async use(req: Request, res: Response, next: NextFunction): Promise<void> {\n    const authHeader = req.headers.authorization;\n    if (!authHeader || !authHeader.startsWith('Bearer ')) {\n      res.status(401).json({ message: 'Missing or malformed authorization header' });\n      return;\n    }\n\n    const token = authHeader.slice(7);\n    try {\n      const payload = await this.jwtService.verifyAsync(token, {\n        secret: process.env.JWT_SECRET,\n        algorithms: ['HS256'],\n      });\n\n      req['user'] = {\n        id: payload.sub,\n        email: payload.email,\n        roles: payload.roles || [],\n      };\n\n      next();\n    } catch (err) {\n      if (err.name === 'TokenExpiredError') {\n        res.status(401).json({ message: 'Token has expired' });\n      } else {\n        res.status(401).json({ message: 'Invalid token' });\n      }\n    }\n  }\n}",
+    "lineNumber": 1
+  },
+  "expectedAtom": {
+    "descriptionContainsAny": ["auth", "token", "access", "protect", "middleware", "verify"],
+    "categoryOneOf": ["security", "functional"],
+    "minConfidence": 55,
+    "hasObservableOutcomes": true
+  }
+}

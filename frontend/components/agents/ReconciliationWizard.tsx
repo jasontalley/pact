@@ -55,7 +55,9 @@ import {
   useSubmitReview,
   useApplyRecommendations,
   useCreateChangeSetFromRun,
+  useLatestDefaultManifest,
 } from '@/hooks/reconciliation';
+import { ManifestViewer } from '@/components/reconciliation';
 import { repositoryAdminApi } from '@/lib/api/repository';
 import type {
   StartReconciliationDto,
@@ -69,6 +71,55 @@ import type {
   MoleculeDecision,
   PreReadPayload,
 } from '@/types/reconciliation';
+
+/**
+ * Pipeline phases for the progress timeline
+ */
+const PIPELINE_PHASES = [
+  { key: 'structure', label: 'Structure' },
+  { key: 'discover', label: 'Discover' },
+  { key: 'test_quality', label: 'Quality' },
+  { key: 'context', label: 'Context' },
+  { key: 'infer', label: 'Infer' },
+  { key: 'synthesize', label: 'Synthesize' },
+  { key: 'verify', label: 'Verify' },
+  { key: 'persist', label: 'Persist' },
+] as const;
+
+/**
+ * Map progressPhase string to PIPELINE_PHASES index
+ */
+function getPhaseIndex(phase: string): number {
+  const normalized = phase.toLowerCase().replace(/[_-]/g, '');
+  const mapping: Record<string, number> = {
+    structure: 0, structureanalysis: 0,
+    discover: 1, discoverfullscan: 1, discoverdelta: 1, discovery: 1,
+    testquality: 2, quality: 2,
+    context: 3, contextgathering: 3, contextanalysis: 3,
+    infer: 4, inferatoms: 4, inference: 4, atominference: 4,
+    synthesize: 5, synthesizemolecules: 5, synthesis: 5, moleculesynthesis: 5,
+    interimpersist: 6, verify: 6, verification: 6, qualityverification: 6,
+    persist: 7, finalpersist: 7, persistence: 7,
+  };
+  return mapping[normalized] ?? -1;
+}
+
+/**
+ * Format estimated remaining time
+ */
+function formatElapsed(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
+
+function formatEstimatedRemaining(elapsedSec: number, progressPct: number): string {
+  if (progressPct <= 5) return '';
+  if (progressPct >= 95) return '';
+  const totalEstSec = elapsedSec / (progressPct / 100);
+  const remainingSec = Math.max(0, Math.round(totalEstSec - elapsedSec));
+  if (remainingSec < 60) return `~${remainingSec}s remaining`;
+  return `~${Math.floor(remainingSec / 60)}m ${remainingSec % 60}s remaining`;
+}
 
 interface ReconciliationWizardProps {
   open?: boolean;
@@ -326,6 +377,10 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
   const [progressPercent, setProgressPercent] = useState(0);
   const [progressMessage, setProgressMessage] = useState('Initializing...');
 
+  // Elapsed time tracking
+  const [analysisStartTime, setAnalysisStartTime] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
   // Review decisions
   const [atomDecisions, setAtomDecisions] = useState<Map<string, 'approve' | 'reject'>>(
     new Map()
@@ -339,7 +394,6 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
     mode: 'full-scan',
     options: {
       analyzeDocs: true,
-      maxTests: 100,
       qualityThreshold: 80,
       requireReview: true,
     },
@@ -382,6 +436,20 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
     }
   }, [step, runId, config, pendingReview, atomDecisions, moleculeDecisions]);
 
+  // Elapsed time ticker while analyzing
+  useEffect(() => {
+    if (step === 'analyzing') {
+      if (!analysisStartTime) setAnalysisStartTime(Date.now());
+      const interval = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+      return () => clearInterval(interval);
+    } else {
+      setAnalysisStartTime(null);
+      setElapsedSeconds(0);
+    }
+  }, [step, analysisStartTime]);
+
   // Change set creation state
   const [changeSetName, setChangeSetName] = useState('');
   const [showChangeSetInput, setShowChangeSetInput] = useState(false);
@@ -406,6 +474,7 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
   const startMutation = useStartReconciliation();
   const startPreReadMutation = useStartPreReadReconciliation();
   const startGitHubMutation = useStartGitHubReconciliation();
+  const { data: latestManifest } = useLatestDefaultManifest();
   const submitReviewMutation = useSubmitReview();
   const applyMutation = useApplyRecommendations();
   const createChangeSetMutation = useCreateChangeSetFromRun();
@@ -551,6 +620,7 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
         {
           branch: githubBranch || undefined,
           commitSha: githubCommitSha || undefined,
+          manifestId: latestManifest?.status === 'complete' ? latestManifest.id : undefined,
         },
         { onSuccess, onError },
       );
@@ -877,6 +947,11 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
                 </Card>
               )}
 
+              {/* Manifest Summary (when available from GitHub mode) */}
+              {sourceMode === 'github' && latestManifest?.status === 'complete' && (
+                <ManifestViewer manifest={latestManifest} compact />
+              )}
+
               {/* Mode Selection */}
               <div className="space-y-2">
                 <Label>Analysis Mode</Label>
@@ -920,29 +995,6 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
                 />
                 <p className="text-xs text-muted-foreground">
                   Atoms below this score will be flagged for review
-                </p>
-              </div>
-
-              {/* Max Tests */}
-              <div className="space-y-2">
-                <Label>Maximum Tests</Label>
-                <Input
-                  type="number"
-                  value={config.options?.maxTests || 100}
-                  onChange={(e) =>
-                    setConfig({
-                      ...config,
-                      options: {
-                        ...config.options,
-                        maxTests: parseInt(e.target.value) || 100,
-                      },
-                    })
-                  }
-                  min={1}
-                  max={1000}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Limit the number of tests to analyze
                 </p>
               </div>
 
@@ -1153,29 +1205,67 @@ export function ReconciliationWizard({ open, onOpenChange }: ReconciliationWizar
           )}
 
           {/* Step: Analyzing */}
-          {step === 'analyzing' && (
-            <div className="flex flex-col items-center justify-center py-12 space-y-4">
-              <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-              <p className="text-lg font-medium">Analyzing repository...</p>
-              <p className="text-sm text-muted-foreground text-center max-w-md">
-                {progressMessage}
-              </p>
-              <Progress value={progressPercent} className="w-64 h-2" />
-              {progressPhase && (
-                <p className="text-xs text-muted-foreground capitalize">
-                  Phase: {progressPhase.replaceAll('_', ' ')}
-                </p>
-              )}
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleCancelRun}
-                disabled={isCancelling || !runId}
-              >
-                {isCancelling ? 'Cancelling...' : 'Cancel Run'}
-              </Button>
-            </div>
-          )}
+          {step === 'analyzing' && (() => {
+            const currentPhaseIdx = getPhaseIndex(progressPhase);
+            return (
+              <div className="flex flex-col items-center justify-center py-8 space-y-5">
+                {/* Phase timeline */}
+                <div className="flex items-center gap-1 w-full max-w-lg px-4">
+                  {PIPELINE_PHASES.map((phase, idx) => {
+                    const isComplete = idx < currentPhaseIdx;
+                    const isCurrent = idx === currentPhaseIdx;
+                    return (
+                      <div key={phase.key} className="flex-1 flex flex-col items-center gap-1">
+                        <div
+                          className={cn(
+                            'h-2 w-full rounded-full transition-all',
+                            isComplete && 'bg-green-500',
+                            isCurrent && 'bg-blue-500 animate-pulse',
+                            !isComplete && !isCurrent && 'bg-muted'
+                          )}
+                        />
+                        <span
+                          className={cn(
+                            'text-[10px] leading-tight',
+                            isComplete && 'text-green-600 font-medium',
+                            isCurrent && 'text-blue-600 font-medium',
+                            !isComplete && !isCurrent && 'text-muted-foreground'
+                          )}
+                        >
+                          {phase.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Progress bar */}
+                <Progress value={progressPercent} className="w-64 h-2" />
+
+                {/* Status line */}
+                <div className="text-center space-y-1">
+                  <p className="text-sm text-muted-foreground max-w-md">
+                    {progressMessage}
+                  </p>
+                  <div className="flex items-center justify-center gap-3 text-xs text-muted-foreground">
+                    <span>Elapsed: {formatElapsed(elapsedSeconds)}</span>
+                    {formatEstimatedRemaining(elapsedSeconds, progressPercent) && (
+                      <span>{formatEstimatedRemaining(elapsedSeconds, progressPercent)}</span>
+                    )}
+                  </div>
+                </div>
+
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleCancelRun}
+                  disabled={isCancelling || !runId}
+                >
+                  {isCancelling ? 'Cancelling...' : 'Cancel Run'}
+                </Button>
+              </div>
+            );
+          })()}
 
           {/* Step: Review */}
           {step === 'review' && pendingReview && (

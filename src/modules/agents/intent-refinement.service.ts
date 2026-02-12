@@ -5,6 +5,7 @@ import { Atom, RefinementRecord } from '../atoms/atom.entity';
 import { AtomicityCheckerService, AtomicityResult } from './atomicity-checker.service';
 import { AtomQualityService } from '../validators/atom-quality.service';
 import { LLMService } from '../../common/llm/llm.service';
+import { parseJsonWithRecovery } from '../../common/llm/json-recovery';
 
 /**
  * Analysis result for raw intent
@@ -426,12 +427,11 @@ Respond with JSON array:
         temperature: 0.3,
       });
 
-      const jsonMatch = response.content.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) {
+      const parsed = parseJsonWithRecovery(response.content);
+      if (!parsed || !Array.isArray(parsed)) {
         return [];
       }
 
-      const parsed = JSON.parse(jsonMatch[0]);
       return parsed.map((s: any, index: number) => ({
         id: `llm-${index}`,
         type: 'rewrite' as const,

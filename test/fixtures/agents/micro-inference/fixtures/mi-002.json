@@ -1,0 +1,17 @@
+{
+  "id": "mi-002",
+  "name": "Auth login with invalid credentials returns 401",
+  "evidenceType": "test",
+  "evidence": {
+    "filePath": "src/auth/__tests__/login.e2e-spec.ts",
+    "testName": "should return 401 when credentials are invalid",
+    "sourceCode": "describe('POST /auth/login', () => {\n  it('should return 401 when credentials are invalid', async () => {\n    const response = await request(app.getHttpServer())\n      .post('/auth/login')\n      .send({ email: 'user@example.com', password: 'wrong-password' })\n      .expect(401);\n\n    expect(response.body).toEqual({\n      statusCode: 401,\n      message: 'Invalid credentials',\n      error: 'Unauthorized',\n    });\n    expect(response.headers['set-cookie']).toBeUndefined();\n  });\n\n  it('should return 401 for a non-existent user', async () => {\n    const response = await request(app.getHttpServer())\n      .post('/auth/login')\n      .send({ email: 'nobody@example.com', password: 'any-password' })\n      .expect(401);\n\n    expect(response.body.message).toBe('Invalid credentials');\n  });\n\n  it('should not leak whether the email exists', async () => {\n    const validUserRes = await request(app.getHttpServer())\n      .post('/auth/login')\n      .send({ email: 'user@example.com', password: 'wrong' });\n\n    const unknownUserRes = await request(app.getHttpServer())\n      .post('/auth/login')\n      .send({ email: 'unknown@example.com', password: 'wrong' });\n\n    expect(validUserRes.body.message).toBe(unknownUserRes.body.message);\n  });\n});",
+    "lineNumber": 1
+  },
+  "expectedAtom": {
+    "descriptionContainsAny": ["login", "credential", "unauthorized", "401", "reject", "invalid"],
+    "categoryOneOf": ["security", "functional"],
+    "minConfidence": 75,
+    "hasObservableOutcomes": true
+  }
+}
